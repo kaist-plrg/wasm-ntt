@@ -131,6 +131,14 @@ let rec assign_exp (ctx : Ctx.t) (exp : exp) (value : value) : Ctx.t =
           Ctx.add_edge ctx value_sub value Dep.Edges.Assign;
           Ctx.add_value Local ctx (id, iters @ [ Il.Ast.List ]) value_sub)
         ctx vars
+  | StrE exps_inner, StructV values_inner ->
+      let exps_inner = List.map snd exps_inner in
+      let values_inner = List.map snd values_inner in
+      let ctx = assign_exps ctx exps_inner values_inner in
+      List.iter
+        (fun value_inner -> Ctx.add_edge ctx value_inner value Dep.Edges.Assign)
+        values_inner;
+      ctx
   | _ ->
       error exp.at
         (F.asprintf "(TODO) match failed %s <- %s"

@@ -99,6 +99,10 @@ let rec assign_exp (ctx : Ctx.t) (exp : exp) (value : value) : Ctx.t =
           in
           Ctx.add_value Local ctx (id, iters @ [ List ]) value_sub)
         ctx vars
+  | StrE exps, StructV values ->
+      let exps = List.map snd exps in
+      let values = List.map snd values in
+      assign_exps ctx exps values
   | _ ->
       error exp.at
         (F.asprintf "(TODO) match failed %s <- %s"
