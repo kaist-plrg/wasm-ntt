@@ -33,8 +33,9 @@ def $rev_<X>(X_h :: X_t*) = $rev_<X>(X_t*) ++ [X_h]
 dec $make_<X>(X, nat) : X*
 def $make_<X>(X, n) = eps
   -- if n = 0
-def $make_<X>(X, n) = $make_<X>(X, $(n-1)) ++ [X]
+def $make_<X>(X, n) = $make_<X>(X, n') ++ [X]
   -- if $(n > 0)
+  -- if n' = $(n - 1)
 
 dec $list_exists<X>(def $p(X) : bool, X*) : bool
 def $list_exists<X>(def $p, eps) = false
