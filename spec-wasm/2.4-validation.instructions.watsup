@@ -665,8 +665,8 @@ rule Instr_ok/vec.splat:
 rule Instr_ok/vec.extract:
   C_0 irt |- VEC.EXTRACT vexop : ({INS (NoEllipses, [t_1]), OUTS (NoEllipses, [t_2])}, eps)
   -- if t_1 = VecT $type_vecop<vextractop>(vexop)
-  -- if t_2 = NumT $type_vec_lane<vnextractop<extension>,vnextractop<extension>,vnextractop<void>,vnextractop<void>,vnextractop<void>,vnextractop<void>>(vexop)
-  -- if $($lane_extractop(vexop) < $num_lanes<vnextractop<extension>,vnextractop<extension>,vnextractop<void>,vnextractop<void>,vnextractop<void>,vnextractop<void>>(vexop))
+  -- if t_2 = NumT $type_vec_lane<vnextractop<extension>,vnextractop<extension>,vnextractop<void>,vnextractop<void>,vnextractop<void>,vnextractop<void> >(vexop)
+  -- if $($lane_extractop(vexop) < $num_lanes<vnextractop<extension>,vnextractop<extension>,vnextractop<void>,vnextractop<void>,vnextractop<void>,vnextractop<void> >(vexop))
 
 rule Instr_ok/vec.replace:
   C_0 irt |- VEC.REPLACE vrepop : ({INS (NoEllipses, [t_1, t_2]), OUTS (NoEllipses, [t_1])}, eps)
