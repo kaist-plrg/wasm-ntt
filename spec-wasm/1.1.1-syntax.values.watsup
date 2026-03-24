@@ -1,0 +1,67 @@
+;;
+;; Syntax of Values
+;;
+
+;; Integers
+
+syntax u32 = nat
+syntax u64 = nat
+syntax i32 = nat
+syntax i64 = int
+
+;; Floating-point
+
+syntax exp = int
+
+syntax fmag =
+  | NORM m exp
+  | SUBNORM m
+  | INF
+  | NAN (m)
+
+syntax f32mag = fmag
+syntax f64mag = fmag
+
+syntax f32 =
+  | POS f32mag
+  | NEG f32mag
+
+syntax f64 =
+  | POS f64mag
+  | NEG f64mag
+
+;; Vectors
+
+syntax v128 = nat
+
+;; Indices
+
+syntax idx = nat
+;; syntax laneidx hint(desc "lane index") = u8
+
+syntax typeidx = idx
+syntax funcidx = idx
+syntax globalidx = idx
+syntax tableidx = idx
+syntax memidx = idx
+syntax tagidx = idx
+syntax elemidx = idx
+syntax dataidx = idx
+syntax labelidx = idx
+syntax localidx = idx
+syntax fieldidx = idx
+
+syntax externidx =
+  | FUNC funcidx | GLOBAL globalidx | TABLE tableidx | MEM memidx | TAG tagidx
+
+var x : idx
+var y : idx
+var ti : typeidx
+var l : labelidx
+var xx : externidx
+
+;; Names
+
+syntax char = nat
+syntax name = char*
+syntax nameset = set<name>

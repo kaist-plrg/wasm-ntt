@@ -1,0 +1,122 @@
+;; Stack typing
+
+syntax ellipses = NoEllipses | Ellipses
+
+syntax inferresulttype = (ellipses, valtype*)
+syntax inferfunctype = {INS inferresulttype, OUTS inferresulttype}
+syntax inferinstrtype = (inferfunctype, localidx*)
+
+var irt : inferresulttype
+var ift : inferfunctype
+
+;; Contexts
+
+syntax context  = {
+    TYPES deftype*,
+    FUNCS deftype*,
+    TABLES tabletype*,
+    MEMS memtype*,
+    TAGS tagtype*,
+    GLOBALS globaltype*,
+    ELEMS elemtype*,
+    DATAS datatype*,
+    LOCALS localtype*,
+    RESULTS valtype*,
+    LABELS resulttype*,
+    REFS free
+  }
+
+var C : context
+
+dec $empty_context : context
+
+def $empty_context = {
+  TYPES eps,
+  FUNCS eps,
+  TABLES eps,
+  MEMS eps,
+  TAGS eps,
+  GLOBALS eps,
+  ELEMS eps,
+  DATAS eps,
+  LOCALS eps,
+  RESULTS eps,
+  LABELS eps,
+  REFS $free_empty
+}
+
+relation Match_resulttype: context |- resulttype resulttype : OK
+  hint(input %0 %1 %2)
+
+rule Match_resulttype:
+  C |- t_1* t_2* : OK
+  -- if |t_1*| = |t_2*|
+  -- (if $match_valtype(C.TYPES, t_1, t_2))*
+
+dec $stack(resulttype) : (ellipses, resulttype)
+def $stack(resulttype) = (NoEllipses, resulttype)
+
+;; Pop
+dec $pop(context, (ellipses, resulttype), (ellipses, resulttype)) : (ellipses, resulttype)
+def $pop(C, (Ellipses, t_1*), (Ellipses, t_2*)) = (Ellipses, eps)
+  -- if n_1 = |t_1*|
+  -- if n_2 = |t_2*|
+  -- if n = $min_(n_1, n_2)
+  -- if n_3 = $(n_1-n)
+  -- if t_2'* = t_2*[n_2-n:n]
+  -- Match_resulttype: C |- ($make_<valtype>(BotT, n_3) ++ t_2'*) t_1* : OK
+def $pop(C, (NoEllipses, t_1*), (Ellipses, t_2*)) = (Ellipses, t_2*[0:n_2-n])
+  -- if n_1 = |t_1*|
+  -- if n_2 = |t_2*|
+  -- if n = $min_(n_1, n_2)
+  -- if n_3 = $(n_1 - n)
+  -- if t_2'* = t_2*[n_2-n:n]
+  -- Match_resulttype: C |- ($make_<valtype>(BotT, n_3) ++ t_2'*) t_1* : OK
+def $pop(C, (Ellipses, t_1*), (NoEllipses, t_2*)) = (NoEllipses, eps)
+  -- if n_1 = |t_1*|
+  -- if n_2 = |t_2*|
+  -- if n = $min_(n_1, n_2)
+  -- if t_2'* = t_2*[n_2-n:n]
+  -- Match_resulttype: C |- t_2'* t_1* : OK
+def $pop(C, (NoEllipses, t_1*), (NoEllipses, t_2*)) = (NoEllipses, t_2*[0:n_2-n])
+  -- if n_1 = |t_1*|
+  -- if n_2 = |t_2*|
+  -- if n = $min_(n_1, n_2)
+  -- if t_2'* = t_2*[n_2-n:n]
+  -- Match_resulttype: C |- t_2'* t_1* : OK
+
+;; Push
+dec $push(context, (ellipses, resulttype), (ellipses, resulttype)) : (ellipses, resulttype)
+def $push(C, (NoEllipses, t_1*), (NoEllipses, t_2*)) = (NoEllipses, t_2* ++ t_1*)
+def $push(C, (NoEllipses, t_1*), (Ellipses, t_2*)) = (Ellipses, t_2* ++ t_1*)
+def $push(C, (Ellipses, t_1*), (ellipses_2, eps)) = (Ellipses, t_1*)
+
+dec $peek(nat, inferresulttype) : valtype
+def $peek(n, (ellipses, t*)) = $rev_<valtype>(t*)[n]
+  -- if $(n < |t*|)
+def $peek(n, (ellipses, t*)) = BotT
+  -- otherwise
+
+dec $peek_ref(nat, inferresulttype) : reftype
+def $peek_ref(n, (ellipses, t*)) = rt
+  -- if $peek(n, (ellipses, t*)) = RefT rt
+def $peek_ref(n, (ellipses, t*)) = (NoNull BotHT)
+  -- if $peek(n, (ellipses, t*)) = BotT
+
+dec $local(context, typeidx) : localtype
+def $local(C, x) = C.LOCALS[x]
+
+dec $init_local(context, typeidx) : context
+def $init_local(C, x) = C[ .LOCALS[x] = (LocalT Set t)]
+  -- if LocalT init t = $local(C, x)
+
+dec $init_locals(context, typeidx*) : context
+def $init_locals(C, eps) = C
+def $init_locals(C, x_1 :: x*) = $init_locals($init_local(C, x_1), x*)
+
+dec $init_valtypes(inferresulttype, nat, nat) : valtype*
+def $init_valtypes(irt, i, n) = t :: $init_valtypes(irt, $(i+1), n)
+  -- if $(i < n)
+  -- if t = $peek($(n-i), irt)
+def $init_valtypes(irt, i, n) = eps
+  -- otherwise
