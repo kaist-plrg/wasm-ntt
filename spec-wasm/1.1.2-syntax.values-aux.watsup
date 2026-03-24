@@ -1,0 +1,27 @@
+;; minimum value of int64
+dec $min_i64 : i64
+def $min_i64 = $(-9223372036854775808)
+
+;; less than or equal operation in terms of unsigned integers
+dec $le_u(i64, i64) : bool
+def $le_u(i64_1, i64_2) = true
+  -- if i64_1' = $(i64_1 + $min_i64)
+  -- if i64_2' = $(i64_2 + $min_i64)
+  -- if $(i64_1' <= i64_2')
+def $le_u(i64_1, i64_2) = false
+  -- otherwise
+
+;; less than operation in terms of unsigned integers
+dec $lt_u(i64, i64) : bool
+def $lt_u(i64_1, i64_2) = true
+  -- if i64_1' = $(i64_1 + $min_i64)
+  -- if i64_2' = $(i64_2 + $min_i64)
+  -- if $(i64_1' < i64_2')
+def $lt_u(i64_1, i64_2) = false
+  -- otherwise
+
+;; initialize a list of n elements whose values are ranging from 0 to n-1
+dec $range(nat) : nat*
+def $range(0) = eps
+def $range(n) = $range($(n-1)) ++ [$(n-1)]
+  -- if $(n > 0)
