@@ -157,7 +157,7 @@ syntax vsplatop_ = vecop<vsplatop>
 var vspop : vsplatop_
 
 syntax vnextractop<X> = Extract (int, X)
-syntax vextractop = laneop<vnextractop<extension>, vnextractop<extension>, vnextractop<void>, vnextractop<void>, vnextractop<void>, vnextractop<void>>
+syntax vextractop = laneop<vnextractop<extension>, vnextractop<extension>, vnextractop<void>, vnextractop<void>, vnextractop<void>, vnextractop<void> >
 syntax vextractop_ = vecop<vextractop>
 var vexop : vextractop_
 
