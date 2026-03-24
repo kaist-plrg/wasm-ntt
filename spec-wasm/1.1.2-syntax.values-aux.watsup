@@ -23,5 +23,6 @@ def $lt_u(i64_1, i64_2) = false
 ;; initialize a list of n elements whose values are ranging from 0 to n-1
 dec $range(nat) : nat*
 def $range(0) = eps
-def $range(n) = $range($(n-1)) ++ [$(n-1)]
+def $range(n) = $range(n') ++ [n']
   -- if $(n > 0)
+  -- if n' = $(n-1)

@@ -147,9 +147,10 @@ dec $subst_fieldtype<X>(X, def $s(typevar, X) : heaptype, fieldtype) : fieldtype
 dec $subst_deftype<X>(X, def $s(typevar, X) : heaptype, deftype) : deftype
 
 dec $s_roll(typevar, (typeidx, typeidx)) : heaptype
-def $s_roll(tv, (x, y)) = VarHT (RecX $(x' - x))
+def $s_roll(tv, (x, y)) = VarHT (RecX x'')
   -- if tv = StatX x'
   -- if $(x <= x') /\ $(x' < y)
+  -- if x'' = $(x' - x)
 def $s_roll(tv, (x, y)) = VarHT tv
   -- otherwise
 

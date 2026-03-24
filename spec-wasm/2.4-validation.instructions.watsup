@@ -220,8 +220,9 @@ rule Instr_ok/br_on_non_null:
   -- if t' = RefT (NoNull ht)
   -- if i = |C_0.LABELS[x]|
   -- if $(i > 0)
-  -- if t_h* = C_0.LABELS[x][0:i-1]
-  -- if t_l = C_0.LABELS[x][i-1]
+  -- if i' = $(i - 1)
+  -- if t_h* = C_0.LABELS[x][0:i']
+  -- if t_l = C_0.LABELS[x][i']
   -- if $match_valtype(C_0.TYPES, t', t_l)
 
 rule Instr_ok/br_on_cast:
@@ -231,8 +232,9 @@ rule Instr_ok/br_on_cast:
   -- if $match_reftype(C_0.TYPES, rt_2, rt_1)
   -- if i = |C_0.LABELS[x]|
   -- if $(i > 0)
-  -- if t_h* = C_0.LABELS[x][0:i-1]
-  -- if t_l = C_0.LABELS[x][i-1]
+  -- if i' = $(i - 1)
+  -- if t_h* = C_0.LABELS[x][0:i']
+  -- if t_l = C_0.LABELS[x][i']
   -- if $match_valtype(C_0.TYPES, RefT rt_2, t_l)
 
 rule Instr_ok/br_on_cast_fail:
@@ -243,8 +245,9 @@ rule Instr_ok/br_on_cast_fail:
   -- if $match_reftype(C_0.TYPES, rt_2, rt_1)
   -- if i = |C_0.LABELS[x]|
   -- if $(i > 0)
-  -- if t_h* = C_0.LABELS[x][0:i-1]
-  -- if t_l = C_0.LABELS[x][i-1]
+  -- if i' = $(i - 1)
+  -- if t_h* = C_0.LABELS[x][0:i']
+  -- if t_l = C_0.LABELS[x][i']
   -- if $match_valtype(C_0.TYPES, RefT rt_1', t_l)
 
 rule Instr_ok/call:
