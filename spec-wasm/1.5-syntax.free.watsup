@@ -51,7 +51,8 @@ def $free_unions(free_h :: free_t*) = free
   -- if free = $free_union(free_h, free')
 
 dec $add_minus_one(idx) : idx
-def $add_minus_one(x) = $(x - 1)
+def $add_minus_one(x) = x'
+  -- if x' = $(x - 1)
 
 dec $free_idx(idx) : set<idx>
 def $free_idx(x) = `{ [x] }
