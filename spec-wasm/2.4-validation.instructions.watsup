@@ -362,7 +362,7 @@ rule Instr_ok/table.init:
 
 rule Instr_ok/elem.drop:
   C_0 irt |- ELEM.DROP x : ({INS (NoEllipses, eps), OUTS (NoEllipses, eps)}, eps)
-  -- if _ = C_0.ELEMS[x]
+  -- if $(x >= 0) /\ $(x < |C_0.ELEMS|)
 
 rule Instr_ok/load:
   C_0 irt |- LOAD x loadop_ : ({INS (NoEllipses, [NumT $numtype_of_addrtype(at)]), OUTS (NoEllipses, [NumT nt])}, eps)
@@ -422,12 +422,12 @@ rule Instr_ok/memory.copy:
 rule Instr_ok/memory.init:
   C_0 irt |- MEMORY.INIT x y : ({INS (NoEllipses, [t, NumT I32T, NumT I32T]), OUTS (NoEllipses, eps)}, eps)
   -- if MemoryT at lim = C_0.MEMS[x]
-  -- if C_0.DATAS[y] = _
+  -- if $(y >= 0) /\ $(y < |C_0.DATAS|)
   -- if t = NumT $numtype_of_addrtype(at)
 
 rule Instr_ok/data.drop:
   C_0 irt |- DATA.DROP x : ({INS (NoEllipses, eps), OUTS (NoEllipses, eps)}, eps)
-  -- if C_0.DATAS[x] = _
+  -- if $(x >= 0) /\ $(x < |C_0.DATAS|)
 
 rule Instr_ok/ref.null:
   C_0 irt |- REF.NULL ht : ({INS (NoEllipses, eps), OUTS (NoEllipses, [RefT (Null ht)])}, eps)
