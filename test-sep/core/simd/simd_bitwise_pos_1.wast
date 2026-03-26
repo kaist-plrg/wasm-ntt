@@ -1,0 +1,10 @@
+(module
+  (func (export "not") (param $0 v128) (result v128) (v128.not (local.get $0)))
+  (func (export "and") (param $0 v128) (param $1 v128) (result v128) (v128.and (local.get $0) (local.get $1)))
+  (func (export "or") (param $0 v128) (param $1 v128) (result v128) (v128.or (local.get $0) (local.get $1)))
+  (func (export "xor") (param $0 v128) (param $1 v128) (result v128) (v128.xor (local.get $0) (local.get $1)))
+  (func (export "bitselect") (param $0 v128) (param $1 v128) (param $2 v128) (result v128)
+    (v128.bitselect (local.get $0) (local.get $1) (local.get $2))
+  )
+  (func (export "andnot") (param $0 v128) (param $1 v128) (result v128) (v128.andnot (local.get $0) (local.get $1)))
+)

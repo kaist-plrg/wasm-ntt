@@ -1,0 +1,1 @@
+(module (func (v128.const i32x4 0x0_9acf_fBDF 0x0_9acf_fBDF 0x0_9acf_fBDF 0x0_9acf_fBDF) drop))
