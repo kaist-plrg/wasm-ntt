@@ -110,6 +110,13 @@ module Make
     | SL _ -> Interp_SL.eval_program relname includes_p4 filename_p4
     | Empty -> assert false
 
+  let run_wasm_program (relname : string) (filename_wasm : string) :
+      wasm_program_result =
+    match !spec with
+    | IL _ -> Interp_IL.eval_wasm_program relname filename_wasm
+    | SL _ -> Interp_SL.eval_wasm_program relname filename_wasm
+    | Empty -> assert false
+
   let run_program_internal (relname : string) (value_program : Value.t) :
       rel_result =
     match !spec with

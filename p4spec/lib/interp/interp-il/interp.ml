@@ -1498,6 +1498,25 @@ module Make (Arch : Sim.ARCH) : Sim.INTERP_IL = struct
     | Util.Error.ParseError (at, msg) -> Sim.Fail (`Syntax (at, msg))
     | Util.Error.InterpError (at, msg) -> Sim.Fail (`Runtime (at, msg))
 
+  let eval_wasm_program (relname : string) (filename_wasm : string) :
+      Sim.wasm_program_result =
+    clear ();
+    try
+      let value_program, expectation = Wasm_interface.Parse.parse_file filename_wasm in
+      match expectation with
+      | Wasm_interface.Parse.Positive ->
+        let+ values_output = do_eval_rel relname [ value_program ] in
+        (Sim.Pass values_output : Sim.wasm_program_result)
+      | Wasm_interface.Parse.Negative ->
+        try
+          let+ values_output = do_eval_rel relname [ value_program ] in
+          (Sim.UnexpectedPass values_output : Sim.wasm_program_result)
+        with
+        | Util.Error.InterpError (at, msg) -> Sim.ExpectedFail (`Runtime (at, msg))
+    with
+    | Util.Error.ParseError (at, msg) -> Sim.Fail (`Syntax (at, msg))
+    | Util.Error.InterpError (at, msg) -> Sim.Fail (`Runtime (at, msg))
+
   let eval_rel (relname : string) (values_input : value list) : Sim.rel_result =
     clear ();
     try

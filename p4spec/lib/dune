@@ -8,6 +8,7 @@
   (re_export runtime)
   (re_export interp)
   (re_export interface)
+  (re_export wasm_interface)
   (re_export stf)
   (re_export backend_testgen_neg)
   (re_export backend_splice)

@@ -19,6 +19,12 @@ type program_result =
   | Pass of Value.t list
   | Fail of [ `Syntax of region * string | `Runtime of region * string ]
 
+type wasm_program_result =
+  | Pass of Value.t list
+  | Fail of [ `Syntax of region * string | `Runtime of region * string ]
+  | ExpectedFail of [ `Syntax of region * string | `Runtime of region * string ]
+  | UnexpectedPass of Value.t list
+
 type stf_result =
   | Pass
   | Fail of [ `Syntax of region * string | `Runtime of region * string ]
@@ -66,6 +72,7 @@ module type INTERP_IL = sig
   (* Relation and meta-function evaluation *)
 
   val eval_program : string -> string list -> string -> program_result
+  val eval_wasm_program : string -> string -> wasm_program_result
   val eval_rel : string -> Value.t list -> rel_result
   val eval_func : string -> Il.typ list -> Value.t list -> func_result
 
@@ -78,6 +85,7 @@ module type INTERP_SL = sig
   (* Relation and meta-function evaluation *)
 
   val eval_program : string -> string list -> string -> program_result
+  val eval_wasm_program : string -> string -> wasm_program_result
   val eval_rel : string -> Value.t list -> rel_result
   val eval_func : string -> Sl.typ list -> Value.t list -> func_result
 
@@ -90,6 +98,7 @@ module type DRIVER = sig
   (* Run a P4 program against the spec *)
 
   val run_program : string -> string list -> string -> program_result
+  val run_wasm_program : string -> string -> wasm_program_result
   val run_program_internal : string -> Value.t -> rel_result
 
   (* Run a P4 program against the spec and a STF test *)
