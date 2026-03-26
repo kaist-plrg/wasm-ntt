@@ -250,23 +250,23 @@ rule Start_ok/none:
 
 rule Export_ok/func:
   C_0 nameset |- { NAME name, EDESC (FuncExport x) } : $union_set<name>(nameset, `{ [name] })
-  -- if dt = C_0.FUNCS[x]
+  -- if $(x >= 0) /\ $(x < |C_0.FUNCS|)
   -- if ~$in_set<name>(name, nameset)
 rule Export_ok/global:
   C_0 nameset |- { NAME name, EDESC (GlobalExport x) } : $union_set<name>(nameset, `{ [name] })
-  -- if gt = C_0.GLOBALS[x]
+  -- if $(x >= 0) /\ $(x < |C_0.GLOBALS|)
   -- if ~$in_set<name>(name, nameset)
 rule Export_ok/table:
   C_0 nameset |- { NAME name, EDESC (TableExport x) } : $union_set<name>(nameset, `{ [name] })
-  -- if tt = C_0.TABLES[x]
+  -- if $(x >= 0) /\ $(x < |C_0.TABLES|)
   -- if ~$in_set<name>(name, nameset)
 rule Export_ok/mem:
   C_0 nameset |- { NAME name, EDESC (MemExport x) } : $union_set<name>(nameset, `{ [name] })
-  -- if mt = C_0.MEMS[x]
+  -- if $(x >= 0) /\ $(x < |C_0.MEMS|)
   -- if ~$in_set<name>(name, nameset)
 rule Export_ok/tag:
   C_0 nameset |- { NAME name, EDESC (TagExport x) } : $union_set<name>(nameset, `{ [name] })
-  -- if jt = C_0.TAGS[x]
+  -- if $(x >= 0) /\ $(x < |C_0.TAGS|)
   -- if ~$in_set<name>(name, nameset)
 
 rule Exports_ok/cons:
