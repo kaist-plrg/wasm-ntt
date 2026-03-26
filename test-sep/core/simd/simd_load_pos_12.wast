@@ -1,0 +1,6 @@
+(module (memory 1)
+  (data (offset (i32.const 0)) "\02\00\00\00\02\00\00\00\02\00\00\00\02\00\00\00")
+  (func (export "as-f32x4.convert_i32x4_u-operand") (result v128)
+    (f32x4.convert_i32x4_u (v128.load (i32.const 0)))
+  )
+)

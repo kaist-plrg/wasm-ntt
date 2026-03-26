@@ -1,0 +1,21 @@
+(module
+  ;; 65 elem segments. 64 is the smallest positive number that is encoded
+  ;; differently as a signed LEB.
+  (elem funcref) (elem funcref) (elem funcref) (elem funcref)
+  (elem funcref) (elem funcref) (elem funcref) (elem funcref)
+  (elem funcref) (elem funcref) (elem funcref) (elem funcref)
+  (elem funcref) (elem funcref) (elem funcref) (elem funcref)
+  (elem funcref) (elem funcref) (elem funcref) (elem funcref)
+  (elem funcref) (elem funcref) (elem funcref) (elem funcref)
+  (elem funcref) (elem funcref) (elem funcref) (elem funcref)
+  (elem funcref) (elem funcref) (elem funcref) (elem funcref)
+  (elem funcref) (elem funcref) (elem funcref) (elem funcref)
+  (elem funcref) (elem funcref) (elem funcref) (elem funcref)
+  (elem funcref) (elem funcref) (elem funcref) (elem funcref)
+  (elem funcref) (elem funcref) (elem funcref) (elem funcref)
+  (elem funcref) (elem funcref) (elem funcref) (elem funcref)
+  (elem funcref) (elem funcref) (elem funcref) (elem funcref)
+  (elem funcref) (elem funcref) (elem funcref) (elem funcref)
+  (elem funcref) (elem funcref) (elem funcref) (elem funcref)
+  (elem funcref)
+  (func (elem.drop 64)))

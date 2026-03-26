@@ -1,0 +1,12 @@
+(module
+  (func (export "eq") (param $x v128) (param $y v128) (result v128) (i32x4.eq (local.get $x) (local.get $y)))
+  (func (export "ne") (param $x v128) (param $y v128) (result v128) (i32x4.ne (local.get $x) (local.get $y)))
+  (func (export "lt_s") (param $x v128) (param $y v128) (result v128) (i32x4.lt_s (local.get $x) (local.get $y)))
+  (func (export "lt_u") (param $x v128) (param $y v128) (result v128) (i32x4.lt_u (local.get $x) (local.get $y)))
+  (func (export "le_s") (param $x v128) (param $y v128) (result v128) (i32x4.le_s (local.get $x) (local.get $y)))
+  (func (export "le_u") (param $x v128) (param $y v128) (result v128) (i32x4.le_u (local.get $x) (local.get $y)))
+  (func (export "gt_s") (param $x v128) (param $y v128) (result v128) (i32x4.gt_s (local.get $x) (local.get $y)))
+  (func (export "gt_u") (param $x v128) (param $y v128) (result v128) (i32x4.gt_u (local.get $x) (local.get $y)))
+  (func (export "ge_s") (param $x v128) (param $y v128) (result v128) (i32x4.ge_s (local.get $x) (local.get $y)))
+  (func (export "ge_u") (param $x v128) (param $y v128) (result v128) (i32x4.ge_u (local.get $x) (local.get $y)))
+)
