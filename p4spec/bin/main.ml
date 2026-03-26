@@ -327,15 +327,76 @@ let run_wasm_command =
          let result = Driver.run_wasm_program relname filename_wasm in
          Inst.Hook.finish ();
          match result with
-         | Pass _ -> Format.printf "passed\n"
-         | ExpectedFail _ -> Format.printf "failed as expected\n"
-         | Fail (`Syntax (_, msg)) -> Format.printf "syntax error: %s\n" msg
-         | Fail (`Runtime (_, msg)) -> Format.printf "runtime error: %s\n" msg
-         | UnexpectedPass _ -> Format.printf "passed unexpectedly\n"
+        | Pass _ -> Format.printf "Passed\n%!";
+        | ExpectedFail _ -> Format.printf "Expected fail (passed)\n%!"
+        | Fail (`Syntax (_, msg)) -> Format.printf "Failed (syntax error): %s\n%!" msg
+        | Fail (`Runtime (_, msg)) -> Format.printf "Failed (runtime error): %s\n%!" msg
+        | UnexpectedPass _ -> Format.printf "Unexpected pass (failed)\n%!";
        with
        | CommandError msg -> Format.printf "%s\n" msg
        | ParseError (at, msg) -> Format.printf "%s\n" (string_of_error at msg)
        | ElabError (at, msg) -> Format.printf "%s\n" (string_of_error at msg))
+
+let run_wasm_suite =
+  Core.Command.basic ~summary:"execute the Wasm spec against a Wasm test suite"
+     (let open Core.Command.Let_syntax in
+      let open Core.Command.Param in
+      let%map filenames_spec =
+        anon (non_empty_sequence_as_list ("filename" %: string))
+      and relname = flag "-rel" (required string) ~doc:"relation to run"
+      and testdirs_wasm = flag "-wasm-dir" (listed string) ~doc:"Wasm test directories"
+      and no_cache = flag "-no-cache" no_arg ~doc:"disable caching"
+      and det = flag "-det" no_arg ~doc:"deterministic mode"
+      and profile = flag "-profile" no_arg ~doc:"profiling"
+      and mode =
+       Command.Param.choose_one
+         [
+           flag "il" no_arg ~doc:"run IL interpreter"
+           |> map ~f:(fun b -> Core.Option.some_if b `IL);
+           flag "sl" no_arg ~doc:"run SL interpreter"
+           |> map ~f:(fun b -> Core.Option.some_if b `SL);
+         ]
+         ~if_nothing_chosen:(Default_to `SL)
+      in
+      fun () ->
+        let filenames_wasm =
+            testdirs_wasm
+            |> List.concat_map (Util.Filesys.collect_files ~suffix:".wast")
+        in
+        let cache = not no_cache in
+        let spec_sim, (module Driver) =
+          runner ~cache ~det mode filenames_spec
+        in
+        let handlers =
+          if profile then
+            let (module PH : Inst.Handler.HANDLER) = Inst.Profile.make () in
+            [ (module PH : Inst.Handler.HANDLER) ]
+          else []
+        in
+        let total = ref 0 in
+        let passed = ref 0 in
+        let failed = ref 0 in
+        List.iter
+          (fun filename_wasm ->
+            try
+              Inst.Hook.register handlers;
+              Inst.Hook.init_spec spec_sim;
+              total := !total + 1;
+              let result = Driver.run_wasm_program relname filename_wasm in
+              Inst.Hook.finish ();
+              match result with
+              | Pass _ -> passed := !passed + 1; Format.printf "Passed\n%!"
+              | ExpectedFail _ -> passed := !passed + 1; Format.printf "Expected fail (passed)\n%!"
+              | Fail (`Syntax (_, msg)) -> failed := !failed + 1; Format.printf "Failed (syntax error): %s\n%!" msg
+              | Fail (`Runtime (_, msg)) -> failed := !failed + 1; Format.printf "Failed (runtime error): %s\n%!" msg
+              | UnexpectedPass _ -> failed := !failed + 1; Format.printf "Unexpected pass (failed)\n%!"
+              with
+              | CommandError msg -> failed := !failed + 1; Format.printf "%s\n%!" msg
+              | ParseError (at, msg) -> failed := !failed + 1; Format.printf "%s\n%!" (string_of_error at msg)
+              | ElabError (at, msg) -> failed := !failed + 1; Format.printf "%s\n%!" (string_of_error at msg))
+        filenames_wasm;
+        Format.printf "typechecker: %d/%d passed, %d failed\n%!" !passed !total !failed;
+        )
 
 let sim_command =
   Core.Command.basic
@@ -804,6 +865,7 @@ let command =
       (* Execution *)
       ("run", run_command);
       ("run-wasm", run_wasm_command);
+      ("run-wasm-suite", run_wasm_suite);
       ("sim", sim_command);
       (* Coverage *)
       ("cover-run", cover_run_command);
