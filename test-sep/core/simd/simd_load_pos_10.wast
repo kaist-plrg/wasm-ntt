@@ -1,0 +1,7 @@
+(module (memory 1)
+  (data (offset (i32.const 0)) "\AA\AA\AA\AA\AA\AA\AA\AA\AA\AA\AA\AA\AA\AA\AA\AA")
+  (data (offset (i32.const 16)) "\02\00\00\00\02\00\00\00\02\00\00\00\02\00\00\00")
+  (func (export "as-f32x4.min-operand") (result v128)
+    (f32x4.min (v128.load (i32.const 0)) (v128.load offset=16 (i32.const 1)))
+  )
+)

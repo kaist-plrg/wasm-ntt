@@ -1,0 +1,8 @@
+(module (memory 1)
+  (data (offset (i32.const 0))  "\AA\AA\AA\AA\AA\AA\AA\AA\AA\AA\AA\AA\AA\AA\AA\AA")
+  (data (offset (i32.const 16)) "\BB\BB\BB\BB\BB\BB\BB\BB\BB\BB\BB\BB\BB\BB\BB\BB")
+  (data (offset (i32.const 32)) "\F0\F0\F0\F0\FF\FF\FF\FF\00\00\00\00\FF\00\FF\00")
+  (func (export "as-v128.bitselect-operand") (result v128)
+    (v128.bitselect (v128.load (i32.const 0)) (v128.load (i32.const 16)) (v128.load (i32.const 32)))
+  )
+)
