@@ -37,7 +37,7 @@ rule Heaptype_ok/abs:
 
 rule Heaptype_ok/typeuse:
   C_0 |- VarHT (StatX x) : OK
-  -- if dt = C_0.TYPES[x]
+  -- if $(x >= 0) /\ $(x < |C_0.TYPES|)
 
 rule Reftype_ok:
   C_0 |- null ht : OK
