@@ -310,6 +310,54 @@ let run_command =
            Format.printf "%s\n" (string_of_error at msg)
        | InterpError (at, msg) -> Format.printf "%s\n" (string_of_error at msg))
 
+let run_wasm_command =
+  Core.Command.basic ~summary:"execute the Wasm spec against a Wasm program"
+    (let open Core.Command.Let_syntax in
+     let open Core.Command.Param in
+     let%map filenames_spec =
+       anon (non_empty_sequence_as_list ("filename" %: string))
+     and relname = flag "-rel" (required string) ~doc:"relation to run"
+     and filename_wasm = flag "-w" (required string) ~doc:"Wasm program"
+     and no_cache = flag "-no-cache" no_arg ~doc:"disable caching"
+     and det = flag "-det" no_arg ~doc:"deterministic mode"
+     and profile = flag "-profile" no_arg ~doc:"profiling"
+     and mode =
+       Command.Param.choose_one
+         [
+           flag "il" no_arg ~doc:"run IL interpreter"
+           |> map ~f:(fun b -> Core.Option.some_if b `IL);
+           flag "sl" no_arg ~doc:"run SL interpreter"
+           |> map ~f:(fun b -> Core.Option.some_if b `SL);
+         ]
+         ~if_nothing_chosen:(Default_to `SL)
+     in
+     fun () ->
+       try
+         let cache = not no_cache in
+         let spec_sim, (module Driver) =
+           runner ~cache ~det mode filenames_spec
+         in
+         let handlers =
+           if profile then
+             let (module PH : Inst.Handler.HANDLER) = Inst.Profile.make () in
+             [ (module PH : Inst.Handler.HANDLER) ]
+           else []
+         in
+         Inst.Hook.register handlers;
+         Inst.Hook.init_spec spec_sim;
+         let result = Driver.run_wasm_program relname filename_wasm in
+         Inst.Hook.finish ();
+         match result with
+         | Pass _ -> Format.printf "passed\n"
+         | ExpectedFail _ -> Format.printf "failed as expected\n"
+         | Fail (`Syntax (_, msg)) -> Format.printf "syntax error: %s\n" msg
+         | Fail (`Runtime (_, msg)) -> Format.printf "runtime error: %s\n" msg
+         | UnexpectedPass _ -> Format.printf "passed unexpectedly\n"
+       with
+       | CommandError msg -> Format.printf "%s\n" msg
+       | ParseError (at, msg) -> Format.printf "%s\n" (string_of_error at msg)
+       | ElabError (at, msg) -> Format.printf "%s\n" (string_of_error at msg))
+
 let sim_command =
   Core.Command.basic
     ~summary:"simulate a target architecture with a P4 program and P4 spec"
@@ -817,6 +865,7 @@ let command =
       ("prose", prose_command);
       (* Execution *)
       ("run", run_command);
+      ("run-wasm", run_wasm_command);
       ("sim", sim_command);
       (* Coverage *)
       ("cover-run", cover_run_command);
