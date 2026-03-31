@@ -171,7 +171,7 @@ let init_storage (dirname_gen : string) : storage =
 let init_seed (cover : DCov_multi.t) : seed = { cover }
 
 let init (randseed : int option) (modes : Modes.t) (specenv : specenv)
-    (storage : storage) (seed : seed) =
+    (storage : storage) (seed : seed) : t =
   let rand = Option.value ~default:2025 randseed in
   Random.init rand;
   { rand; modes; specenv; storage; seed }

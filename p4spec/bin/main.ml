@@ -21,6 +21,42 @@ let run_with_instr (module Simulator : SIM) spec_sim relname includes_p4 path_p4
   let cover = read_coverage_instr () in
   (result, cover)
 
+module Wasm_run = struct
+  type result =
+    | WasmPass of Lang.Il.value list
+    | WasmFail of [ `Syntax of region * string | `Runtime of region * string ]
+    | WasmExpectedFail of
+        [ `Syntax of region * string | `Runtime of region * string ]
+    | WasmUnexpectedPass of Lang.Il.value list
+
+  let run (module Simulator : SIM) (relname : string) (path_wasm : string) :
+      result =
+    try
+      let value_program, expectation = Wasm_interface.Parse.parse_file path_wasm in
+      Inst.Hook.on_program value_program;
+      match (expectation, Simulator.Interp.eval_rel relname [ value_program ]) with
+      | Wasm_interface.Parse.Positive, Pass values -> WasmPass values
+      | Wasm_interface.Parse.Positive, Fail (at, msg) ->
+          WasmFail (`Runtime (at, msg))
+      | Wasm_interface.Parse.Negative, Pass values -> WasmUnexpectedPass values
+      | Wasm_interface.Parse.Negative, Fail (at, msg) ->
+          WasmExpectedFail (`Runtime (at, msg))
+    with
+    | ParseError (at, msg) -> WasmFail (`Syntax (at, msg))
+    | InterpError (at, msg) -> WasmFail (`Runtime (at, msg))
+end
+
+let wasm_run_with_instr (module Simulator : SIM) spec_sim relname path_wasm =
+  let (module IH : Inst.Handler.HANDLER), read_coverage_instr =
+    Inst.Coverage_instr.make ()
+  in
+  Inst.Hook.register [ (module IH : Inst.Handler.HANDLER) ];
+  Inst.Hook.init_spec spec_sim;
+  let result = Wasm_run.run (module Simulator) relname path_wasm in
+  Inst.Hook.finish ();
+  let cover = read_coverage_instr () in
+  (result, cover)
+
 let run_with_dangling (module Simulator : SIM) spec_sim relname includes_p4
     path_p4 =
   let (module DH : Inst.Handler.HANDLER), read_coverage_dangling =
@@ -29,6 +65,17 @@ let run_with_dangling (module Simulator : SIM) spec_sim relname includes_p4
   Inst.Hook.register [ (module DH : Inst.Handler.HANDLER) ];
   Inst.Hook.init_spec spec_sim;
   let result = Simulator.Interp.eval_program relname includes_p4 path_p4 in
+  Inst.Hook.finish ();
+  let cover = read_coverage_dangling () in
+  (result, cover)
+
+let wasm_run_with_dangling (module Simulator : SIM) spec_sim relname path_wasm =
+  let (module DH : Inst.Handler.HANDLER), read_coverage_dangling =
+    Inst.Coverage_dangling.make ()
+  in
+  Inst.Hook.register [ (module DH : Inst.Handler.HANDLER) ];
+  Inst.Hook.init_spec spec_sim;
+  let result = Wasm_run.run (module Simulator) relname path_wasm in
   Inst.Hook.finish ();
   let cover = read_coverage_dangling () in
   (result, cover)
@@ -79,6 +126,28 @@ let cover_run_instr ?(arch : string option) mode paths_spec relname includes_p4
   in
   Coverage.Instr.Log.log_spec ~path_cov_opt:(Some path_cov) cover_multi spec_sl
 
+let wasm_cover_run_instr ?(arch : string option) mode paths_spec relname
+    paths_wasm path_cov =
+  let spec_sim, (module Simulator) =
+    Backend_sim.Build.build ?arch ~final:true mode paths_spec
+  in
+  let spec_sl =
+    match spec_sim with
+    | SL spec_sl -> spec_sl
+    | _ -> raise (CommandError "instruction coverage is only supported for SL")
+  in
+  let cover_multi = Coverage.Instr.Multi.init spec_sl in
+  let cover_multi =
+    List.fold_left
+      (fun cover_multi path_wasm ->
+        let _, cover_single =
+          wasm_run_with_instr (module Simulator) spec_sim relname path_wasm
+        in
+        Coverage.Instr.Multi.extend cover_multi path_wasm cover_single)
+      cover_multi paths_wasm
+  in
+  Coverage.Instr.Log.log_spec ~path_cov_opt:(Some path_cov) cover_multi spec_sl
+
 let cover_run_dangling ?(arch : string option) mode paths_spec relname
     includes_p4 paths_p4 path_cov =
   let spec_sim, (module Simulator) =
@@ -107,6 +176,38 @@ let cover_run_dangling ?(arch : string option) mode paths_spec relname
         Coverage.Dangling.Multi.extend cover_multi path_p4 wellformed welltyped
           cover_single)
       cover_multi paths_p4
+  in
+  Coverage.Dangling.Multi.log ~path_cov_opt:(Some path_cov) cover_multi
+
+let wasm_cover_run_dangling ?(arch : string option) mode paths_spec relname
+    paths_wasm path_cov =
+  let spec_sim, (module Simulator) =
+    Backend_sim.Build.build ?arch ~final:true mode paths_spec
+  in
+  let spec_sl =
+    match spec_sim with
+    | SL spec_sl -> spec_sl
+    | _ -> raise (CommandError "dangling coverage is only supported for SL")
+  in
+  let cover_multi = Coverage.Dangling.Multi.init spec_sl in
+  let cover_multi =
+    List.fold_left
+      (fun cover_multi path_wasm ->
+        let program_result, cover_single =
+          wasm_run_with_dangling (module Simulator) spec_sim relname path_wasm
+        in
+        let wellformed, welltyped =
+          match program_result with
+          | Wasm_run.WasmPass _ | Wasm_run.WasmUnexpectedPass _ ->
+              (true, true)
+          | Wasm_run.WasmFail (`Syntax _) -> (false, false)
+          | Wasm_run.WasmFail (`Runtime _)
+          | Wasm_run.WasmExpectedFail _ ->
+              (true, false)
+        in
+        Coverage.Dangling.Multi.extend cover_multi path_wasm wellformed
+          welltyped cover_single)
+      cover_multi paths_wasm
   in
   Coverage.Dangling.Multi.log ~path_cov_opt:(Some path_cov) cover_multi
 
@@ -314,10 +415,10 @@ let run_wasm_command =
   Core.Command.basic ~summary:"execute the Wasm spec against a Wasm program"
     (let open Core.Command.Let_syntax in
      let open Core.Command.Param in
-     let%map filenames_spec =
-       anon (non_empty_sequence_as_list ("filename" %: string))
+     let%map paths_spec =
+       anon (non_empty_sequence_as_list ("path" %: string))
      and relname = flag "-rel" (required string) ~doc:"relation to run"
-     and filename_wasm = flag "-w" (required string) ~doc:"Wasm program"
+     and path_wasm = flag "-w" (required string) ~doc:"Wasm program"
      and no_cache = flag "-no-cache" no_arg ~doc:"disable caching"
      and det = flag "-det" no_arg ~doc:"deterministic mode"
      and profile = flag "-profile" no_arg ~doc:"profiling"
@@ -325,17 +426,21 @@ let run_wasm_command =
        Command.Param.choose_one
          [
            flag "il" no_arg ~doc:"run IL interpreter"
-           |> map ~f:(fun b -> Core.Option.some_if b `IL);
+           |> map ~f:(fun b -> Core.Option.some_if b AL_mode);
+           flag "al" no_arg ~doc:"run AL interpreter"
+           |> map ~f:(fun b -> Core.Option.some_if b AL_mode);
            flag "sl" no_arg ~doc:"run SL interpreter"
-           |> map ~f:(fun b -> Core.Option.some_if b `SL);
+           |> map ~f:(fun b -> Core.Option.some_if b SL_mode);
+           flag "pl" no_arg ~doc:"run PL interpreter"
+           |> map ~f:(fun b -> Core.Option.some_if b PL_mode);
          ]
-         ~if_nothing_chosen:(Default_to `SL)
+         ~if_nothing_chosen:(Default_to SL_mode)
      in
      fun () ->
        try
          let cache = not no_cache in
-         let spec_sim, (module Driver) =
-           runner ~cache ~det mode filenames_spec
+         let spec_sim, (module Simulator) =
+           Backend_sim.Build.build ~cache ~det ~final:true mode paths_spec
          in
          let handlers =
            if profile then
@@ -345,14 +450,18 @@ let run_wasm_command =
          in
          Inst.Hook.register handlers;
          Inst.Hook.init_spec spec_sim;
-         let result = Driver.run_wasm_program relname filename_wasm in
+         let result = Wasm_run.run (module Simulator) relname path_wasm in
          Inst.Hook.finish ();
          match result with
-        | Pass _ -> Format.printf "Passed\n%!";
-        | ExpectedFail _ -> Format.printf "Expected fail (passed)\n%!"
-        | Fail (`Syntax (_, msg)) -> Format.printf "Failed (syntax error): %s\n%!" msg
-        | Fail (`Runtime (_, msg)) -> Format.printf "Failed (runtime error): %s\n%!" msg
-        | UnexpectedPass _ -> Format.printf "Unexpected pass (failed)\n%!";
+         | Wasm_run.WasmPass _ -> Format.printf "Passed\n%!"
+         | Wasm_run.WasmExpectedFail _ ->
+             Format.printf "Expected fail (passed)\n%!"
+         | Wasm_run.WasmFail (`Syntax (_, msg)) ->
+             Format.printf "Failed (syntax error): %s\n%!" msg
+         | Wasm_run.WasmFail (`Runtime (_, msg)) ->
+             Format.printf "Failed (runtime error): %s\n%!" msg
+         | Wasm_run.WasmUnexpectedPass _ ->
+             Format.printf "Unexpected pass (failed)\n%!"
        with
        | CommandError msg -> Format.printf "%s\n" msg
        | ParseError (at, msg) -> Format.printf "%s\n" (string_of_error at msg)
@@ -362,8 +471,8 @@ let run_wasm_suite =
   Core.Command.basic ~summary:"execute the Wasm spec against a Wasm test suite"
      (let open Core.Command.Let_syntax in
       let open Core.Command.Param in
-      let%map filenames_spec =
-        anon (non_empty_sequence_as_list ("filename" %: string))
+      let%map paths_spec =
+        anon (non_empty_sequence_as_list ("path" %: string))
       and relname = flag "-rel" (required string) ~doc:"relation to run"
       and testdirs_wasm = flag "-wasm-dir" (listed string) ~doc:"Wasm test directories"
       and no_cache = flag "-no-cache" no_arg ~doc:"disable caching"
@@ -373,20 +482,24 @@ let run_wasm_suite =
        Command.Param.choose_one
          [
            flag "il" no_arg ~doc:"run IL interpreter"
-           |> map ~f:(fun b -> Core.Option.some_if b `IL);
+           |> map ~f:(fun b -> Core.Option.some_if b AL_mode);
+           flag "al" no_arg ~doc:"run AL interpreter"
+           |> map ~f:(fun b -> Core.Option.some_if b AL_mode);
            flag "sl" no_arg ~doc:"run SL interpreter"
-           |> map ~f:(fun b -> Core.Option.some_if b `SL);
+           |> map ~f:(fun b -> Core.Option.some_if b SL_mode);
+           flag "pl" no_arg ~doc:"run PL interpreter"
+           |> map ~f:(fun b -> Core.Option.some_if b PL_mode);
          ]
-         ~if_nothing_chosen:(Default_to `SL)
+         ~if_nothing_chosen:(Default_to SL_mode)
       in
       fun () ->
-        let filenames_wasm =
+        let paths_wasm =
             testdirs_wasm
             |> List.concat_map (Util.Filesys.collect_files ~suffix:".wast")
         in
         let cache = not no_cache in
-        let spec_sim, (module Driver) =
-          runner ~cache ~det mode filenames_spec
+        let spec_sim, (module Simulator) =
+          Backend_sim.Build.build ~cache ~det ~final:true mode paths_spec
         in
         let handlers =
           if profile then
@@ -398,24 +511,34 @@ let run_wasm_suite =
         let passed = ref 0 in
         let failed = ref 0 in
         List.iter
-          (fun filename_wasm ->
+          (fun path_wasm ->
             try
               Inst.Hook.register handlers;
               Inst.Hook.init_spec spec_sim;
               total := !total + 1;
-              let result = Driver.run_wasm_program relname filename_wasm in
+              let result = Wasm_run.run (module Simulator) relname path_wasm in
               Inst.Hook.finish ();
               match result with
-              | Pass _ -> passed := !passed + 1; Format.printf "Passed\n%!"
-              | ExpectedFail _ -> passed := !passed + 1; Format.printf "Expected fail (passed)\n%!"
-              | Fail (`Syntax (_, msg)) -> failed := !failed + 1; Format.printf "Failed (syntax error): %s\n%!" msg
-              | Fail (`Runtime (_, msg)) -> failed := !failed + 1; Format.printf "Failed (runtime error): %s\n%!" msg
-              | UnexpectedPass _ -> failed := !failed + 1; Format.printf "Unexpected pass (failed)\n%!"
+              | Wasm_run.WasmPass _ ->
+                  passed := !passed + 1;
+                  Format.printf "Passed\n%!"
+              | Wasm_run.WasmExpectedFail _ ->
+                  passed := !passed + 1;
+                  Format.printf "Expected fail (passed)\n%!"
+              | Wasm_run.WasmFail (`Syntax (_, msg)) ->
+                  failed := !failed + 1;
+                  Format.printf "Failed (syntax error): %s\n%!" msg
+              | Wasm_run.WasmFail (`Runtime (_, msg)) ->
+                  failed := !failed + 1;
+                  Format.printf "Failed (runtime error): %s\n%!" msg
+              | Wasm_run.WasmUnexpectedPass _ ->
+                  failed := !failed + 1;
+                  Format.printf "Unexpected pass (failed)\n%!"
               with
               | CommandError msg -> failed := !failed + 1; Format.printf "%s\n%!" msg
               | ParseError (at, msg) -> failed := !failed + 1; Format.printf "%s\n%!" (string_of_error at msg)
               | ElabError (at, msg) -> failed := !failed + 1; Format.printf "%s\n%!" (string_of_error at msg))
-        filenames_wasm;
+        paths_wasm;
         Format.printf "typechecker: %d/%d passed, %d failed\n%!" !passed !total !failed;
         )
 
@@ -530,6 +653,46 @@ let cover_run_command =
                path_cov
          | `Dangling ->
              cover_run_dangling SL_mode paths_spec relname includes_p4 paths_p4
+               path_cov
+       with
+       | CommandError msg -> Format.printf "%s\n" msg
+       | ParseError (at, msg)
+       | ElabError (at, msg)
+       | StructError (at, msg)
+       | InterpError (at, msg)
+       | ExternError (at, msg) ->
+           Format.printf "%s\n" (string_of_error at msg))
+
+let wasm_cover_run_command =
+  Core.Command.basic ~summary:"measure coverage of the spec"
+    (let open Core.Command.Let_syntax in
+     let open Core.Command.Param in
+     let%map paths_spec =
+       anon (non_empty_sequence_as_list ("path" %: string))
+     and relname = flag "-rel" (required string) ~doc:"relation to run"
+     and testdirs_wasm = flag "-wasm-dir" (listed string) ~doc:"Wasm test directories"
+     and path_cov = flag "-cov" (required string) ~doc:"output coverage file"
+     and mode =
+       Command.Param.choose_one
+         [
+           flag "instr" no_arg ~doc:"measure instruction coverage"
+           |> map ~f:(fun b -> Core.Option.some_if b `Instr);
+           flag "dangling" no_arg ~doc:"measure dangling coverage"
+           |> map ~f:(fun b -> Core.Option.some_if b `Dangling);
+         ]
+         ~if_nothing_chosen:(Default_to `Instr)
+     in
+     fun () ->
+       try
+         let paths_wasm =
+           testdirs_wasm
+           |> List.concat_map (Util.Filesys.collect_files ~suffix:".wast")
+         in
+         match mode with
+         | `Instr ->
+             wasm_cover_run_instr SL_mode paths_spec relname paths_wasm path_cov
+         | `Dangling ->
+             wasm_cover_run_dangling SL_mode paths_spec relname paths_wasm
                path_cov
        with
        | CommandError msg -> Format.printf "%s\n" msg
@@ -661,6 +824,41 @@ let run_testgen_command =
        | InterpError (at, msg)
        | ExternError (at, msg) ->
            Format.printf "%s\n" (string_of_error at msg))
+
+let wasm_run_testgen_command =
+  Core.Command.basic
+    ~summary:"generate negative type checker tests from a Wasm spec"
+    (let open Core.Command.Let_syntax in
+     let open Core.Command.Param in
+     let%map _paths_spec =
+       anon (non_empty_sequence_as_list ("path" %: string))
+     and _relname = flag "-rel" (required string) ~doc:"relation to run"
+     and _fuel = flag "-fuel" (required int) ~doc:"fuel for test generation"
+     and _gendir =
+       flag "-gen-dir" (required string)
+         ~doc:"directory for generated wasm programs"
+     and _name_campaign =
+       flag "-name" (optional string)
+         ~doc:"name of the test generation campaign"
+     and _silent = flag "-silent" no_arg ~doc:"do not print logs to stdout"
+     and _randseed =
+       flag "-seed" (optional int) ~doc:"seed for random number generator"
+     and _bootdir =
+       flag "-boot-dir" (optional string) ~doc:"seed wasm directory for boot"
+     and _path_boot =
+       flag "-boot-file" (optional string) ~doc:"coverage file for boot"
+     and _random = flag "-random" no_arg ~doc:"randomize AST selection"
+     and _hybrid =
+       flag "-hybrid" no_arg
+         ~doc:"randomize AST selection when no derivations exist"
+     and _strict =
+       flag "-strict" no_arg
+         ~doc:"cover a new dangling only if it was intended by a mutation"
+     in
+     fun () ->
+       Format.printf
+         "wasm-testgen is not available on the concrete runner yet; use \
+          run-wasm or wasm-cover-run, or port the fuzzer to SIM first.\n")
 
 let run_testgen_debug_command =
   Core.Command.basic
@@ -931,9 +1129,11 @@ let command =
       ("sim", sim_command);
       (* Coverage *)
       ("cover-run", cover_run_command);
+      ("wasm-cover-run", wasm_cover_run_command);
       ("cover-sim", cover_sim_command);
       (* Negative type checker test generation and coverage *)
       ("testgen", run_testgen_command);
+      ("wasm-testgen", wasm_run_testgen_command);
       ("testgen-dbg", run_testgen_debug_command);
       ("interesting", interesting_command);
       (* Splicing *)
