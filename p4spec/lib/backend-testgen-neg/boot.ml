@@ -20,6 +20,12 @@ let boot_cold (module Driver : Sim.DRIVER) (spec : Sim.spec) (relname : string)
     (module Driver)
     spec relname includes_p4 filenames_p4
 
+let wasm_boot_cold (module Driver : Sim.DRIVER) (spec : Sim.spec) (relname : string)
+    (dirname_wasm : string) : DCov_multi.t =
+  let filenames_wasm = Util.Filesys.collect_files ~suffix:".wast" dirname_wasm in
+  Runner.run_wasm_programs_with_dangling
+    (module Driver)
+    spec relname filenames_wasm
 (* On warm boot, load the coverage from a file *)
 
 let boot_warm (filename_cov : string) : DCov_multi.t =

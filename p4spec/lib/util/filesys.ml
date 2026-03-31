@@ -55,8 +55,29 @@ let cp (filename_src : string) (dirname_dst : string) : string =
     close_out oc;
     filename_dst
 
+let cpw (filename_src : string) (dirname_dst : string) : string =
+  let filename_dst =
+    dirname_dst ^ "/" ^ base ~suffix:".wast" filename_src ^ ".wast"
+  in
+  let ic = open_in filename_src in
+  let oc = open_out filename_dst in
+  try
+    while true do
+      output_string oc (input_line ic ^ "\n")
+    done;
+    raise End_of_file
+  with End_of_file ->
+    close_in ic;
+    close_out oc;
+    filename_dst
+
 let rmdir (dirname : string) : unit =
   let files = collect_files ~suffix:".p4" dirname in
+  List.iter Sys_unix.remove files;
+  Unix.rmdir dirname
+
+let rmdirw (dirname : string) : unit =
+  let files = collect_files ~suffix:".wast" dirname in
   List.iter Sys_unix.remove files;
   Unix.rmdir dirname
 

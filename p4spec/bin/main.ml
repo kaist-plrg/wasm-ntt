@@ -51,6 +51,18 @@ let run_with_instr (module Driver : Runtime.Sim.Simulator.DRIVER) spec_sim
   let cover = read_coverage_instr () in
   (result, cover)
 
+let wasm_run_with_instr (module Driver : Runtime.Sim.Simulator.DRIVER) spec_sim
+    relname filename_wasm =
+  let (module IH : Inst.Handler.HANDLER), read_coverage_instr =
+    Inst.Coverage_instr.make ()
+  in
+  Inst.Hook.register [ (module IH : Inst.Handler.HANDLER) ];
+  Inst.Hook.init_spec spec_sim;
+  let result = Driver.run_wasm_program relname filename_wasm in
+  Inst.Hook.finish ();
+  let cover = read_coverage_instr () in
+  (result, cover)
+
 let run_with_dangling (module Driver : Runtime.Sim.Simulator.DRIVER) spec_sim
     relname includes_p4 filename_p4 =
   let (module DH : Inst.Handler.HANDLER), read_coverage_dangling =
@@ -59,6 +71,18 @@ let run_with_dangling (module Driver : Runtime.Sim.Simulator.DRIVER) spec_sim
   Inst.Hook.register [ (module DH : Inst.Handler.HANDLER) ];
   Inst.Hook.init_spec spec_sim;
   let result = Driver.run_program relname includes_p4 filename_p4 in
+  Inst.Hook.finish ();
+  let cover = read_coverage_dangling () in
+  (result, cover)
+
+let wasm_run_with_dangling (module Driver : Runtime.Sim.Simulator.DRIVER) spec_sim
+    relname filename_wasm =
+  let (module DH : Inst.Handler.HANDLER), read_coverage_dangling =
+    Inst.Coverage_dangling.make ()
+  in
+  Inst.Hook.register [ (module DH : Inst.Handler.HANDLER) ];
+  Inst.Hook.init_spec spec_sim;
+  let result = Driver.run_wasm_program relname filename_wasm in
   Inst.Hook.finish ();
   let cover = read_coverage_dangling () in
   (result, cover)
@@ -110,6 +134,29 @@ let cover_run_instr ?(arch : string option) mode filenames_spec relname
   Coverage.Instr.Log.log_spec ~filename_cov_opt:(Some filename_cov) cover_multi
     spec_sl
 
+let wasm_cover_run_instr ?(arch : string option) mode filenames_spec relname
+    filenames_wasm filename_cov =
+  let spec_sim, (module Driver) = runner ?arch mode filenames_spec in
+  let spec_sl =
+    match spec_sim with
+    | Runtime.Sim.Simulator.SL spec_sl -> spec_sl
+    | _ -> raise (CommandError "instruction coverage is only supported for SL")
+  in
+  let cover_multi = Coverage.Instr.Multi.init spec_sl in
+  let cover_multi =
+    List.fold_left
+      (fun cover_multi filename_p4 ->
+        let _, cover_single =
+          wasm_run_with_instr
+            (module Driver)
+            spec_sim relname filename_p4
+        in
+        Coverage.Instr.Multi.extend cover_multi filename_p4 cover_single)
+      cover_multi filenames_wasm
+  in
+  Coverage.Instr.Log.log_spec ~filename_cov_opt:(Some filename_cov) cover_multi
+    spec_sl
+
 let cover_run_dangling ?(arch : string option) mode filenames_spec relname
     includes_p4 filenames_p4 filename_cov =
   let spec_sim, (module Driver) = runner ?arch mode filenames_spec in
@@ -136,6 +183,35 @@ let cover_run_dangling ?(arch : string option) mode filenames_spec relname
         Coverage.Dangling.Multi.extend cover_multi filename_p4 wellformed
           welltyped cover_single)
       cover_multi filenames_p4
+  in
+  Coverage.Dangling.Multi.log ~filename_cov_opt:(Some filename_cov) cover_multi
+
+let wasm_cover_run_dangling ?(arch : string option) mode filenames_spec relname
+    filenames_wasm filename_cov =
+  let spec_sim, (module Driver) = runner ?arch mode filenames_spec in
+  let spec_sl =
+    match spec_sim with
+    | Runtime.Sim.Simulator.SL spec_sl -> spec_sl
+    | _ -> raise (CommandError "instruction coverage is only supported for SL")
+  in
+  let cover_multi = Coverage.Dangling.Multi.init spec_sl in
+  let cover_multi =
+    List.fold_left
+      (fun cover_multi filename_wasm ->
+        let program_result, cover_single =
+          wasm_run_with_dangling
+            (module Driver)
+            spec_sim relname filename_wasm
+        in
+        let wellformed, welltyped =
+          match program_result with
+          | Pass _ | UnexpectedPass _ -> (true, true)
+          | Fail (`Syntax _) -> (false, false)
+          | Fail (`Runtime _) | ExpectedFail _ -> (true, false)
+        in
+        Coverage.Dangling.Multi.extend cover_multi filename_wasm wellformed
+          welltyped cover_single)
+      cover_multi filenames_wasm
   in
   Coverage.Dangling.Multi.log ~filename_cov_opt:(Some filename_cov) cover_multi
 
@@ -493,6 +569,42 @@ let cover_run_command =
        | ParseError (at, msg) | ElabError (at, msg) ->
            Format.printf "%s\n" (string_of_error at msg))
 
+let wasm_cover_run_command =
+  Core.Command.basic ~summary:"measure coverage of the spec"
+    (let open Core.Command.Let_syntax in
+     let open Core.Command.Param in
+     let%map filenames_spec =
+       anon (non_empty_sequence_as_list ("filename" %: string))
+     and relname = flag "-rel" (required string) ~doc:"relation to run"
+     and testdirs_wasm = flag "-wasm-dir" (listed string) ~doc:"Wasm test directories"
+     and filename_cov =
+       flag "-cov" (required string) ~doc:"output coverage file"
+     and mode =
+       Command.Param.choose_one
+         [
+           flag "instr" no_arg ~doc:"measure instruction coverage"
+           |> map ~f:(fun b -> Core.Option.some_if b `Instr);
+           flag "dangling" no_arg ~doc:"measure dangling coverage"
+           |> map ~f:(fun b -> Core.Option.some_if b `Dangling);
+         ]
+         ~if_nothing_chosen:(Default_to `Instr)
+     in
+     fun () ->
+       try
+         let filenames_wasm =
+           testdirs_wasm
+           |> List.concat_map (Util.Filesys.collect_files ~suffix:".wast")
+         in
+         match mode with
+         | `Instr ->
+             wasm_cover_run_instr `SL filenames_spec relname filenames_wasm filename_cov
+         | `Dangling ->
+             wasm_cover_run_dangling `SL filenames_spec relname filenames_wasm filename_cov
+       with
+       | CommandError msg -> Format.printf "%s\n" msg
+       | ParseError (at, msg) | ElabError (at, msg) ->
+           Format.printf "%s\n" (string_of_error at msg))
+
 let cover_sim_command =
   Core.Command.basic
     ~summary:"measure coverage of the spec when simulated on STF"
@@ -606,6 +718,73 @@ let run_testgen_command =
            else Backend_testgen_neg.Modes.Relaxed
          in
          Backend_testgen_neg.Gen.fuzzer fuel spec_sl relname includes_p4 gendir
+           name_campaign randseed logmode bootmode mutationmode covermode
+       with
+       | CommandError msg -> Format.printf "%s\n" msg
+       | ParseError (at, msg) | ElabError (at, msg) ->
+           Format.printf "%s\n" (string_of_error at msg))
+
+let wasm_run_testgen_command =
+  Core.Command.basic
+    ~summary:"generate negative type checker tests from a Wasm spec"
+    (let open Core.Command.Let_syntax in
+     let open Core.Command.Param in
+     let%map filenames_spec =
+       anon (non_empty_sequence_as_list ("filename" %: string))
+     and relname = flag "-rel" (required string) ~doc:"relation to run"
+     and fuel = flag "-fuel" (required int) ~doc:"fuel for test generation"
+     and gendir =
+       flag "-gen-dir" (required string)
+         ~doc:"directory for generated wasm programs"
+     and name_campaign =
+       flag "-name" (optional string)
+         ~doc:"name of the test generation campaign"
+     and silent = flag "-silent" no_arg ~doc:"do not print logs to stdout"
+     and randseed =
+       flag "-seed" (optional int) ~doc:"seed for random number generator"
+     and bootdir =
+       flag "-boot-dir" (optional string) ~doc:"seed wasm directory for boot"
+     and filename_boot =
+       flag "-boot-file" (optional string) ~doc:"coverage file for boot"
+     and random = flag "-random" no_arg ~doc:"randomize AST selection"
+     and hybrid =
+       flag "-hybrid" no_arg
+         ~doc:"randomize AST selection when no derivations exist"
+     and strict =
+       flag "-strict" no_arg
+         ~doc:"cover a new phantom only if it was intended by a mutation"
+     in
+     fun () ->
+       try
+         let spec_sl = structure filenames_spec in
+         let logmode =
+           if silent then Backend_testgen_neg.Modes.Silent
+           else Backend_testgen_neg.Modes.Verbose
+         in
+         let bootmode =
+           match (bootdir, filename_boot) with
+           | Some bootdir, None ->
+               Backend_testgen_neg.Modes.Cold ([], bootdir)
+           | None, Some filename_boot ->
+               Backend_testgen_neg.Modes.Warm filename_boot
+           | Some _, Some _ ->
+               raise
+                 (CommandError
+                    "Error: should specify only one of -boot-dir or -boot-file")
+           | None, None ->
+               raise
+                 (CommandError "Error: should specify either -cold or -warm")
+         in
+         let mutationmode =
+           if random then Backend_testgen_neg.Modes.Random
+           else if hybrid then Backend_testgen_neg.Modes.Hybrid
+           else Backend_testgen_neg.Modes.Derive
+         in
+         let covermode =
+           if strict then Backend_testgen_neg.Modes.Strict
+           else Backend_testgen_neg.Modes.Relaxed
+         in
+         Backend_testgen_neg.Gen.wasm_fuzzer fuel spec_sl relname gendir
            name_campaign randseed logmode bootmode mutationmode covermode
        with
        | CommandError msg -> Format.printf "%s\n" msg
@@ -869,9 +1048,11 @@ let command =
       ("sim", sim_command);
       (* Coverage *)
       ("cover-run", cover_run_command);
+      ("wasm-cover-run", wasm_cover_run_command);
       ("cover-sim", cover_sim_command);
       (* Negative type checker test generation and coverage *)
       ("testgen", run_testgen_command);
+      ("wasm-testgen", wasm_run_testgen_command);
       ("testgen-dbg", run_testgen_debug_command);
       ("interesting", interesting_command);
       (* Splicing *)

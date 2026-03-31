@@ -39,6 +39,14 @@ type specenv = {
   includes_p4 : string list;
 }
 
+type wasm_specenv = {
+  driver : (module Sim.DRIVER);
+  spec : Sim.spec;
+  relname : string;
+  tdenv : TDEnv.t;
+  mixopenv : MixopEnv.t;
+}
+
 (* Storage for generated files *)
 
 type storage = {
@@ -60,6 +68,14 @@ type t = {
   rand : int;
   modes : Modes.t;
   specenv : specenv;
+  storage : storage;
+  seed : seed;
+}
+
+type tw = {
+  rand : int;
+  modes : Modes.t;
+  specenv : wasm_specenv;
   storage : storage;
   seed : seed;
 }
@@ -146,6 +162,14 @@ let init_specenv (spec : spec) (relname : string) (includes_p4 : string list) :
   let spec = Sim.SL spec in
   { driver; printer; spec; relname; tdenv; mixopenv; includes_p4 }
 
+let init_wasm_specenv (spec : spec) (relname : string) : wasm_specenv =
+  let (module Driver : Sim.DRIVER) = Backend_sim.Gen.gen_placeholder () in
+  Driver.init (Sim.SL spec);
+  let driver = (module Driver : Sim.DRIVER) in
+  let tdenv, mixopenv = load_spec TDEnv.empty MixopEnv.empty spec in
+  let spec = Sim.SL spec in
+  { driver; spec; relname; tdenv; mixopenv; }
+
 let init_storage (dirname_gen : string) : storage =
   Util.Filesys.mkdir dirname_gen;
   let dirname_log = dirname_gen ^ "/log" in
@@ -170,8 +194,15 @@ let init_storage (dirname_gen : string) : storage =
 let init_seed (cover : DCov_multi.t) : seed = { cover }
 
 let init (randseed : int option) (modes : Modes.t) (specenv : specenv)
-    (storage : storage) (seed : seed) =
+    (storage : storage) (seed : seed) : t =
   let rand = Option.value ~default:2025 randseed in
+  Random.init rand;
+  { rand; modes; specenv; storage; seed }
+
+
+let initw (randseed : int option) (modes : Modes.t) (specenv : wasm_specenv)
+    (storage : storage) (seed : seed) : tw =
+  let rand = Option.value ~default:2026 randseed in
   Random.init rand;
   { rand; modes; specenv; storage; seed }
 
@@ -198,6 +229,33 @@ let update_hit_seed (config : t) (filename_p4 : string) (welltyped : bool)
               let filenames_p4 = [ filename_p4 ] in
               DCov_multi.Branch.
                 { branch with status = Hit (likely, filenames_p4) }
+        in
+        DCov_multi.Cover.add pid_hit branch cover_seed)
+      pids_hit cover_seed
+  in
+  config.seed.cover <- cover_seed
+
+let update_hit_seedw (config : tw) (filename_wasm : string) (welltyped : bool)
+    (pids_hit : PIdSet.t) : unit =
+  let cover_seed = config.seed.cover in
+  let cover_seed =
+    PIdSet.fold
+      (fun pid_hit cover_seed ->
+        let branch : DCov_multi.Branch.t =
+          DCov_multi.Cover.find pid_hit cover_seed
+        in
+        let branch =
+          match branch.status with
+          | Hit (likely, filenames_wasm) ->
+              let likely = likely && not welltyped in
+              let filenames_wasm = filename_wasm :: filenames_wasm in
+              DCov_multi.Branch.
+                { branch with status = Hit (likely, filenames_wasm) }
+          | _ ->
+              let likely = not welltyped in
+              let filenames_wasm = [ filename_wasm ] in
+              DCov_multi.Branch.
+                { branch with status = Hit (likely, filenames_wasm) }
         in
         DCov_multi.Cover.add pid_hit branch cover_seed)
       pids_hit cover_seed
