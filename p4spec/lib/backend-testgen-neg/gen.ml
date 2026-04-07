@@ -103,7 +103,7 @@ let update_hit_neww' (fuel : int) (pid : pid) (idx_seed : int)
     (if PIdSet.mem pid pids_hit_new then "GOODHIT" else "BADHIT")
   |> Logger.mark config.modes.logmode log;
   let oc = open_out_gen [ Open_append; Open_text ] 0o666 filename_hit_wasm in
-  F.asprintf "\n// Covered pids %s\n" (PIdSet.to_string pids_hit_new)
+  F.asprintf "\n;; Covered pids %s\n" (PIdSet.to_string pids_hit_new)
   |> output_string oc;
   close_out oc;
   (* Update the set of covered phantoms *)
@@ -138,13 +138,24 @@ let update_hit_new (fuel : int) (pid : pid) (idx_seed : int) (strategy : string)
 
 let update_hit_neww (fuel : int) (pid : pid) (idx_seed : int) (strategy : string)
     (idx_method : int) (idx_mutation : int) (config : Config.tw) (log : Logger.t)
-    (rel_result : Sim.rel_result) (cover : DCov_single.t)
-    (filename_gen_wasm : string) (kind : Mutate.kind) (pids_hit_new : PIdSet.t) :
-    unit =
+    (filename_gen_wasm : string) (kind : Mutate.kind) (pids_hit_new : PIdSet.t)
+    (value_program : value) : unit =
   (* Re-run the SL interpreter to make sure of the new hits *)
   (* Then copy the interesting test program to the output directory
      and update the running coverage *)
-  match rel_result with (* relation result 로 ill-formed 를 발라낼 수 있나? *)
+  let prefix = Util.Filesys.read_file filename_gen_wasm in
+  let module_string = config.specenv.printer value_program in
+  let write_generated_wasm (content : string) : unit =
+    let oc = open_out filename_gen_wasm in
+    output_string oc content;
+    close_out oc
+  in
+  write_generated_wasm (F.asprintf "%s%s\n" prefix module_string);
+  let program_result, cover =
+    Runner.run_wasm_program_with_dangling config.specenv.driver config.specenv.spec
+      config.specenv.relname filename_gen_wasm
+  in
+  match program_result with (* relation result 로 ill-formed 를 발라낼 수 있나? *)
   | Pass _ when PIdSet.for_all (DCov_single.is_hit cover) pids_hit_new ->
     let filename_hit_wasm =
         Util.Filesys.cpw filename_gen_wasm config.storage.dirname_welltyped_p4
@@ -152,6 +163,8 @@ let update_hit_neww (fuel : int) (pid : pid) (idx_seed : int) (strategy : string
       update_hit_neww' fuel pid idx_seed strategy idx_method idx_mutation config
         log filename_hit_wasm kind true pids_hit_new
   | Fail _ when PIdSet.for_all (DCov_single.is_hit cover) pids_hit_new ->
+    write_generated_wasm
+      (F.asprintf "%s(assert_invalid\n  %s  \"\"\n)\n" prefix module_string);
     let filename_hit_wasm =
         Util.Filesys.cpw filename_gen_wasm config.storage.dirname_illtyped_p4
       in
@@ -178,6 +191,25 @@ let update_close_miss_new' (fuel : int) (pid : pid) (idx_seed : int)
   Config.update_close_miss_seed config filename_close_miss_p4
     pids_close_miss_new
 
+let update_close_miss_neww' (fuel : int) (pid : pid) (idx_seed : int)
+    (strategy : string) (idx_method : int) (idx_mutation : int)
+    (config : Config.tw) (log : Logger.t) (filename_close_miss_wasm : string)
+    (pids_close_miss_new : PIdSet.t) : unit =
+  F.asprintf "[F %d] [P %d] [S %d] [%s %d] [M %d] %s close-misses %s" fuel pid
+    idx_seed strategy idx_method idx_mutation filename_close_miss_wasm
+    (PIdSet.to_string pids_close_miss_new)
+  |> Logger.log config.modes.logmode log;
+  let oc =
+    open_out_gen [ Open_append; Open_text ] 0o666 filename_close_miss_wasm
+  in
+  F.asprintf "\n;; Close-missed pids %s\n"
+    (PIdSet.to_string pids_close_miss_new)
+  |> output_string oc;
+  close_out oc;
+  (* Update the set of covered phantoms *)
+  Config.update_close_miss_seedw config filename_close_miss_wasm
+    pids_close_miss_new
+
 let update_close_miss_new (fuel : int) (pid : pid) (idx_seed : int)
     (strategy : string) (idx_method : int) (idx_mutation : int)
     (config : Config.t) (log : Logger.t) (filename_gen_p4 : string)
@@ -199,6 +231,33 @@ let update_close_miss_new (fuel : int) (pid : pid) (idx_seed : int)
       in
       update_close_miss_new' fuel pid idx_seed strategy idx_method idx_mutation
         config log filename_close_miss_p4 pids_close_miss_new
+  | _ -> ()
+
+let update_close_miss_neww (fuel : int) (pid : pid) (idx_seed : int)
+    (strategy : string) (idx_method : int) (idx_mutation : int)
+    (config : Config.tw) (log : Logger.t) (filename_gen_wasm : string)
+    (pids_close_miss_new : PIdSet.t) (value_program : value) : unit =
+  (* Re-run the SL interpreter to make sure of the new close-misses *)
+  (* Then copy the interesting test program to the output directory,
+     and update the running coverage *)
+  (* Then copy the interesting test program to the output directory
+     and update the running coverage *)
+  let program_result, cover =
+    Runner.run_wasm_program_with_dangling config.specenv.driver config.specenv.spec
+      config.specenv.relname filename_gen_wasm
+  in
+  match program_result with
+  | Pass _
+    when PIdSet.for_all (DCov_single.is_close_miss cover) pids_close_miss_new ->
+      let oc = open_out_gen [ Open_append; Open_text ] 0o666 filename_gen_wasm in
+      F.asprintf "%s\n" (config.specenv.printer value_program)
+      |> output_string oc;
+      close_out oc;
+      let filename_close_miss_wasm =
+        Util.Filesys.cpw filename_gen_wasm config.storage.dirname_close_miss_p4
+      in
+      update_close_miss_neww' fuel pid idx_seed strategy idx_method idx_mutation
+        config log filename_close_miss_wasm pids_close_miss_new
   | _ -> ()
 
 let update_interesting (fuel : int) (pid : pid) (idx_seed : int)
@@ -255,9 +314,12 @@ let update_interestingw (fuel : int) (pid : pid) (idx_seed : int)
     pid idx_seed strategy idx_method idx_mutation !trials Config.trials_seed
     filename_gen_wasm
   |> Logger.log config.modes.logmode log;
-  let rel_result, cover =
-    Runner.run_program_internal_with_dangling config.specenv.driver
-      config.specenv.spec config.specenv.relname value_program
+  let welltyped, cover =
+    let rel_result, cover =
+      Runner.run_program_internal_with_dangling config.specenv.driver
+        config.specenv.spec config.specenv.relname value_program
+    in
+    match rel_result with Pass _ -> (true, cover) | Fail _ -> (false, cover)
   in
   let time_end = Unix.gettimeofday () in
   F.asprintf
@@ -266,23 +328,23 @@ let update_interestingw (fuel : int) (pid : pid) (idx_seed : int)
     filename_gen_wasm (time_end -. time_start)
   |> Logger.log config.modes.logmode log;
   (* Find newly hit or newly close-missing nodes *)
-  let pids_hit_new, _ = find_interestingw config cover in
+  let pids_hit_new, pids_close_miss_new = find_interestingw config cover in
   (* Collect the file if it covers a new phantom, and update the running coverage
      If in strict mode, we only collect the file if it covers the intended phantom *)
   (match config.modes.covermode with
   | Relaxed ->
       if not (PIdSet.is_empty pids_hit_new) then
         update_hit_neww fuel pid idx_seed strategy idx_method idx_mutation config
-          log rel_result cover filename_gen_wasm kind pids_hit_new
+          log filename_gen_wasm kind pids_hit_new value_program
   | Strict ->
       if PIdSet.mem pid pids_hit_new then
         update_hit_neww fuel pid idx_seed strategy idx_method idx_mutation config
-          log rel_result cover filename_gen_wasm kind (PIdSet.singleton pid))
+          log filename_gen_wasm kind (PIdSet.singleton pid) value_program);
   (* Collect the file if it is well-typed and covers a new close-miss phantom,
      then update the running coverage *)
-  (* if welltyped && not (PIdSet.is_empty pids_close_miss_new) then
-    update_close_miss_new fuel pid idx_seed strategy idx_method idx_mutation
-      config log filename_gen_wasm pids_close_miss_new *)
+  if welltyped && not (PIdSet.is_empty pids_close_miss_new) then
+    update_close_miss_neww fuel pid idx_seed strategy idx_method idx_mutation
+      config log filename_gen_wasm pids_close_miss_new value_program
 
 (* Mutate an AST and generate a new program *)
 
@@ -331,13 +393,13 @@ let classify_mutationw' (fuel : int) (pid : pid) (idx_seed : int)
       idx_method idx_mutation !trials
   in
   let comment_gen_wasm =
-    F.asprintf "%s\n/*\nFrom %s\nTo %s\n*/\n" comment_gen_wasm
+    F.asprintf "%s\n(;\nFrom %s\nTo %s\n;)\n" comment_gen_wasm
       (Sl.Print.string_of_value value_source)
       (Sl.Print.string_of_value value_mutated)
   in
   (* Write the mutated program to a file *)
   let oc = open_out filename_gen_wasm in
-  F.asprintf "%s\n%s\n" comment_gen_wasm (Sl.Print.string_of_value value_program)
+  F.asprintf "%s\n" comment_gen_wasm
   |> output_string oc;
   close_out oc;
   (* Check if the mutated program is interesting, and if so, update *)
@@ -440,7 +502,7 @@ let fuzz_mutationw (fuel : int) (pid : pid) (idx_seed : int) (strategy : string)
           (Sl.Print.string_of_value value_mutated)
         |> Query.answer query;
         let comment_gen_wasm =
-          F.asprintf "%s\n// Mutation %s\n" comment_gen_wasm
+          F.asprintf "%s\n;; Mutation %s\n" comment_gen_wasm
             (Mutate.string_of_kind kind)
         in
         classify_mutationw fuel pid idx_seed strategy idx_method idx_mutation
@@ -478,7 +540,7 @@ let fuzz_derivationsw (fuel : int) (pid : pid) (idx_seed : int)
         !trials < Config.trials_seed && DCov_multi.is_miss config.seed.cover pid
       then
         let comment_gen_wasm =
-          F.asprintf "// Intended pid %d\n// Source vid %d\n// Depth %d\n" pid
+          F.asprintf ";; Intended pid %d\n;; Source vid %d\n;; Depth %d\n" pid
             vid_source depth
         in
         let strategy = "Derive" in
@@ -559,7 +621,7 @@ let fuzz_randomsw (fuel : int) (pid : pid) (idx_seed : int) (trials : int ref)
         !trials < Config.trials_seed && DCov_multi.is_miss config.seed.cover pid
       then
         let comment_gen_wasm =
-          F.asprintf "// Intended pid %d\n// Source vid %d\n" pid vid_source
+          F.asprintf ";; Intended pid %d\n;; Source vid %d\n" pid vid_source
         in
         let strategy = "Random" in
         fuzz_mutationw fuel pid idx_seed strategy idx_random trials config log

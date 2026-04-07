@@ -41,6 +41,7 @@ type specenv = {
 
 type wasm_specenv = {
   driver : (module Sim.DRIVER);
+  printer : Sl.value -> string;
   spec : Sim.spec;
   relname : string;
   tdenv : TDEnv.t;
@@ -166,9 +167,14 @@ let init_wasm_specenv (spec : spec) (relname : string) : wasm_specenv =
   let (module Driver : Sim.DRIVER) = Backend_sim.Gen.gen_placeholder () in
   Driver.init (Sim.SL spec);
   let driver = (module Driver : Sim.DRIVER) in
+  let printer value_program =
+    (List.hd (Wasm_interface.Deconstruct.sl_to_list Wasm_interface.Deconstruct.sl_to_module value_program), [])
+      |> Wasm_interpreter.Arrange.module_with_custom
+      |> Wasm_interpreter.Sexpr.to_string 80
+  in
   let tdenv, mixopenv = load_spec TDEnv.empty MixopEnv.empty spec in
   let spec = Sim.SL spec in
-  { driver; spec; relname; tdenv; mixopenv; }
+  { driver; printer; spec; relname; tdenv; mixopenv; }
 
 let init_storage (dirname_gen : string) : storage =
   Util.Filesys.mkdir dirname_gen;
@@ -271,6 +277,21 @@ let update_close_miss_seed (config : t) (filename_p4 : string)
         let branch = DCov_multi.Cover.find pid_close_miss cover_seed in
         let branch =
           DCov_multi.Branch.{ branch with status = Miss [ filename_p4 ] }
+        in
+        DCov_multi.Cover.add pid_close_miss branch cover_seed)
+      pids_close_miss cover_seed
+  in
+  config.seed.cover <- cover_seed
+
+let update_close_miss_seedw (config : tw) (filename_wasm : string)
+    (pids_close_miss : PIdSet.t) : unit =
+  let cover_seed = config.seed.cover in
+  let cover_seed =
+    PIdSet.fold
+      (fun pid_close_miss cover_seed ->
+        let branch = DCov_multi.Cover.find pid_close_miss cover_seed in
+        let branch =
+          DCov_multi.Branch.{ branch with status = Miss [ filename_wasm ] }
         in
         DCov_multi.Cover.add pid_close_miss branch cover_seed)
       pids_close_miss cover_seed
