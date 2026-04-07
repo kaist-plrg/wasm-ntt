@@ -1024,6 +1024,141 @@ let parse_command =
            Format.printf "Parse error: %s\n" (string_of_error at msg)
        | e -> Format.printf "Unknown error: %s\n" (Printexc.to_string e))
 
+let wasm_parse_command =
+  Core.Command.basic ~summary:"parse a Wasm program"
+    (let open Core.Command.Let_syntax in
+     let open Core.Command.Param in
+     let%map filename_wasm = flag "-p" (required string) ~doc:"Wasm program"
+     and roundtrip =
+       flag "-r" no_arg ~doc:"perform a round-trip parse/unparse"
+     in
+     fun () ->
+       try
+         let (parsed_wasm_file, _) =
+           Wasm_interface.Parse.parse_file filename_wasm
+         in
+         let unparsed_wasm_string =
+           (List.hd (Wasm_interface.Deconstruct.sl_to_list Wasm_interface.Deconstruct.sl_to_module parsed_wasm_file), [])
+           |> Wasm_interpreter.Arrange.module_with_custom
+           |> Wasm_interpreter.Sexpr.to_string 80
+         in
+         if roundtrip then
+           let parsed_wasm_string =
+             Wasm_interpreter.Parse.Module.parse_string unparsed_wasm_string
+             |> snd
+             |> (fun def ->
+                  match def.it with
+                  | Wasm_interpreter.Script.Textual (m, _) -> [m]
+                  | _ -> failwith "Expected textual Wasm definition")
+             |> Wasm_interface.Construct.il_of_list "module" Wasm_interface.Construct.il_of_module
+           in
+           Il.Eq.eq_value ~dbg:true parsed_wasm_file parsed_wasm_string
+           |> (fun b ->
+                if b then "Roundtrip successful" else "Roundtrip failed")
+           |> print_endline
+         else unparsed_wasm_string |> print_endline
+       with
+       | Sys_error msg -> Format.printf "File error: %s\n" msg
+       | ElabError (at, msg) ->
+           Format.printf "Elaboration error: %s\n" (string_of_error at msg)
+       | ParseError (at, msg) ->
+           Format.printf "Parse error: %s\n" (string_of_error at msg)
+       | e -> Format.printf "Unknown error: %s\n" (Printexc.to_string e))
+
+let wasm_suite_roundtrip_command =
+  Core.Command.basic ~summary:"parse Wasm programs in directories"
+    (let open Core.Command.Let_syntax in
+     let open Core.Command.Param in
+     let%map testdirs_wasm = flag "-wasm-dir" (listed string) ~doc:"Wasm test directories"
+     and roundtrip =
+       flag "-r" no_arg ~doc:"perform a round-trip parse/unparse"
+     in
+     fun () ->
+       try
+         if List.is_empty testdirs_wasm then
+           raise (CommandError "Error: should specify at least one -wasm-dir");
+         let filenames_wasm =
+           testdirs_wasm
+           |> List.concat_map (Util.Filesys.collect_files ~suffix:".wast")
+           |> List.sort String.compare
+         in
+         let total_files = List.length filenames_wasm in
+         let roundtrip_success = ref 0 in
+         let roundtrip_failed = ref 0 in
+         let roundtrip_failed_files = ref [] in
+         List.iter
+           (fun filename_wasm ->
+             Format.printf "===== %s =====\n%!" filename_wasm;
+             try
+               let (parsed_wasm_file, _) =
+                 Wasm_interface.Parse.parse_file filename_wasm
+               in
+               let unparsed_wasm_string =
+                 (List.hd (Wasm_interface.Deconstruct.sl_to_list Wasm_interface.Deconstruct.sl_to_module parsed_wasm_file), [])
+                 |> Wasm_interpreter.Arrange.module_with_custom
+                 |> Wasm_interpreter.Sexpr.to_string 80
+               in
+               if roundtrip then
+                 let parsed_wasm_string =
+                   Wasm_interpreter.Parse.Module.parse_string unparsed_wasm_string
+                   |> snd
+                   |> (fun def ->
+                        match def.it with
+                        | Wasm_interpreter.Script.Textual (m, _) -> [m]
+                        | _ -> failwith "Expected textual Wasm definition")
+                   |> Wasm_interface.Construct.il_of_list "module" Wasm_interface.Construct.il_of_module
+                 in
+                 Il.Eq.eq_value ~dbg:true parsed_wasm_file parsed_wasm_string
+                 |> (fun b ->
+                      if b then roundtrip_success := !roundtrip_success + 1
+                      else (
+                        roundtrip_failed := !roundtrip_failed + 1;
+                        roundtrip_failed_files := filename_wasm :: !roundtrip_failed_files
+                      );
+                      if b then "Roundtrip successful" else "Roundtrip failed")
+                 |> print_endline
+               else unparsed_wasm_string |> print_endline
+             with
+             | Sys_error msg ->
+                 if roundtrip then (
+                   roundtrip_failed := !roundtrip_failed + 1;
+                   roundtrip_failed_files := filename_wasm :: !roundtrip_failed_files
+                 );
+                 Format.printf "File error: %s\n%!" msg
+             | ElabError (at, msg) ->
+                 if roundtrip then (
+                   roundtrip_failed := !roundtrip_failed + 1;
+                   roundtrip_failed_files := filename_wasm :: !roundtrip_failed_files
+                 );
+                 Format.printf "Elaboration error: %s\n%!" (string_of_error at msg)
+             | ParseError (at, msg) ->
+                 if roundtrip then (
+                   roundtrip_failed := !roundtrip_failed + 1;
+                   roundtrip_failed_files := filename_wasm :: !roundtrip_failed_files
+                 );
+                 Format.printf "Parse error: %s\n%!" (string_of_error at msg)
+             | e ->
+                 if roundtrip then (
+                   roundtrip_failed := !roundtrip_failed + 1;
+                   roundtrip_failed_files := filename_wasm :: !roundtrip_failed_files
+                 );
+                 Format.printf "Unknown error: %s\n%!" (Printexc.to_string e))
+           filenames_wasm;
+         Format.printf "===== Summary =====\n%!";
+         Format.printf "Total files: %d\n%!" total_files;
+         if roundtrip then (
+           Format.printf "Roundtrip successful: %d\n%!" !roundtrip_success;
+           Format.printf "Roundtrip failed: %d\n%!" !roundtrip_failed;
+           if !roundtrip_failed > 0 then (
+             Format.printf "Failed files:\n%!";
+             List.rev !roundtrip_failed_files
+             |> List.iter (fun filename -> Format.printf "%s\n%!" filename)
+           )
+         )
+       with
+       | CommandError msg -> Format.printf "%s\n" msg
+       | e -> Format.printf "Unknown error: %s\n" (Printexc.to_string e))
+
 let json_ast_command =
   Core.Command.basic ~summary:"Emit/Parse JSON AST for Structured Language"
     ~readme:(fun () ->
@@ -1140,6 +1275,9 @@ let command =
       ("splice", splice_command);
       (* Interfacing with P4 *)
       ("parse", parse_command);
+      (* Interfacing with Wasm *)
+      ("wasm-parse", wasm_parse_command);
+      ("wasm-suite-roundtrip", wasm_suite_roundtrip_command);
       (* Interfacing with external tools via JSON *)
       ("json-ast", json_ast_command);
       ("p4-program-value-json", p4_program_value_json_command);
