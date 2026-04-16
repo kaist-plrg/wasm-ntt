@@ -1,0 +1,10 @@
+(module
+  (import "spectest" "table" (table 0 funcref))
+  (import "spectest" "table" (table 0 funcref))
+  (import "test" "table64-10-inf" (table i64 10 funcref))
+  (import "test" "table64-10-inf" (table i64 10 funcref))
+  (table 10 funcref)
+  (table 10 funcref)
+  (table i64 10 funcref)
+  (table i64 10 funcref)
+)

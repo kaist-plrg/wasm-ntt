@@ -139,7 +139,7 @@ and string_of_notval ?(level = 0) notval =
       if idx mod 2 = 0 then idx / 2 |> List.nth mixop |> string_of_atoms
       else idx / 2 |> List.nth values |> string_of_value ~level)
   |> List.filter_map (fun str -> if str = "" then None else Some str)
-  |> String.concat " "
+  |> String.concat " " |> Format.asprintf "<%s>"
 
 (* Operators *)
 

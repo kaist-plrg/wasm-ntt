@@ -9,8 +9,11 @@ syntax final = Final | NoFinal
 syntax limits = {MIN i64, MAX i64?}
 syntax range = i64
 
-syntax typevar =
+syntax typevar hint(concrete "typevarConcrete") =
   | StatX typeidx | RecX nat
+
+syntax typevarConcrete =
+  | StatX typeidx
 
 syntax addrtype =
   | I32AT | I64AT
@@ -22,21 +25,31 @@ syntax vectype =
   | V128T
 
 syntax deftype
-syntax heaptype =
+syntax heaptypeVar = VarHT typevar
+syntax heaptype hint(concrete "heaptypeConcrete") =
   | AnyHT | NoneHT | EqHT | I31HT | StructHT | ArrayHT
   | FuncHT | NoFuncHT
   | ExnHT | NoExnHT
   | ExternHT | NoExternHT
-  | VarHT typevar
+  | heaptypeVar
   | DefHT deftype
   | BotHT
+syntax heaptypeConcrete =
+  | AnyHT | NoneHT | EqHT | I31HT | StructHT | ArrayHT
+  | FuncHT | NoFuncHT
+  | ExnHT | NoExnHT
+  | ExternHT | NoExternHT
+  | heaptypeVar
 
 syntax reftype = null heaptype
 
-syntax valtype =
+syntax valtype hint(concrete "valtypeConcrete") =
   | NumT numtype | VecT vectype | RefT reftype | BotT
+syntax valtypeConcrete =
+  | NumT numtype | VecT vectype | RefT reftype
 
 syntax resulttype = valtype*
+
 
 syntax instrtype = InstrT resulttype resulttype localidx*
 
@@ -56,7 +69,9 @@ syntax storagetype =
 syntax fieldtype = FieldT mut storagetype
 
 syntax structtype = StructT fieldtype*
+
 syntax arraytype = ArrayT fieldtype
+
 syntax functype = FuncT resulttype resulttype
 
 syntax strtype =
@@ -64,10 +79,12 @@ syntax strtype =
   | DefArrayT arraytype
   | DefFuncT functype
 
-syntax subtype = SubT final heaptype* strtype
+syntax subtype hint(concrete "subtypeConcrete") = SubT final heaptype* strtype
+syntax subtypeConcrete = SubT final heaptypeVar* strtype
 syntax rectype
 syntax rectype = RecT subtype*
-syntax deftype = DefT rectype n
+syntax deftype hint(concrete "deftypeConcrete") = DefT rectype n
+syntax deftypeConcrete = typevar
 
 syntax tabletype = TableT addrtype limits reftype
 syntax memtype = MemoryT addrtype limits

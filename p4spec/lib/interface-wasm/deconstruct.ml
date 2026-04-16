@@ -48,6 +48,7 @@ let sl_to_z_int (value: Value.t) : Z.t = Interface.Unwrap.unwrap_num_v value |> 
 
 let z_to_intN signed unsigned z = if z < Z.zero then signed z else unsigned z
 
+let sl_to_nat (value: Value.t) : int = sl_to_z_nat value |> Z.to_int
 let sl_to_nat32 (value: Value.t) : I32.t = sl_to_z_nat value |> z_to_intN Z.to_int32 Z.to_int32_unsigned
 let sl_to_nat64 (value: Value.t) : I64.t = sl_to_z_nat value |> z_to_intN Z.to_int64 Z.to_int64_unsigned
 
@@ -675,37 +676,37 @@ and sl_to_vnsplatop (value: Value.t) : Ast.V128Op.nsplatop =
 
 and sl_to_vsplatop (value: Value.t) : Ast.vec_splatop = sl_to_vop sl_to_vnsplatop sl_to_vnsplatop value
 
-and sl_to_int_vnextractop (value: Value.t) : Pack.extension Ast.V128Op.nextractop =
+and sl_to_vnextractop (value: Value.t) : Pack.extension Ast.V128Op.nextractop =
   match value.it with
   | CaseV (([{ it = Atom "Extract"; _ }] :: _), [tuple]) ->
     let i, ext = Interface.Unwrap.unwrap_tuple_v_two tuple in
-    Extract (sl_to_int i, sl_to_extension ext)
+    Extract (sl_to_nat i, sl_to_extension ext)
   | _ -> failwith "Expected int vnextractop"
 
-and sl_to_float_vnextractop (value: Value.t) : unit Ast.V128Op.nextractop =
+and sl_to_vnextractop' (value: Value.t) : unit Ast.V128Op.nextractop =
   match value.it with
   | CaseV (([{ it = Atom "Extract"; _ }] :: _), [tuple]) ->
     let i, void = Interface.Unwrap.unwrap_tuple_v_two tuple in
     sl_to_void void;
-    Extract (sl_to_int i, ())
+    Extract (sl_to_nat i, ())
   | _ -> failwith "Expected float vnextractop"
 
 and sl_to_vextractop (value: Value.t) : Ast.vec_extractop =
   match value.it with
   | CaseV (([{ it = Atom "V128"; _ }] :: _), [vop]) ->
     (match vop.it with
-    | CaseV (([{ it = Atom "I8x16"; _ }] :: _), [op]) -> Wasm_Value.V128 (V128.I8x16 (sl_to_int_vnextractop op))
-    | CaseV (([{ it = Atom "I16x8"; _ }] :: _), [op]) -> Wasm_Value.V128 (V128.I16x8 (sl_to_int_vnextractop op))
-    | CaseV (([{ it = Atom "I32x4"; _ }] :: _), [op]) -> Wasm_Value.V128 (V128.I32x4 (sl_to_float_vnextractop op))
-    | CaseV (([{ it = Atom "I64x2"; _ }] :: _), [op]) -> Wasm_Value.V128 (V128.I64x2 (sl_to_float_vnextractop op))
-    | CaseV (([{ it = Atom "F32x4"; _ }] :: _), [op]) -> Wasm_Value.V128 (V128.F32x4 (sl_to_float_vnextractop op))
-    | CaseV (([{ it = Atom "F64x2"; _ }] :: _), [op]) -> Wasm_Value.V128 (V128.F64x2 (sl_to_float_vnextractop op))
+    | CaseV (([{ it = Atom "I8x16"; _ }] :: _), [op]) -> Wasm_Value.V128 (V128.I8x16 (sl_to_vnextractop op))
+    | CaseV (([{ it = Atom "I16x8"; _ }] :: _), [op]) -> Wasm_Value.V128 (V128.I16x8 (sl_to_vnextractop op))
+    | CaseV (([{ it = Atom "I32x4"; _ }] :: _), [op]) -> Wasm_Value.V128 (V128.I32x4 (sl_to_vnextractop' op))
+    | CaseV (([{ it = Atom "I64x2"; _ }] :: _), [op]) -> Wasm_Value.V128 (V128.I64x2 (sl_to_vnextractop' op))
+    | CaseV (([{ it = Atom "F32x4"; _ }] :: _), [op]) -> Wasm_Value.V128 (V128.F32x4 (sl_to_vnextractop' op))
+    | CaseV (([{ it = Atom "F64x2"; _ }] :: _), [op]) -> Wasm_Value.V128 (V128.F64x2 (sl_to_vnextractop' op))
     | _ -> failwith "Expected vextractop lane")
   | _ -> failwith "Expected vextractop_"
 
 and sl_to_vnreplaceop (value: Value.t) : Ast.V128Op.nreplaceop =
   match value.it with
-  | CaseV (([{ it = Atom "Replace"; _ }] :: _), [i]) -> Replace (sl_to_int i)
+  | CaseV (([{ it = Atom "Replace"; _ }] :: _), [i]) -> Replace (sl_to_nat i)
   | _ -> failwith "Expected vnreplaceop"
 
 and sl_to_vreplaceop (value: Value.t) : Ast.vec_replaceop = sl_to_vop sl_to_vnreplaceop sl_to_vnreplaceop value
@@ -933,7 +934,7 @@ and sl_to_start' (value: Value.t) : Ast.start' =
 
 and sl_to_start (value: Value.t) : Ast.start = sl_to_phrase sl_to_start' value
 
-and sl_to_segment_mode' (value: Value.t) : Ast.segment_mode' =
+and sl_to_elemmode' (value: Value.t) : Ast.segment_mode' =
   match value.it with
   | CaseV ([[{ it = Atom "Passive"; _ }]], []) -> Passive
   | CaseV (([{ it = Atom "Active"; _ }] :: _), [active]) ->
@@ -945,9 +946,9 @@ and sl_to_segment_mode' (value: Value.t) : Ast.segment_mode' =
       | _ -> failwith "Expect 2 active fields")
     | _ -> failwith "Expect active struct")
   | CaseV ([[{ it = Atom "Declarative"; _ }]], []) -> Declarative
-  | _ -> failwith "Expected segmentmode"
+  | _ -> failwith "Expected elemmode"
 
-and sl_to_segment_mode (value: Value.t) : Ast.segment_mode = sl_to_phrase sl_to_segment_mode' value
+and sl_to_elemmode (value: Value.t) : Ast.segment_mode = sl_to_phrase sl_to_elemmode' value
 
 and sl_to_elem' (value: Value.t) : Ast.elem_segment' =
   match (value.note.typ, value.it) with
@@ -958,12 +959,27 @@ and sl_to_elem' (value: Value.t) : Ast.elem_segment' =
       {
         etype = sl_to_ref_type etype;
         einit = sl_to_list sl_to_const einit;
-        emode = sl_to_segment_mode emode;
+        emode = sl_to_elemmode emode;
       }
     | _ -> failwith "Expect 3 elem fields")
   | _ -> failwith "Expect elem with StructV, but different value is given."
 
 and sl_to_elem (value: Value.t) : Ast.elem_segment = sl_to_phrase sl_to_elem' value
+
+and sl_to_datamode' (value: Value.t) : Ast.segment_mode' =
+  match value.it with
+  | CaseV ([[{ it = Atom "Passive"; _ }]], []) -> Passive
+  | CaseV (([{ it = Atom "Active"; _ }] :: _), [active]) ->
+    (match active.it with
+    | StructV valuefields ->
+      let _atoms, values = List.split valuefields in
+      (match values with
+      | [index; offset] -> Active { index = sl_to_idx index; offset = sl_to_const offset }
+      | _ -> failwith "Expect 2 active fields")
+    | _ -> failwith "Expect active struct")
+  | _ -> failwith "Expected datamode"
+
+and sl_to_datamode (value: Value.t) : Ast.segment_mode = sl_to_phrase sl_to_datamode' value
 
 and sl_to_data' (value: Value.t) : Ast.data_segment' =
   match (value.note.typ, value.it) with
@@ -973,7 +989,7 @@ and sl_to_data' (value: Value.t) : Ast.data_segment' =
     | [dinit; dmode] ->
       {
         dinit = Interface.Unwrap.unwrap_text_v dinit;
-        dmode = sl_to_segment_mode dmode;
+        dmode = sl_to_datamode dmode;
       }
     | _ -> failwith "Expect 2 data fields")
   | _ -> failwith "Expect data with StructV, but different value is given."

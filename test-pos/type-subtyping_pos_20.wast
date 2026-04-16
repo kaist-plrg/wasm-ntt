@@ -1,0 +1,10 @@
+(module
+  (rec (type $f1 (sub (func))) (type (struct (field (ref $f1)))))
+  (rec (type $f2 (sub (func))) (type (struct (field (ref $f1)))))
+  (rec (type $g1 (sub $f1 (func))) (type (struct)))
+  (rec (type $g2 (sub $f2 (func))) (type (struct)))
+  (func $g (type $g2)) (elem declare func $g)
+  (func (export "run") (result i32)
+    (ref.test (ref $g1) (ref.func $g))
+  )
+)

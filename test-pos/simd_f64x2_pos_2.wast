@@ -1,0 +1,10 @@
+(module
+  (func (export "max-min") (param v128 v128 v128) (result v128)
+    (f64x2.max (f64x2.min (local.get 0) (local.get 1))(local.get 2)))
+  (func (export "min-max") (param v128 v128 v128) (result v128)
+    (f64x2.min (f64x2.max (local.get 0) (local.get 1))(local.get 2)))
+  (func (export "max-abs") (param v128 v128) (result v128)
+    (f64x2.max (f64x2.abs (local.get 0)) (local.get 1)))
+  (func (export "min-abs") (param v128 v128) (result v128)
+    (f64x2.min (f64x2.abs (local.get 0)) (local.get 1)))
+)

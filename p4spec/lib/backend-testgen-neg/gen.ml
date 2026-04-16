@@ -382,7 +382,7 @@ let classify_mutationw' (fuel : int) (pid : pid) (idx_seed : int)
     (trials : int ref) (config : Config.tw) (log : Logger.t)
     (dirname_gen_tmp : string) (filename_wasm : string) (comment_gen_wasm : string)
     (kind : Mutate.kind) (value_source : value) (value_mutated : value)
-    (value_program : value) : unit =
+    (_value_program_before : value) (value_program : value) : unit =
   let filename_gen_wasm =
     F.asprintf "%s/%s_F%dP%dS%d%s%dM%dT%d.wast" dirname_gen_tmp
       (Util.Filesys.base ~suffix:".wast" filename_wasm)
@@ -431,16 +431,31 @@ let classify_mutationw (fuel : int) (pid : pid) (idx_seed : int)
     (vdg : Dep.Graph.t) (kind : Mutate.kind) (value_source : value)
     (value_mutated : value) : unit =
   (* Reassemble the program with the mutated AST *)
+  let value_program_before = Dep.Graph.reassemble_graph_from_root vdg VIdMap.empty in
   let renamer = VIdMap.singleton value_source.note.vid value_mutated in
   let value_program = Dep.Graph.reassemble_graph_from_root vdg renamer in
   (* Mutation may yield a syntactically ill-formed AST, so have a try block *)
   try
     classify_mutationw' fuel pid idx_seed strategy idx_method idx_mutation trials
       config log dirname_gen_tmp filename_wasm comment_gen_wasm kind value_source
-      value_mutated value_program
+      value_mutated value_program_before value_program
   with Util.Error.UnparseError msg ->
     Logger.warn config.modes.logmode log
       (Format.asprintf "error while printing the mutated program: %s" msg)
+  | err ->
+    Logger.warn config.modes.logmode log
+      (Format.asprintf
+         "[F %d] [P %d] [S %d] [%s %d] [M %d] unexpected exception in \
+          classify_mutationw: %s\n[Kind] %s\n[Source] %s\n[Mutated] \
+          %s\n[IL Before Mutation]\n%s\n[IL After Mutation]\n%s"
+         fuel pid idx_seed strategy idx_method idx_mutation
+         (Printexc.to_string err)
+         (Mutate.string_of_kind kind)
+         (Sl.Print.string_of_value value_source)
+         (Sl.Print.string_of_value value_mutated)
+         (Lang.Il.Print.string_of_value value_program_before)
+         (Lang.Il.Print.string_of_value value_program));
+    raise err
 
 let fuzz_mutation (fuel : int) (pid : pid) (idx_seed : int) (strategy : string)
     (idx_method : int) (trials : int ref) (config : Config.t) (log : Logger.t)
@@ -485,7 +500,7 @@ let fuzz_mutationw (fuel : int) (pid : pid) (idx_seed : int) (strategy : string)
   |> Query.query query;
   (* Mutate the AST *)
   let mutations =
-    Mutate.mutates Config.trials_mutation config.specenv.tdenv
+    Mutate.mutatesw Config.trials_mutation config.specenv.tdenv
       config.specenv.mixopenv vdg vid_source
   in
   (* Generate the mutated program *)

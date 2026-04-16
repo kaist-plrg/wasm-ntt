@@ -226,7 +226,7 @@ builtin def $sort_<X>((nat, X)*) : (nat, X)*
 
 builtin def $distinct_<K>(K*) : bool
 
-syntax set<K> = 
+syntax set<K> =
    | { K* }
 
 def $empty_set<K> : set<K> =
@@ -249,7 +249,7 @@ builtin def $sub_set<K>(set<K>, set<K>) : bool
 
 builtin def $eq_set<K>(set<K>, set<K>) : bool
 
-syntax pair<K, V> = 
+syntax pair<K, V> =
    | K : V
 
 syntax map<K, V> = set<pair<K, V>>
@@ -296,29 +296,29 @@ def $modulo_42(nat) : nat =
   -- if nat?{nat <- nat?} matches (_)
   -- let ?(n_result) = nat?{nat <- nat?}
 
-syntax trailingCommaOpt = 
+syntax trailingCommaOpt =
    | `empty
    | ,
 
-syntax booleanLiteral = 
+syntax booleanLiteral =
    | true
    | false
 
-syntax integerLiteral = 
+syntax integerLiteral =
    | d int hint(print %)
    | nat w int hint(print %#W#%)
    | nat s int hint(print %#S#%)
 
-syntax stringLiteral = 
+syntax stringLiteral =
    | " text " hint(print "#%#")
 
-syntax identifier = 
+syntax identifier =
    | `id text
 
-syntax typeIdentifier = 
+syntax typeIdentifier =
    | `tid text
 
-syntax nonTypeName = 
+syntax nonTypeName =
    | `id text
    | apply
    | key
@@ -328,7 +328,7 @@ syntax nonTypeName =
    | type
    | priority
 
-syntax prefixedNonTypeName = 
+syntax prefixedNonTypeName =
    | `id text
    | apply
    | key
@@ -341,11 +341,11 @@ syntax prefixedNonTypeName =
 
 syntax typeName = typeIdentifier
 
-syntax prefixedTypeName = 
+syntax prefixedTypeName =
    | `tid text
    | `tid. typeName
 
-syntax tableCustomName = 
+syntax tableCustomName =
    | `id text
    | `tid text
    | apply
@@ -353,7 +353,7 @@ syntax tableCustomName =
    | type
    | priority
 
-syntax name = 
+syntax name =
    | `id text
    | apply
    | key
@@ -365,7 +365,7 @@ syntax name =
    | `tid text
    | list
 
-syntax nameList = 
+syntax nameList =
    | `id text
    | apply
    | key
@@ -390,13 +390,13 @@ def $flatten_nameList(nameList) : name* =
 
 syntax member = name
 
-syntax direction = 
+syntax direction =
    | `empty
    | in
    | out
    | inout
 
-syntax baseType = 
+syntax baseType =
    | bool
    | error
    | match_kind
@@ -410,24 +410,24 @@ syntax baseType =
    | varbit< int >
    | varbit<( expression )>
 
-syntax specializedType = 
+syntax specializedType =
    | prefixedTypeName < typeArgumentList >
 
-syntax namedType = 
+syntax namedType =
    | `tid text
    | `tid. typeName
    | prefixedTypeName < typeArgumentList >
 
-syntax headerStackType = 
+syntax headerStackType =
    | namedType [ expression ]
 
-syntax listType = 
+syntax listType =
    | list< typeArgument >
 
-syntax tupleType = 
+syntax tupleType =
    | tuple< typeArgumentList >
 
-syntax type = 
+syntax type =
    | bool
    | error
    | match_kind
@@ -447,7 +447,7 @@ syntax type =
    | list< typeArgument >
    | tuple< typeArgumentList >
 
-syntax typeOrVoid = 
+syntax typeOrVoid =
    | bool
    | error
    | match_kind
@@ -471,7 +471,7 @@ syntax typeOrVoid =
 
 syntax typeParameter = name
 
-syntax typeParameterList = 
+syntax typeParameterList =
    | `id text
    | apply
    | key
@@ -494,7 +494,7 @@ def $flatten_typeParameterList(typeParameterList) : typeParameter* =
   -- if typeParameterList' matches `%,%`
   -- let typeParameterList , typeParameter = typeParameterList'
 
-syntax typeParameterListOpt = 
+syntax typeParameterListOpt =
    | `empty
    | < typeParameterList >
 
@@ -507,14 +507,14 @@ def $flatten_typeParameterListOpt(typeParameterListOpt) : typeParameter* =
   -- if typeParameterListOpt matches `<%>`
   -- let < typeParameterList > = typeParameterListOpt
 
-syntax parameter = 
+syntax parameter =
    | annotationList direction type name initializerOpt
 
-syntax nonEmptyParameterList = 
+syntax nonEmptyParameterList =
    | annotationList direction type name initializerOpt
    | nonEmptyParameterList , parameter
 
-syntax parameterList = 
+syntax parameterList =
    | `empty
    | annotationList direction type name initializerOpt
    | nonEmptyParameterList , parameter
@@ -538,7 +538,7 @@ syntax constructorParameter = parameter
 
 syntax constructorParameterList = parameterList
 
-syntax constructorParameterListOpt = 
+syntax constructorParameterListOpt =
    | `empty
    | ( parameterList )
 
@@ -551,10 +551,10 @@ def $flatten_constructorParameterListOpt(constructorParameterListOpt) : construc
   -- if constructorParameterListOpt matches `(%)`
   -- let ( parameterList ) = constructorParameterListOpt
 
-syntax namedExpression = 
+syntax namedExpression =
    | name = expression
 
-syntax namedExpressionList = 
+syntax namedExpressionList =
    | name = expression
    | namedExpressionList , namedExpression
 
@@ -568,7 +568,7 @@ def $flatten_namedExpressionList(namedExpressionList) : namedExpression* =
   -- if namedExpressionList' matches `%,%`
   -- let namedExpressionList , namedExpression = namedExpressionList'
 
-syntax literalExpression = 
+syntax literalExpression =
    | true
    | false
    | d int hint(print %)
@@ -576,7 +576,7 @@ syntax literalExpression =
    | nat s int hint(print %#S#%)
    | " text " hint(print "#%#")
 
-syntax referenceExpression = 
+syntax referenceExpression =
    | `id text
    | apply
    | key
@@ -588,19 +588,19 @@ syntax referenceExpression =
    | `id. nonTypeName
    | this
 
-syntax defaultExpression = 
+syntax defaultExpression =
    | ...
 
-syntax unop = 
+syntax unop =
    | !
    | ~
    | -
    | +
 
-syntax unaryExpression = 
+syntax unaryExpression =
    | unop expression
 
-syntax binop = 
+syntax binop =
    | *
    | /
    | %
@@ -623,76 +623,76 @@ syntax binop =
    | &&
    | ||
 
-syntax binaryExpression = 
+syntax binaryExpression =
    | expression binop expression
 
-syntax binaryExpressionNonBrace = 
+syntax binaryExpressionNonBrace =
    | expressionNonBrace binop expression
 
-syntax ternaryExpression = 
+syntax ternaryExpression =
    | expression ? expression : expression
 
-syntax ternaryExpressionNonBrace = 
+syntax ternaryExpressionNonBrace =
    | expressionNonBrace ? expression : expression
 
-syntax castExpression = 
+syntax castExpression =
    | ( type ) expression
 
-syntax invalidHeaderExpression = 
+syntax invalidHeaderExpression =
    | {#}
 
-syntax sequenceOrRecordExpression = 
+syntax sequenceOrRecordExpression =
    | { sequenceOrRecordElementExpression trailingCommaOpt }
 
-syntax dataExpression = 
+syntax dataExpression =
    | {#}
    | { sequenceOrRecordElementExpression trailingCommaOpt }
 
-syntax errorAccessExpression = 
+syntax errorAccessExpression =
    | error. member
 
-syntax memberAccessExpression = 
+syntax memberAccessExpression =
    | memberAccessBase . member
 
-syntax indexAccessExpression = 
+syntax indexAccessExpression =
    | expression [ expression ]
 
-syntax sliceAccessExpression = 
+syntax sliceAccessExpression =
    | expression [ expression : expression ]
 
-syntax accessExpression = 
+syntax accessExpression =
    | error. member
    | memberAccessBase . member
    | expression [ expression ]
    | expression [ expression : expression ]
 
-syntax memberAccessExpressionNonBrace = 
+syntax memberAccessExpressionNonBrace =
    | memberAccessBaseNonBrace . member
 
-syntax indexAccessExpressionNonBrace = 
+syntax indexAccessExpressionNonBrace =
    | expressionNonBrace [ expression ]
 
-syntax sliceAccessExpressionNonBrace = 
+syntax sliceAccessExpressionNonBrace =
    | expressionNonBrace [ expression : expression ]
 
-syntax accessExpressionNonBrace = 
+syntax accessExpressionNonBrace =
    | error. member
    | memberAccessBaseNonBrace . member
    | expressionNonBrace [ expression ]
    | expressionNonBrace [ expression : expression ]
 
-syntax callExpression = 
+syntax callExpression =
    | callTarget ( argumentList )
    | callableTarget < realTypeArgumentList >( argumentList )
 
-syntax callExpressionNonBrace = 
+syntax callExpressionNonBrace =
    | callTargetNonBrace ( argumentList )
    | callableTargetNonBrace < realTypeArgumentList >( argumentList )
 
-syntax parenthesizedExpression = 
+syntax parenthesizedExpression =
    | ( expression )
 
-syntax expression = 
+syntax expression =
    | true
    | false
    | d int hint(print %)
@@ -724,7 +724,7 @@ syntax expression =
    | callableTarget < realTypeArgumentList >( argumentList )
    | ( expression )
 
-syntax expressionList = 
+syntax expressionList =
    | `empty
    | true
    | false
@@ -771,7 +771,7 @@ def $flatten_expressionList(expressionList) : expression* =
   -- if expressionList' matches `%,%`
   -- let expressionList , expression = expressionList'
 
-syntax memberAccessBase = 
+syntax memberAccessBase =
    | `tid text
    | `tid. typeName
    | true
@@ -807,13 +807,13 @@ syntax memberAccessBase =
 
 syntax sequenceElementExpression = expressionList
 
-syntax recordElementExpression = 
+syntax recordElementExpression =
    | name = expression
    | name = expression ,...
    | name = expression , namedExpressionList
    | name = expression , namedExpressionList ,...
 
-syntax sequenceOrRecordElementExpression = 
+syntax sequenceOrRecordElementExpression =
    | `empty
    | true
    | false
@@ -855,7 +855,7 @@ syntax callableTarget = expression
 
 syntax constructorTarget = namedType
 
-syntax callTarget = 
+syntax callTarget =
    | true
    | false
    | d int hint(print %)
@@ -890,7 +890,7 @@ syntax callTarget =
    | `tid. typeName
    | prefixedTypeName < typeArgumentList >
 
-syntax expressionNonBrace = 
+syntax expressionNonBrace =
    | true
    | false
    | d int hint(print %)
@@ -919,7 +919,7 @@ syntax expressionNonBrace =
    | callableTargetNonBrace < realTypeArgumentList >( argumentList )
    | ( expression )
 
-syntax memberAccessBaseNonBrace = 
+syntax memberAccessBaseNonBrace =
    | `tid text
    | `tid. typeName
    | true
@@ -952,7 +952,7 @@ syntax memberAccessBaseNonBrace =
 
 syntax callableTargetNonBrace = expressionNonBrace
 
-syntax callTargetNonBrace = 
+syntax callTargetNonBrace =
    | true
    | false
    | d int hint(print %)
@@ -1067,7 +1067,7 @@ def $expressionNonBrace_as_expression(expressionNonBrace) : expression =
   -- if expressionNonBrace <: parenthesizedExpression
   -- let parenthesizedExpression = expressionNonBrace as parenthesizedExpression
 
-syntax simpleKeysetExpression = 
+syntax simpleKeysetExpression =
    | true
    | false
    | d int hint(print %)
@@ -1103,7 +1103,7 @@ syntax simpleKeysetExpression =
    | default
    | _
 
-syntax simpleKeysetExpressionList = 
+syntax simpleKeysetExpressionList =
    | true
    | false
    | d int hint(print %)
@@ -1150,14 +1150,14 @@ def $flatten_simpleKeysetExpressionList(simpleKeysetExpressionList) : simpleKeys
   -- if simpleKeysetExpressionList' matches `%,%`
   -- let simpleKeysetExpressionList , simpleKeysetExpression = simpleKeysetExpressionList'
 
-syntax tupleKeysetExpression = 
+syntax tupleKeysetExpression =
    | ( expression &&& expression )
    | ( expression .. expression )
    | (default)
    | (_)
    | ( simpleKeysetExpression , simpleKeysetExpressionList )
 
-syntax keysetExpression = 
+syntax keysetExpression =
    | true
    | false
    | d int hint(print %)
@@ -1198,7 +1198,7 @@ syntax keysetExpression =
    | (_)
    | ( simpleKeysetExpression , simpleKeysetExpressionList )
 
-syntax realTypeArgument = 
+syntax realTypeArgument =
    | bool
    | error
    | match_kind
@@ -1220,7 +1220,7 @@ syntax realTypeArgument =
    | void
    | _
 
-syntax realTypeArgumentList = 
+syntax realTypeArgumentList =
    | bool
    | error
    | match_kind
@@ -1253,7 +1253,7 @@ def $flatten_realTypeArgumentList(realTypeArgumentList) : realTypeArgument* =
   -- if realTypeArgumentList' matches `%,%`
   -- let realTypeArgumentList , realTypeArgument = realTypeArgumentList'
 
-syntax typeArgument = 
+syntax typeArgument =
    | bool
    | error
    | match_kind
@@ -1283,7 +1283,7 @@ syntax typeArgument =
    | type
    | priority
 
-syntax typeArgumentList = 
+syntax typeArgumentList =
    | `empty
    | bool
    | error
@@ -1328,7 +1328,7 @@ def $flatten_typeArgumentList(typeArgumentList) : typeArgument* =
   -- if typeArgumentList' matches `%,%`
   -- let typeArgumentList , typeArgument = typeArgumentList'
 
-syntax argument = 
+syntax argument =
    | true
    | false
    | d int hint(print %)
@@ -1363,7 +1363,7 @@ syntax argument =
    | name =_
    | _
 
-syntax argumentListNonEmpty = 
+syntax argumentListNonEmpty =
    | true
    | false
    | d int hint(print %)
@@ -1399,7 +1399,7 @@ syntax argumentListNonEmpty =
    | _
    | argumentListNonEmpty , argument
 
-syntax argumentList = 
+syntax argumentList =
    | `empty
    | true
    | false
@@ -1451,7 +1451,7 @@ def $flatten_argumentList(argumentList) : argument* =
   -- if argumentListNonEmpty' matches `%,%`
   -- let argumentListNonEmpty , argument = argumentListNonEmpty'
 
-syntax lvalue = 
+syntax lvalue =
    | `id text
    | apply
    | key
@@ -1529,10 +1529,10 @@ def $expression_as_lvalue(expression) : lvalue? =
   -- if lvalue'?{lvalue' <- lvalue'?} matches (_)
   -- let ?(lvalue) = lvalue'?{lvalue' <- lvalue'?}
 
-syntax emptyStatement = 
+syntax emptyStatement =
    | ;
 
-syntax assignop = 
+syntax assignop =
    | =
    | +=
    | -=
@@ -1547,7 +1547,7 @@ syntax assignop =
    | ^=
    | |=
 
-syntax assignmentStatement = 
+syntax assignmentStatement =
    | lvalue assignop expression ;
 
 def $assignop_as_binop(assignop) : binop? =
@@ -1590,39 +1590,39 @@ def $assignop_as_binop(assignop) : binop? =
 
   clause -1 : (assignop) = ?()
 
-syntax callStatement = 
+syntax callStatement =
    | lvalue ( argumentList );
    | lvalue < typeArgumentList >( argumentList );
 
-syntax directApplicationStatement = 
+syntax directApplicationStatement =
    | namedType .apply( argumentList );
 
-syntax returnStatement = 
+syntax returnStatement =
    | return;
    | return expression ;
 
-syntax exitStatement = 
+syntax exitStatement =
    | exit;
 
-syntax blockStatement = 
+syntax blockStatement =
    | annotationList { blockElementStatementList }
 
-syntax conditionalStatement = 
+syntax conditionalStatement =
    | if( expression ) statement
    | if( expression ) statement else statement
 
-syntax forUpdateStatement = 
+syntax forUpdateStatement =
    | lvalue ( argumentList )
    | lvalue < typeArgumentList >( argumentList )
    | lvalue assignop expression
 
-syntax forUpdateStatementListNonEmpty = 
+syntax forUpdateStatementListNonEmpty =
    | lvalue ( argumentList )
    | lvalue < typeArgumentList >( argumentList )
    | lvalue assignop expression
    | forUpdateStatementListNonEmpty , forUpdateStatement
 
-syntax forUpdateStatementList = 
+syntax forUpdateStatementList =
    | `empty
    | lvalue ( argumentList )
    | lvalue < typeArgumentList >( argumentList )
@@ -1644,20 +1644,20 @@ def $flatten_forUpdateStatementList(forUpdateStatementList) : forUpdateStatement
   -- if forUpdateStatementListNonEmpty' matches `%,%`
   -- let forUpdateStatementListNonEmpty , forUpdateStatement = forUpdateStatementListNonEmpty'
 
-syntax forInitStatement = 
+syntax forInitStatement =
    | annotationList type name initializerOpt
    | lvalue ( argumentList )
    | lvalue < typeArgumentList >( argumentList )
    | lvalue assignop expression
 
-syntax forInitStatementListNonEmpty = 
+syntax forInitStatementListNonEmpty =
    | annotationList type name initializerOpt
    | lvalue ( argumentList )
    | lvalue < typeArgumentList >( argumentList )
    | lvalue assignop expression
    | forInitStatementListNonEmpty , forInitStatement
 
-syntax forInitStatementList = 
+syntax forInitStatementList =
    | `empty
    | annotationList type name initializerOpt
    | lvalue ( argumentList )
@@ -1680,7 +1680,7 @@ def $flatten_forInitStatementList(forInitStatementList) : forInitStatement* =
   -- if forInitStatementListNonEmpty' matches `%,%`
   -- let forInitStatementListNonEmpty , forInitStatement = forInitStatementListNonEmpty'
 
-syntax forCollectionExpression = 
+syntax forCollectionExpression =
    | true
    | false
    | d int hint(print %)
@@ -1713,12 +1713,12 @@ syntax forCollectionExpression =
    | ( expression )
    | expression .. expression
 
-syntax forStatement = 
+syntax forStatement =
    | annotationList for( forInitStatementList ; expression ; forUpdateStatementList ) statement
    | annotationList for( type name in forCollectionExpression ) statement
    | annotationList for( annotationListNonEmpty type name in forCollectionExpression ) statement
 
-syntax switchLabel = 
+syntax switchLabel =
    | default
    | true
    | false
@@ -1748,11 +1748,11 @@ syntax switchLabel =
    | callableTargetNonBrace < realTypeArgumentList >( argumentList )
    | ( expression )
 
-syntax switchCase = 
+syntax switchCase =
    | switchLabel : blockStatement
    | switchLabel :
 
-syntax switchCaseList = 
+syntax switchCaseList =
    | `empty
    | switchCaseList switchCase
 
@@ -1765,16 +1765,16 @@ def $flatten_switchCaseList(switchCaseList) : switchCase* =
   -- if switchCaseList' matches `%%`
   -- let switchCaseList switchCase = switchCaseList'
 
-syntax switchStatement = 
+syntax switchStatement =
    | switch( expression ){ switchCaseList }
 
-syntax breakStatement = 
+syntax breakStatement =
    | break;
 
-syntax continueStatement = 
+syntax continueStatement =
    | continue;
 
-syntax statement = 
+syntax statement =
    | ;
    | lvalue assignop expression ;
    | lvalue ( argumentList );
@@ -1793,20 +1793,20 @@ syntax statement =
    | continue;
    | switch( expression ){ switchCaseList }
 
-syntax initializer = 
+syntax initializer =
    | = expression
 
-syntax constantDeclaration = 
+syntax constantDeclaration =
    | annotationList const type name initializer ;
 
-syntax initializerOpt = 
+syntax initializerOpt =
    | `empty
    | = expression
 
-syntax variableDeclaration = 
+syntax variableDeclaration =
    | annotationList type name initializerOpt ;
 
-syntax blockElementStatement = 
+syntax blockElementStatement =
    | annotationList const type name initializer ;
    | annotationList type name initializerOpt ;
    | ;
@@ -1827,7 +1827,7 @@ syntax blockElementStatement =
    | continue;
    | switch( expression ){ switchCaseList }
 
-syntax blockElementStatementList = 
+syntax blockElementStatementList =
    | `empty
    | blockElementStatementList blockElementStatement
 
@@ -1840,28 +1840,28 @@ def $flatten_blockElementStatementList(blockElementStatementList) : blockElement
   -- if blockElementStatementList' matches `%%`
   -- let blockElementStatementList blockElementStatement = blockElementStatementList'
 
-syntax functionPrototype = 
+syntax functionPrototype =
    | typeOrVoid name typeParameterListOpt ( parameterList )
 
-syntax functionDeclaration = 
+syntax functionDeclaration =
    | annotationList functionPrototype blockStatement
 
-syntax actionDeclaration = 
+syntax actionDeclaration =
    | annotationList action name ( parameterList ) blockStatement
 
-syntax objectInitializer = 
+syntax objectInitializer =
    | ={ objectDeclarationList }
 
-syntax instantiation = 
+syntax instantiation =
    | annotationList type ( argumentList ) name ;
    | annotationList type ( argumentList ) name objectInitializer ;
 
-syntax objectDeclaration = 
+syntax objectDeclaration =
    | annotationList functionPrototype blockStatement
    | annotationList type ( argumentList ) name ;
    | annotationList type ( argumentList ) name objectInitializer ;
 
-syntax objectDeclarationList = 
+syntax objectDeclarationList =
    | `empty
    | objectDeclarationList objectDeclaration
 
@@ -1874,20 +1874,20 @@ def $flatten_objectDeclarationList(objectDeclarationList) : objectDeclaration* =
   -- if objectDeclarationList' matches `%%`
   -- let objectDeclarationList objectDeclaration = objectDeclarationList'
 
-syntax errorDeclaration = 
+syntax errorDeclaration =
    | error{ nameList }
 
-syntax matchKindDeclaration = 
+syntax matchKindDeclaration =
    | match_kind{ nameList trailingCommaOpt }
 
-syntax enumTypeDeclaration = 
+syntax enumTypeDeclaration =
    | annotationList enum name { nameList trailingCommaOpt }
    | annotationList enum type name { namedExpressionList trailingCommaOpt }
 
-syntax typeField = 
+syntax typeField =
    | annotationList type name ;
 
-syntax typeFieldList = 
+syntax typeFieldList =
    | `empty
    | typeFieldList typeField
 
@@ -1900,23 +1900,23 @@ def $flatten_typeFieldList(typeFieldList) : typeField* =
   -- if typeFieldList' matches `%%`
   -- let typeFieldList typeField = typeFieldList'
 
-syntax structTypeDeclaration = 
+syntax structTypeDeclaration =
    | annotationList struct name typeParameterListOpt { typeFieldList }
 
-syntax headerTypeDeclaration = 
+syntax headerTypeDeclaration =
    | annotationList header name typeParameterListOpt { typeFieldList }
 
-syntax headerUnionTypeDeclaration = 
+syntax headerUnionTypeDeclaration =
    | annotationList header_union name typeParameterListOpt { typeFieldList }
 
-syntax derivedTypeDeclaration = 
+syntax derivedTypeDeclaration =
    | annotationList enum name { nameList trailingCommaOpt }
    | annotationList enum type name { namedExpressionList trailingCommaOpt }
    | annotationList struct name typeParameterListOpt { typeFieldList }
    | annotationList header name typeParameterListOpt { typeFieldList }
    | annotationList header_union name typeParameterListOpt { typeFieldList }
 
-syntax typedef = 
+syntax typedef =
    | bool
    | error
    | match_kind
@@ -1941,21 +1941,21 @@ syntax typedef =
    | annotationList header name typeParameterListOpt { typeFieldList }
    | annotationList header_union name typeParameterListOpt { typeFieldList }
 
-syntax typedefDeclaration = 
+syntax typedefDeclaration =
    | annotationList typedef typedef name ;
    | annotationList type type name ;
 
-syntax externFunctionDeclaration = 
+syntax externFunctionDeclaration =
    | annotationList extern functionPrototype ;
 
-syntax externConstructorPrototype = 
+syntax externConstructorPrototype =
    | annotationList typeIdentifier ( parameterList );
 
-syntax externMethodPrototype = 
+syntax externMethodPrototype =
    | annotationList functionPrototype ;
    | annotationList abstract functionPrototype ;
 
-syntax externConstructorOrMethodPrototype = 
+syntax externConstructorOrMethodPrototype =
    | annotationList typeIdentifier ( parameterList );
    | annotationList functionPrototype ;
    | annotationList abstract functionPrototype ;
@@ -1972,7 +1972,7 @@ def $is_externMethodPrototype(externConstructorOrMethodPrototype) : bool =
 
   clause 0 : (externConstructorOrMethodPrototype) = ~$is_externConstructorPrototype(externConstructorOrMethodPrototype)
 
-syntax externConstructorOrMethodPrototypeList = 
+syntax externConstructorOrMethodPrototypeList =
    | `empty
    | externConstructorOrMethodPrototypeList externConstructorOrMethodPrototype
 
@@ -1985,17 +1985,17 @@ def $flatten_externConstructorOrMethodPrototypeList(externConstructorOrMethodPro
   -- if externConstructorOrMethodPrototypeList' matches `%%`
   -- let externConstructorOrMethodPrototypeList externConstructorOrMethodPrototype = externConstructorOrMethodPrototypeList'
 
-syntax externObjectDeclaration = 
+syntax externObjectDeclaration =
    | annotationList extern nonTypeName typeParameterListOpt { externConstructorOrMethodPrototypeList }
 
-syntax externDeclaration = 
+syntax externDeclaration =
    | annotationList extern functionPrototype ;
    | annotationList extern nonTypeName typeParameterListOpt { externConstructorOrMethodPrototypeList }
 
-syntax selectCase = 
+syntax selectCase =
    | keysetExpression : name ;
 
-syntax selectCaseList = 
+syntax selectCaseList =
    | `empty
    | selectCaseList selectCase
 
@@ -2008,18 +2008,18 @@ def $flatten_selectCaseList(selectCaseList) : selectCase* =
   -- if selectCaseList' matches `%%`
   -- let selectCaseList selectCase = selectCaseList'
 
-syntax selectExpression = 
+syntax selectExpression =
    | select( expressionList ){ selectCaseList }
 
-syntax stateExpression = 
+syntax stateExpression =
    | name ;
    | select( expressionList ){ selectCaseList }
 
-syntax transitionStatement = 
+syntax transitionStatement =
    | `empty
    | transition stateExpression
 
-syntax valueSetType = 
+syntax valueSetType =
    | bool
    | error
    | match_kind
@@ -2036,20 +2036,20 @@ syntax valueSetType =
    | `tid text
    | `tid. typeName
 
-syntax valueSetDeclaration = 
+syntax valueSetDeclaration =
    | annotationList value_set< valueSetType >( expression ) name ;
 
-syntax parserTypeDeclaration = 
+syntax parserTypeDeclaration =
    | annotationList parser name typeParameterListOpt ( parameterList );
 
-syntax parserBlockStatement = 
+syntax parserBlockStatement =
    | annotationList { parserStatementList }
 
-syntax parserConditionalStatement = 
+syntax parserConditionalStatement =
    | if( expression ) parserStatement
    | if( expression ) parserStatement else parserStatement
 
-syntax parserStatement = 
+syntax parserStatement =
    | annotationList const type name initializer ;
    | annotationList type name initializerOpt ;
    | ;
@@ -2061,7 +2061,7 @@ syntax parserStatement =
    | if( expression ) parserStatement
    | if( expression ) parserStatement else parserStatement
 
-syntax parserStatementList = 
+syntax parserStatementList =
    | `empty
    | parserStatementList parserStatement
 
@@ -2074,10 +2074,10 @@ def $flatten_parserStatementList(parserStatementList) : parserStatement* =
   -- if parserStatementList' matches `%%`
   -- let parserStatementList parserStatement = parserStatementList'
 
-syntax parserState = 
+syntax parserState =
    | annotationList state name { parserStatementList transitionStatement }
 
-syntax parserStateList = 
+syntax parserStateList =
    | annotationList state name { parserStatementList transitionStatement }
    | parserStateList parserState
 
@@ -2091,14 +2091,14 @@ def $flatten_parserStateList(parserStateList) : parserState* =
   -- if parserStateList' matches `%%`
   -- let parserStateList parserState = parserStateList'
 
-syntax parserLocalDeclaration = 
+syntax parserLocalDeclaration =
    | annotationList const type name initializer ;
    | annotationList type ( argumentList ) name ;
    | annotationList type ( argumentList ) name objectInitializer ;
    | annotationList type name initializerOpt ;
    | annotationList value_set< valueSetType >( expression ) name ;
 
-syntax parserLocalDeclarationList = 
+syntax parserLocalDeclarationList =
    | `empty
    | parserLocalDeclarationList parserLocalDeclaration
 
@@ -2111,13 +2111,13 @@ def $flatten_parserLocalDeclarationList(parserLocalDeclarationList) : parserLoca
   -- if parserLocalDeclarationList' matches `%%`
   -- let parserLocalDeclarationList parserLocalDeclaration = parserLocalDeclarationList'
 
-syntax parserDeclaration = 
+syntax parserDeclaration =
    | annotationList parser name typeParameterListOpt ( parameterList ) constructorParameterListOpt { parserLocalDeclarationList parserStateList }
 
-syntax const = 
+syntax const =
    | const
 
-syntax constOpt = 
+syntax constOpt =
    | `empty
    | const
 
@@ -2130,10 +2130,10 @@ def $flatten_constOpt(constOpt) : const? =
   -- if constOpt <: const
   -- let const = constOpt as const
 
-syntax tableKey = 
+syntax tableKey =
    | expression : name annotationList ;
 
-syntax tableKeyList = 
+syntax tableKeyList =
    | `empty
    | tableKeyList tableKey
 
@@ -2146,7 +2146,7 @@ def $flatten_tableKeyList(tableKeyList) : tableKey* =
   -- if tableKeyList' matches `%%`
   -- let tableKeyList tableKey = tableKeyList'
 
-syntax tableActionReference = 
+syntax tableActionReference =
    | `id text
    | apply
    | key
@@ -2158,10 +2158,10 @@ syntax tableActionReference =
    | `id. nonTypeName
    | prefixedNonTypeName ( argumentList )
 
-syntax tableAction = 
+syntax tableAction =
    | annotationList tableActionReference ;
 
-syntax tableActionList = 
+syntax tableActionList =
    | `empty
    | tableActionList tableAction
 
@@ -2174,15 +2174,15 @@ def $flatten_tableActionList(tableActionList) : tableAction* =
   -- if tableActionList' matches `%%`
   -- let tableActionList tableAction = tableActionList'
 
-syntax tableEntryPriority = 
+syntax tableEntryPriority =
    | priority= integerLiteral :
    | priority=( expression ):
 
-syntax tableEntry = 
+syntax tableEntry =
    | constOpt tableEntryPriority keysetExpression : tableActionReference annotationList ;
    | constOpt keysetExpression : tableActionReference annotationList ;
 
-syntax tableEntryList = 
+syntax tableEntryList =
    | `empty
    | tableEntryList tableEntry
 
@@ -2195,13 +2195,13 @@ def $flatten_tableEntryList(tableEntryList) : tableEntry* =
   -- if tableEntryList' matches `%%`
   -- let tableEntryList tableEntry = tableEntryList'
 
-syntax tableProperty = 
+syntax tableProperty =
    | key={ tableKeyList }
    | actions={ tableActionList }
    | annotationList constOpt entries={ tableEntryList }
    | annotationList constOpt tableCustomName initializer ;
 
-syntax tablePropertyList = 
+syntax tablePropertyList =
    | `empty
    | tablePropertyList tableProperty
 
@@ -2214,15 +2214,15 @@ def $flatten_tablePropertyList(tablePropertyList) : tableProperty* =
   -- if tablePropertyList' matches `%%`
   -- let tablePropertyList tableProperty = tablePropertyList'
 
-syntax tableDeclaration = 
+syntax tableDeclaration =
    | annotationList table name { tablePropertyList }
 
-syntax controlTypeDeclaration = 
+syntax controlTypeDeclaration =
    | annotationList control name typeParameterListOpt ( parameterList );
 
 syntax controlBody = blockStatement
 
-syntax controlLocalDeclaration = 
+syntax controlLocalDeclaration =
    | annotationList const type name initializer ;
    | annotationList type ( argumentList ) name ;
    | annotationList type ( argumentList ) name objectInitializer ;
@@ -2230,7 +2230,7 @@ syntax controlLocalDeclaration =
    | annotationList action name ( parameterList ) blockStatement
    | annotationList table name { tablePropertyList }
 
-syntax controlLocalDeclarationList = 
+syntax controlLocalDeclarationList =
    | `empty
    | controlLocalDeclarationList controlLocalDeclaration
 
@@ -2243,13 +2243,13 @@ def $flatten_controlLocalDeclarationList(controlLocalDeclarationList) : controlL
   -- if controlLocalDeclarationList' matches `%%`
   -- let controlLocalDeclarationList controlLocalDeclaration = controlLocalDeclarationList'
 
-syntax controlDeclaration = 
+syntax controlDeclaration =
    | annotationList control name typeParameterListOpt ( parameterList ) constructorParameterListOpt { controlLocalDeclarationList apply controlBody }
 
-syntax packageTypeDeclaration = 
+syntax packageTypeDeclaration =
    | annotationList package name typeParameterListOpt ( parameterList );
 
-syntax typeDeclaration = 
+syntax typeDeclaration =
    | annotationList enum name { nameList trailingCommaOpt }
    | annotationList enum type name { namedExpressionList trailingCommaOpt }
    | annotationList struct name typeParameterListOpt { typeFieldList }
@@ -2261,7 +2261,7 @@ syntax typeDeclaration =
    | annotationList control name typeParameterListOpt ( parameterList );
    | annotationList package name typeParameterListOpt ( parameterList );
 
-syntax declaration = 
+syntax declaration =
    | annotationList const type name initializer ;
    | annotationList type ( argumentList ) name ;
    | annotationList type ( argumentList ) name objectInitializer ;
@@ -2284,7 +2284,7 @@ syntax declaration =
    | annotationList control name typeParameterListOpt ( parameterList );
    | annotationList package name typeParameterListOpt ( parameterList );
 
-syntax annotationToken = 
+syntax annotationToken =
    | unexpected_token
    | abstract
    | action
@@ -2377,28 +2377,28 @@ syntax annotationToken =
    | ;
    | @
 
-syntax annotationBody = 
+syntax annotationBody =
    | `empty
    | annotationBody ( annotationBody )
    | annotationBody annotationToken
 
-syntax structuredAnnotationBody = 
+syntax structuredAnnotationBody =
    | sequenceOrRecordElementExpression trailingCommaOpt
 
-syntax annotation = 
+syntax annotation =
    | @ name hint(print "@"#%0)
    | @ name ( annotationBody ) hint(print "@"#%0#"("#%1#")")
    | @ name [ structuredAnnotationBody ] hint(print "@"#%0#"["#%1#"]")
    | @pragma name annotationBody hint(print "@pragma" %0 %1)
 
-syntax annotationListNonEmpty = 
+syntax annotationListNonEmpty =
    | @ name hint(print "@"#%0)
    | @ name ( annotationBody ) hint(print "@"#%0#"("#%1#")")
    | @ name [ structuredAnnotationBody ] hint(print "@"#%0#"["#%1#"]")
    | @pragma name annotationBody hint(print "@pragma" %0 %1)
    | annotationListNonEmpty annotation
 
-syntax annotationList = 
+syntax annotationList =
    | `empty
    | @ name hint(print "@"#%0)
    | @ name ( annotationBody ) hint(print "@"#%0#"("#%1#")")
@@ -2421,7 +2421,7 @@ def $flatten_annotationList(annotationList) : annotation* =
   -- if annotationListNonEmpty' matches `%%`
   -- let annotationListNonEmpty annotation = annotationListNonEmpty'
 
-syntax p4program = 
+syntax p4program =
    | `empty
    | p4program declaration
    | p4program ;
@@ -2439,7 +2439,7 @@ def $flatten_p4program(p4program) : declaration* =
   -- if p4program' matches `%;`
   -- let p4program ; = p4program'
 
-syntax cursor = 
+syntax cursor =
    | global
    | block
    | local
@@ -2471,7 +2471,7 @@ def $fresh_typeIds(nat) : typeId* =
   -- if int <: nat
   -- let n' = int as nat
 
-syntax callTargetId = 
+syntax callTargetId =
    | nameIR ( id* )
 
 syntax callableId = callTargetId
@@ -2518,24 +2518,24 @@ def $objectId_ends_with(objectId, nameIR) : bool =
 
   clause -1 : (objectId, nameIR) = false
 
-syntax boolValue = 
+syntax boolValue =
    | `b bool
 
-syntax errorValue = 
+syntax errorValue =
    | error. nameIR
 
-syntax matchKindValue = 
+syntax matchKindValue =
    | match_kind. nameIR
 
 syntax stringValue = stringLiteral
 
-syntax integerValue = 
+syntax integerValue =
    | d int hint(print %)
    | nat w int hint(print %#W#%)
    | nat s int hint(print %#S#%)
    | nat . nat v int
 
-syntax baseValue = 
+syntax baseValue =
    | `b bool
    | error. nameIR
    | match_kind. nameIR
@@ -2545,32 +2545,32 @@ syntax baseValue =
    | nat s int hint(print %#S#%)
    | nat . nat v int
 
-syntax listValue = 
+syntax listValue =
    | list[ value* ]
 
-syntax tupleValue = 
+syntax tupleValue =
    | tuple( value* )
 
-syntax headerStackValue = 
+syntax headerStackValue =
    | header_stack[ value* ( nat ; nat )]
 
-syntax fieldValue = 
+syntax fieldValue =
    | value nameIR ;
 
-syntax structValue = 
+syntax structValue =
    | struct typeId { fieldValue* }
 
-syntax headerValue = 
+syntax headerValue =
    | header typeId { bool ; fieldValue* }
 
-syntax headerUnionValue = 
+syntax headerUnionValue =
    | header_union typeId { fieldValue* }
 
-syntax enumValue = 
+syntax enumValue =
    | typeId . nameIR
    | typeId . nameIR . value
 
-syntax dataValue = 
+syntax dataValue =
    | list[ value* ]
    | tuple( value* )
    | header_stack[ value* ( nat ; nat )]
@@ -2580,41 +2580,41 @@ syntax dataValue =
    | typeId . nameIR
    | typeId . nameIR . value
 
-syntax objectReferenceValue = 
+syntax objectReferenceValue =
    | ref objectId
 
-syntax defaultValue = 
+syntax defaultValue =
    | default
 
-syntax invalidHeaderValue = 
+syntax invalidHeaderValue =
    | {#}
 
-syntax sequenceValue = 
+syntax sequenceValue =
    | seq( value* )
    | seq( value* ,...)
 
-syntax recordValue = 
+syntax recordValue =
    | record{ fieldValue* }
    | record{ fieldValue* ,...}
 
-syntax setValue = 
+syntax setValue =
    | set{ value }
    | set{ value* ( nat )}
    | set{ value &&& value }
    | set{ value .. value }
    | set{...}
 
-syntax tableMetadataEnumValue = 
+syntax tableMetadataEnumValue =
    | table_enum typeId . nameIR
 
-syntax tableMetadataStructValue = 
+syntax tableMetadataStructValue =
    | table_struct typeId {hit boolValue ;miss boolValue ;action_run tableMetadataEnumValue ;}
 
-syntax tableMetadataValue = 
+syntax tableMetadataValue =
    | table_enum typeId . nameIR
    | table_struct typeId {hit boolValue ;miss boolValue ;action_run tableMetadataEnumValue ;}
 
-syntax synthesizedValue = 
+syntax synthesizedValue =
    | default
    | {#}
    | seq( value* )
@@ -2629,7 +2629,7 @@ syntax synthesizedValue =
    | table_enum typeId . nameIR
    | table_struct typeId {hit boolValue ;miss boolValue ;action_run tableMetadataEnumValue ;}
 
-syntax value = 
+syntax value =
    | `b bool
    | error. nameIR
    | match_kind. nameIR
@@ -2929,40 +2929,40 @@ def $write_bits_from_value(value) : bool* =
   -- if enumValue matches `%.%.%`
   -- let typeId . id . value = enumValue
 
-syntax voidTypeIR = 
+syntax voidTypeIR =
    | void
 
-syntax boolTypeIR = 
+syntax boolTypeIR =
    | bool
 
-syntax errorTypeIR = 
+syntax errorTypeIR =
    | error
 
-syntax matchKindTypeIR = 
+syntax matchKindTypeIR =
    | match_kind
 
-syntax stringTypeIR = 
+syntax stringTypeIR =
    | string
 
-syntax intTypeIR = 
+syntax intTypeIR =
    | int
 
-syntax fixedIntTypeIR = 
+syntax fixedIntTypeIR =
    | int< nat >
 
-syntax fixedBitTypeIR = 
+syntax fixedBitTypeIR =
    | bit< nat >
 
-syntax varBitTypeIR = 
+syntax varBitTypeIR =
    | varbit< nat >
 
-syntax integerTypeIR = 
+syntax integerTypeIR =
    | int
    | int< nat >
    | bit< nat >
    | varbit< nat >
 
-syntax baseTypeIR = 
+syntax baseTypeIR =
    | void
    | bool
    | error
@@ -2973,54 +2973,54 @@ syntax baseTypeIR =
    | bit< nat >
    | varbit< nat >
 
-syntax nameTypeIR = 
+syntax nameTypeIR =
    | ` typeId hint(print %0)
 
-syntax typedefTypeIR = 
+syntax typedefTypeIR =
    | typedef typeId typeIR hint(print %0)
 
-syntax newTypeIR = 
+syntax newTypeIR =
    | type typeId typeIR hint(print %0)
 
-syntax aliasTypeIR = 
+syntax aliasTypeIR =
    | typedef typeId typeIR hint(print %0)
    | type typeId typeIR hint(print %0)
 
-syntax listTypeIR = 
+syntax listTypeIR =
    | list< typeIR >
 
-syntax tupleTypeIR = 
+syntax tupleTypeIR =
    | tuple< typeIR* >
 
-syntax headerStackTypeIR = 
+syntax headerStackTypeIR =
    | typeIR [ nat ]
 
-syntax fieldTypeIR = 
+syntax fieldTypeIR =
    | annotationList typeIR nameIR ;
 
-syntax structTypeIR = 
+syntax structTypeIR =
    | struct typeId < typeArgumentIR* >{ fieldTypeIR* } hint(print %0#"<"#%1#">")
 
-syntax headerTypeIR = 
+syntax headerTypeIR =
    | header typeId < typeArgumentIR* >{ fieldTypeIR* } hint(print %0#"<"#%1#">")
 
-syntax headerUnionTypeIR = 
+syntax headerUnionTypeIR =
    | header_union typeId < typeArgumentIR* >{ fieldTypeIR* } hint(print %0#"<"#%1#">")
 
-syntax valueFieldIR = 
+syntax valueFieldIR =
    | nameIR = value ;
 
-syntax simpleEnumTypeIR = 
+syntax simpleEnumTypeIR =
    | enum typeId { nameIR* } hint(print %0)
 
-syntax serializableEnumTypeIR = 
+syntax serializableEnumTypeIR =
    | enum typeId < typeIR >{ valueFieldIR* } hint(print %0)
 
-syntax enumTypeIR = 
+syntax enumTypeIR =
    | enum typeId { nameIR* } hint(print %0)
    | enum typeId < typeIR >{ valueFieldIR* } hint(print %0)
 
-syntax dataTypeIR = 
+syntax dataTypeIR =
    | list< typeIR >
    | tuple< typeIR* >
    | typeIR [ nat ]
@@ -3032,56 +3032,56 @@ syntax dataTypeIR =
 
 syntax externMethodTypeDefEnv = map<callableId, externMethodTypeDefIR>
 
-syntax externObjectTypeIR = 
+syntax externObjectTypeIR =
    | extern typeId < typeArgumentIR* > externMethodTypeDefEnv hint(print %0#"<"#%1#">")
 
-syntax parserObjectTypeIR = 
+syntax parserObjectTypeIR =
    | parser typeId < typeArgumentIR* >( parameterIR* ) hint(print %0#"<"#%1#">")
 
-syntax controlObjectTypeIR = 
+syntax controlObjectTypeIR =
    | control typeId < typeArgumentIR* >( parameterIR* ) hint(print %0#"<"#%1#">")
 
-syntax packageObjectTypeIR = 
+syntax packageObjectTypeIR =
    | package typeId < typeArgumentIR* >{ typeIR* } hint(print %0#"<"#%1#">")
 
-syntax tableObjectTypeIR = 
+syntax tableObjectTypeIR =
    | table typeId { tableMetadataStructTypeIR } hint(print %0)
 
-syntax objectTypeIR = 
+syntax objectTypeIR =
    | extern typeId < typeArgumentIR* > externMethodTypeDefEnv hint(print %0#"<"#%1#">")
    | parser typeId < typeArgumentIR* >( parameterIR* ) hint(print %0#"<"#%1#">")
    | control typeId < typeArgumentIR* >( parameterIR* ) hint(print %0#"<"#%1#">")
    | package typeId < typeArgumentIR* >{ typeIR* } hint(print %0#"<"#%1#">")
    | table typeId { tableMetadataStructTypeIR } hint(print %0)
 
-syntax defaultTypeIR = 
+syntax defaultTypeIR =
    | default
 
-syntax invalidHeaderTypeIR = 
+syntax invalidHeaderTypeIR =
    | header_invalid
 
-syntax sequenceTypeIR = 
+syntax sequenceTypeIR =
    | seq< typeIR* >
    | seq< typeIR* ,...>
 
-syntax recordTypeIR = 
+syntax recordTypeIR =
    | record{ fieldTypeIR* }
    | record{ fieldTypeIR* ,...}
 
-syntax setTypeIR = 
+syntax setTypeIR =
    | set< typeIR >
 
-syntax tableMetadataEnumTypeIR = 
+syntax tableMetadataEnumTypeIR =
    | table_enum typeId { nameIR* } hint(print %0)
 
-syntax tableMetadataStructTypeIR = 
+syntax tableMetadataStructTypeIR =
    | table_struct typeId {hit boolTypeIR ;miss boolTypeIR ;action_run tableMetadataEnumTypeIR ;} hint(print %0)
 
-syntax tableMetadataTypeIR = 
+syntax tableMetadataTypeIR =
    | table_enum typeId { nameIR* } hint(print %0)
    | table_struct typeId {hit boolTypeIR ;miss boolTypeIR ;action_run tableMetadataEnumTypeIR ;} hint(print %0)
 
-syntax synthesizedTypeIR = 
+syntax synthesizedTypeIR =
    | default
    | header_invalid
    | seq< typeIR* >
@@ -3092,7 +3092,7 @@ syntax synthesizedTypeIR =
    | table_enum typeId { nameIR* } hint(print %0)
    | table_struct typeId {hit boolTypeIR ;miss boolTypeIR ;action_run tableMetadataEnumTypeIR ;} hint(print %0)
 
-syntax typeIR = 
+syntax typeIR =
    | void
    | bool
    | error
@@ -3136,46 +3136,46 @@ syntax nameTypeDefIR = nameTypeIR
 
 syntax aliasTypeDefIR = aliasTypeIR
 
-syntax structTypeDefIR = 
+syntax structTypeDefIR =
    | struct typeId < typeParameterIR* >{ fieldTypeIR* }
 
-syntax headerTypeDefIR = 
+syntax headerTypeDefIR =
    | header typeId < typeParameterIR* >{ fieldTypeIR* }
 
-syntax headerUnionTypeDefIR = 
+syntax headerUnionTypeDefIR =
    | header_union typeId < typeParameterIR* >{ fieldTypeIR* }
 
 syntax enumTypeDefIR = enumTypeIR
 
-syntax dataTypeDefIR = 
+syntax dataTypeDefIR =
    | struct typeId < typeParameterIR* >{ fieldTypeIR* }
    | header typeId < typeParameterIR* >{ fieldTypeIR* }
    | header_union typeId < typeParameterIR* >{ fieldTypeIR* }
    | enum typeId { nameIR* } hint(print %0)
    | enum typeId < typeIR >{ valueFieldIR* } hint(print %0)
 
-syntax externObjectTypeDefIR = 
+syntax externObjectTypeDefIR =
    | extern typeId < typeParameterIR* , typeParameterIR* > externMethodTypeDefEnv
 
-syntax parserObjectTypeDefIR = 
+syntax parserObjectTypeDefIR =
    | parser typeId < typeParameterIR* , typeParameterIR* >( parameterIR* )
 
-syntax controlObjectTypeDefIR = 
+syntax controlObjectTypeDefIR =
    | control typeId < typeParameterIR* , typeParameterIR* >( parameterIR* )
 
-syntax packageObjectTypeDefIR = 
+syntax packageObjectTypeDefIR =
    | package typeId < typeParameterIR* , typeParameterIR* >{ typeIR* }
 
 syntax tableObjectTypeDefIR = tableObjectTypeIR
 
-syntax objectTypeDefIR = 
+syntax objectTypeDefIR =
    | extern typeId < typeParameterIR* , typeParameterIR* > externMethodTypeDefEnv
    | parser typeId < typeParameterIR* , typeParameterIR* >( parameterIR* )
    | control typeId < typeParameterIR* , typeParameterIR* >( parameterIR* )
    | package typeId < typeParameterIR* , typeParameterIR* >{ typeIR* }
    | table typeId { tableMetadataStructTypeIR } hint(print %0)
 
-syntax typeDefIR = 
+syntax typeDefIR =
    | ` typeId hint(print %0)
    | typedef typeId typeIR hint(print %0)
    | type typeId typeIR hint(print %0)
@@ -3573,51 +3573,51 @@ def $is_polymorphic_typeDefIR(typeDefIR) : bool =
 
   clause 0 : (typeDefIR) = ~$is_monomorphic_typeDefIR(typeDefIR)
 
-syntax initializerIR = 
+syntax initializerIR =
    | = typedExpressionIR
 
-syntax constantInitializerIR = 
+syntax constantInitializerIR =
    | =`value value
 
-syntax parameterInitializerIR = 
+syntax parameterInitializerIR =
    | = typedExpressionIR
    | =`value value
 
 syntax parameterInitializerOptIR = parameterInitializerIR?
 
-syntax parameterIR = 
+syntax parameterIR =
    | annotationList direction typeIR id parameterInitializerOptIR hint(prose_fields "annotations" "direction" "type" "name" "default initializer")
 
-syntax actionTypeIR = 
+syntax actionTypeIR =
    | annotationList action nameIR ( parameterIR* )
 
-syntax definedFunctionTypeIR = 
+syntax definedFunctionTypeIR =
    | function nameIR ( parameterIR* ): typeIR
 
-syntax externFunctionTypeIR = 
+syntax externFunctionTypeIR =
    | extern_function nameIR ( parameterIR* ): typeIR
 
-syntax functionTypeIR = 
+syntax functionTypeIR =
    | function nameIR ( parameterIR* ): typeIR
    | extern_function nameIR ( parameterIR* ): typeIR
 
-syntax builtinMethodTypeIR = 
+syntax builtinMethodTypeIR =
    | builtin_method nameIR ( parameterIR* ): typeIR
 
-syntax externMethodTypeIR = 
+syntax externMethodTypeIR =
    | extern_method nameIR ( parameterIR* ): typeIR
    | extern_methodabstract nameIR ( parameterIR* ): typeIR
 
-syntax parserApplyMethodTypeIR = 
+syntax parserApplyMethodTypeIR =
    | parser_apply( parameterIR* )
 
-syntax controlApplyMethodTypeIR = 
+syntax controlApplyMethodTypeIR =
    | control_apply( parameterIR* )
 
-syntax tableApplyMethodTypeIR = 
+syntax tableApplyMethodTypeIR =
    | table_apply: tableMetadataStructTypeIR
 
-syntax methodTypeIR = 
+syntax methodTypeIR =
    | builtin_method nameIR ( parameterIR* ): typeIR
    | extern_method nameIR ( parameterIR* ): typeIR
    | extern_methodabstract nameIR ( parameterIR* ): typeIR
@@ -3625,7 +3625,7 @@ syntax methodTypeIR =
    | control_apply( parameterIR* )
    | table_apply: tableMetadataStructTypeIR
 
-syntax callableTypeIR = 
+syntax callableTypeIR =
    | annotationList action nameIR ( parameterIR* )
    | function nameIR ( parameterIR* ): typeIR
    | extern_function nameIR ( parameterIR* ): typeIR
@@ -3677,17 +3677,17 @@ def $is_optional_parameterIR(parameterIR) : bool =
 
 syntax actionTypeDefIR = actionTypeIR
 
-syntax definedFunctionTypeDefIR = 
+syntax definedFunctionTypeDefIR =
    | function nameIR < typeParameterIR* , typeParameterIR* >( parameterIR* ): typeIR
 
-syntax externFunctionTypeDefIR = 
+syntax externFunctionTypeDefIR =
    | extern_function nameIR < typeParameterIR* , typeParameterIR* >( parameterIR* ): typeIR
 
-syntax functionTypeDefIR = 
+syntax functionTypeDefIR =
    | function nameIR < typeParameterIR* , typeParameterIR* >( parameterIR* ): typeIR
    | extern_function nameIR < typeParameterIR* , typeParameterIR* >( parameterIR* ): typeIR
 
-syntax externMethodTypeDefIR = 
+syntax externMethodTypeDefIR =
    | extern_method nameIR < typeParameterIR* , typeParameterIR* >( parameterIR* ): typeIR
    | extern_methodabstract nameIR < typeParameterIR* , typeParameterIR* >( parameterIR* ): typeIR
 
@@ -3697,14 +3697,14 @@ syntax controlApplyMethodTypeDefIR = controlApplyMethodTypeIR
 
 syntax tableApplyMethodTypeDefIR = tableApplyMethodTypeIR
 
-syntax methodTypeDefIR = 
+syntax methodTypeDefIR =
    | extern_method nameIR < typeParameterIR* , typeParameterIR* >( parameterIR* ): typeIR
    | extern_methodabstract nameIR < typeParameterIR* , typeParameterIR* >( parameterIR* ): typeIR
    | parser_apply( parameterIR* )
    | control_apply( parameterIR* )
    | table_apply: tableMetadataStructTypeIR
 
-syntax callableTypeDefIR = 
+syntax callableTypeDefIR =
    | annotationList action nameIR ( parameterIR* )
    | function nameIR < typeParameterIR* , typeParameterIR* >( parameterIR* ): typeIR
    | extern_function nameIR < typeParameterIR* , typeParameterIR* >( parameterIR* ): typeIR
@@ -3860,10 +3860,10 @@ def $parameterListIR_of_tableApplyMethodTypeDefIR(tableApplyMethodTypeDefIR) : p
 
 syntax constructorParameterIR = parameterIR
 
-syntax constructorTypeIR = 
+syntax constructorTypeIR =
    | constructor( constructorParameterIR* ): typeIR
 
-syntax constructorTypeDefIR = 
+syntax constructorTypeDefIR =
    | constructor< typeParameterIR* , typeParameterIR* >( constructorParameterIR* ): typeIR
 
 def $parameterListIR_of_constructorTypeDefIR(constructorTypeDefIR) : parameterIR* =
@@ -4904,7 +4904,7 @@ relation Type_alpha: typeIR ~~ typeIR
 
 relation ParameterType_alpha: parameterIR ~~ parameterIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -4914,13 +4914,13 @@ relation ParameterType_alpha: parameterIR ~~ parameterIR
 
    paths
 
-    rulepath 
+    rulepath
     -- if Type_alpha: typeIR_a ~~ typeIR_b holds
     -- the relation holds
 
 relation ExternMethodType_alpha: externMethodTypeIR ~~ externMethodTypeIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -4955,7 +4955,7 @@ relation ExternMethodType_alpha: externMethodTypeIR ~~ externMethodTypeIR
 
 relation ExternMethodTypeDef_alpha: externMethodTypeDefIR ~~ externMethodTypeDefIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -4964,7 +4964,7 @@ relation ExternMethodTypeDef_alpha: externMethodTypeDefIR ~~ externMethodTypeDef
 
    paths
 
-    rulepath 
+    rulepath
     -- let (typeParameterIR_expl_a*{typeParameterIR_expl_a <- typeParameterIR_expl_a*}, typeParameterIR_impl_a*{typeParameterIR_impl_a <- typeParameterIR_impl_a*}) = $typeParameterListIR_of_callableTypeDefIR(externMethodTypeDefIR_a as callableTypeDefIR)
     -- let (typeParameterIR_expl_b*{typeParameterIR_expl_b <- typeParameterIR_expl_b*}, typeParameterIR_impl_b*{typeParameterIR_impl_b <- typeParameterIR_impl_b*}) = $typeParameterListIR_of_callableTypeDefIR(externMethodTypeDefIR_b as callableTypeDefIR)
     -- if (|typeParameterIR_expl_a*{typeParameterIR_expl_a <- typeParameterIR_expl_a*}| = |typeParameterIR_expl_b*{typeParameterIR_expl_b <- typeParameterIR_expl_b*}|)
@@ -4989,7 +4989,7 @@ relation ExternMethodTypeDef_alpha: externMethodTypeDefIR ~~ externMethodTypeDef
     -- if ExternMethodType_alpha: externMethodTypeIR_a_subst ~~ externMethodTypeIR_b_subst holds
     -- the relation holds
 
-syntax ctk = 
+syntax ctk =
    | lctk
    | ctk
    | dyn
@@ -6855,7 +6855,7 @@ def $sizeof_maxSizeInBytes(typeIR) : value =
   clause 0 : (typeIR) = d (n_size / 8) as int as value
   -- let n_size = $sizeof_maxSizeInBits'(typeIR)
 
-syntax prefixedNameIR = 
+syntax prefixedNameIR =
    | ` nameIR hint(print %0)
    | . nameIR
 
@@ -6897,12 +6897,12 @@ syntax parameterListIR = parameterIR*
 
 syntax constructorParameterListIR = parameterIR*
 
-syntax namedValueIR = 
+syntax namedValueIR =
    | nameIR = value
 
 syntax namedValueListIR = namedValueIR*
 
-syntax namedExpressionIR = 
+syntax namedExpressionIR =
    | nameIR = typedExpressionIR
 
 syntax namedExpressionListIR = namedExpressionIR*
@@ -6913,71 +6913,71 @@ syntax referenceExpressionIR = prefixedNameIR
 
 syntax defaultExpressionIR = defaultExpression
 
-syntax unaryExpressionIR = 
+syntax unaryExpressionIR =
    | unop typedExpressionIR
 
-syntax binaryExpressionIR = 
+syntax binaryExpressionIR =
    | typedExpressionIR binop typedExpressionIR
 
-syntax ternaryExpressionIR = 
+syntax ternaryExpressionIR =
    | typedExpressionIR ? typedExpressionIR : typedExpressionIR
 
-syntax castExpressionIR = 
+syntax castExpressionIR =
    | ( typeIR ) typedExpressionIR
 
 syntax invalidHeaderExpressionIR = invalidHeaderExpression
 
-syntax sequenceExpressionIR = 
+syntax sequenceExpressionIR =
    | seq{ typedExpressionListIR }
    | seq{ typedExpressionListIR ,...}
 
-syntax recordExpressionIR = 
+syntax recordExpressionIR =
    | record{ namedExpressionListIR }
    | record{ namedExpressionListIR ,...}
 
-syntax dataExpressionIR = 
+syntax dataExpressionIR =
    | {#}
    | seq{ typedExpressionListIR }
    | seq{ typedExpressionListIR ,...}
    | record{ namedExpressionListIR }
    | record{ namedExpressionListIR ,...}
 
-syntax errorAccessExpressionIR = 
+syntax errorAccessExpressionIR =
    | error. nameIR
 
-syntax memberAccessExpressionIR = 
+syntax memberAccessExpressionIR =
    | memberAccessBaseIR . nameIR
 
-syntax indexAccessExpressionIR = 
+syntax indexAccessExpressionIR =
    | typedExpressionIR [ typedExpressionIR ]
 
-syntax sliceAccessExpressionIR = 
+syntax sliceAccessExpressionIR =
    | typedExpressionIR [ typedExpressionIR : typedExpressionIR ]
 
-syntax accessExpressionIR = 
+syntax accessExpressionIR =
    | error. nameIR
    | memberAccessBaseIR . nameIR
    | typedExpressionIR [ typedExpressionIR ]
    | typedExpressionIR [ typedExpressionIR : typedExpressionIR ]
 
-syntax callableTargetIR = 
+syntax callableTargetIR =
    | ` nameIR hint(print %0)
    | . nameIR
    | typedExpressionIR . nameIR
    | type prefixedNameIR . nameIR
    | ( callableTargetIR )
 
-syntax constructorTargetIR = 
+syntax constructorTargetIR =
    | prefixedNameIR < typeArgumentListIR >
 
-syntax callExpressionIR = 
+syntax callExpressionIR =
    | constructorTargetIR ( argumentListIR )
    | callableTargetIR < typeArgumentListIR >( argumentListIR )
 
-syntax parenthesizedExpressionIR = 
+syntax parenthesizedExpressionIR =
    | ( typedExpressionIR )
 
-syntax expressionIR = 
+syntax expressionIR =
    | true
    | false
    | d int hint(print %)
@@ -7004,15 +7004,15 @@ syntax expressionIR =
    | callableTargetIR < typeArgumentListIR >( argumentListIR )
    | ( typedExpressionIR )
 
-syntax expressionNoteIR = 
+syntax expressionNoteIR =
    | ( typeIR ctk ) hint(prose "a pair of type" %0 "and compile-time known-ness" %1) hint(prose_fields "type" "compile-time known-ness")
 
-syntax typedExpressionIR = 
+syntax typedExpressionIR =
    | expressionIR # expressionNoteIR hint(print %0) hint(prose %0 "annotated with" %1) hint(prose_fields "expression" "note")
 
 syntax typedExpressionListIR = typedExpressionIR*
 
-syntax memberAccessBaseIR = 
+syntax memberAccessBaseIR =
    | type prefixedNameIR
    | expressionIR # expressionNoteIR hint(print %0) hint(prose %0 "annotated with" %1) hint(prose_fields "expression" "note")
 
@@ -7026,7 +7026,7 @@ def $ctk_of_typedExpressionIR(typedExpressionIR) : ctk =
   clause 0 : (typedExpressionIR) = ctk
   -- let _expressionIR # ( _typeIR ctk ) = typedExpressionIR
 
-syntax simpleKeysetExpressionIR = 
+syntax simpleKeysetExpressionIR =
    | expressionIR # expressionNoteIR hint(print %0) hint(prose %0 "annotated with" %1) hint(prose_fields "expression" "note")
    | typedExpressionIR &&& typedExpressionIR
    | typedExpressionIR .. typedExpressionIR
@@ -7035,10 +7035,10 @@ syntax simpleKeysetExpressionIR =
 
 syntax simpleKeysetExpressionListIR = simpleKeysetExpressionIR*
 
-syntax tupleKeysetExpressionIR = 
+syntax tupleKeysetExpressionIR =
    | ( simpleKeysetExpressionListIR )
 
-syntax keysetExpressionIR = 
+syntax keysetExpressionIR =
    | expressionIR # expressionNoteIR hint(print %0) hint(prose %0 "annotated with" %1) hint(prose_fields "expression" "note")
    | typedExpressionIR &&& typedExpressionIR
    | typedExpressionIR .. typedExpressionIR
@@ -7058,7 +7058,7 @@ def $flatten_keysetExpressionIR(keysetExpressionIR) : simpleKeysetExpressionList
 
 syntax typeArgumentListIR = typeArgumentIR*
 
-syntax argumentIR = 
+syntax argumentIR =
    | expressionIR # expressionNoteIR hint(print %0) hint(prose %0 "annotated with" %1) hint(prose_fields "expression" "note")
    | nameIR = typedExpressionIR
    | nameIR =_
@@ -7066,7 +7066,7 @@ syntax argumentIR =
 
 syntax argumentListIR = argumentIR*
 
-syntax lvalueIR = 
+syntax lvalueIR =
    | ` nameIR hint(print %0)
    | . nameIR
    | typedLvalueIR . nameIR
@@ -7074,10 +7074,10 @@ syntax lvalueIR =
    | typedLvalueIR [ typedExpressionIR : typedExpressionIR ]
    | ( typedLvalueIR )
 
-syntax lvalueNoteIR = 
+syntax lvalueNoteIR =
    | ( typeIR )
 
-syntax typedLvalueIR = 
+syntax typedLvalueIR =
    | lvalueIR # lvalueNoteIR hint(print %0) hint(prose %0 "with note" %1) hint(prose_fields "lvalue" "note")
 
 def $type_of_typedLvalueIR(typedLvalueIR) : typeIR =
@@ -7150,68 +7150,68 @@ def $typedExpressionIR_as_typedLvalueIR(typedExpressionIR) : typedLvalueIR? =
 
 syntax emptyStatementIR = emptyStatement
 
-syntax assignmentStatementIR = 
+syntax assignmentStatementIR =
    | typedLvalueIR assignop typedExpressionIR ;
 
-syntax callStatementIR = 
+syntax callStatementIR =
    | callableTargetIR < typeArgumentListIR >( argumentListIR );
 
-syntax directApplicationStatementIR = 
+syntax directApplicationStatementIR =
    | constructorTargetIR .apply( argumentListIR );
 
-syntax returnStatementIR = 
+syntax returnStatementIR =
    | return;
    | return typedExpressionIR ;
 
 syntax exitStatementIR = exitStatement
 
-syntax blockStatementIR = 
+syntax blockStatementIR =
    | annotationList { blockElementStatementListIR }
 
-syntax conditionalStatementIR = 
+syntax conditionalStatementIR =
    | if( typedExpressionIR ) statementIR
    | if( typedExpressionIR ) statementIR else statementIR
 
-syntax forUpdateStatementIR = 
+syntax forUpdateStatementIR =
    | callableTargetIR < typeArgumentListIR >( argumentListIR )
    | typedLvalueIR assignop typedExpressionIR
 
 syntax forUpdateStatementListIR = forUpdateStatementIR*
 
-syntax forInitStatementIR = 
+syntax forInitStatementIR =
    | annotationList typeIR nameIR initializerOptIR
    | callableTargetIR < typeArgumentListIR >( argumentListIR )
    | typedLvalueIR assignop typedExpressionIR
 
 syntax forInitStatementListIR = forInitStatementIR*
 
-syntax forCollectionExpressionIR = 
+syntax forCollectionExpressionIR =
    | expressionIR # expressionNoteIR hint(print %0) hint(prose %0 "annotated with" %1) hint(prose_fields "expression" "note")
    | typedExpressionIR .. typedExpressionIR
 
-syntax forStatementIR = 
+syntax forStatementIR =
    | annotationList for( forInitStatementListIR ; typedExpressionIR ; forUpdateStatementListIR ) statementIR
    | annotationList for( typeIR nameIR in forCollectionExpressionIR ) statementIR
    | annotationList for( annotationList typeIR nameIR in forCollectionExpressionIR ) statementIR
 
-syntax switchLabelIR = 
+syntax switchLabelIR =
    | default
    | expressionIR # expressionNoteIR hint(print %0) hint(prose %0 "annotated with" %1) hint(prose_fields "expression" "note")
 
-syntax switchCaseIR = 
+syntax switchCaseIR =
    | switchLabelIR : blockStatementIR
    | switchLabelIR :
 
 syntax switchCaseListIR = switchCaseIR*
 
-syntax switchStatementIR = 
+syntax switchStatementIR =
    | switch( typedExpressionIR ){ switchCaseListIR }
 
 syntax breakStatementIR = breakStatement
 
 syntax continueStatementIR = continueStatement
 
-syntax statementIR = 
+syntax statementIR =
    | ;
    | typedLvalueIR assignop typedExpressionIR ;
    | callableTargetIR < typeArgumentListIR >( argumentListIR );
@@ -7229,15 +7229,15 @@ syntax statementIR =
    | continue;
    | switch( typedExpressionIR ){ switchCaseListIR }
 
-syntax constantDeclarationIR = 
+syntax constantDeclarationIR =
    | annotationList const typeIR nameIR constantInitializerIR ;
 
 syntax initializerOptIR = initializerIR?
 
-syntax variableDeclarationIR = 
+syntax variableDeclarationIR =
    | annotationList typeIR nameIR initializerOptIR ;
 
-syntax blockElementStatementIR = 
+syntax blockElementStatementIR =
    | annotationList const typeIR nameIR constantInitializerIR ;
    | annotationList typeIR nameIR initializerOptIR ;
    | ;
@@ -7259,24 +7259,24 @@ syntax blockElementStatementIR =
 
 syntax blockElementStatementListIR = blockElementStatementIR*
 
-syntax functionPrototypeIR = 
+syntax functionPrototypeIR =
    | typeIR nameIR < typeParameterListIR , typeParameterListIR >( parameterListIR )
 
-syntax functionDeclarationIR = 
+syntax functionDeclarationIR =
    | annotationList functionPrototypeIR blockStatementIR
 
-syntax actionDeclarationIR = 
+syntax actionDeclarationIR =
    | annotationList action nameIR ( parameterListIR ) blockStatementIR
 
-syntax objectInitializerIR = 
+syntax objectInitializerIR =
    | ={ objectDeclarationListIR }
 
 syntax objectInitializerOptIR = objectInitializerIR?
 
-syntax instantiationIR = 
+syntax instantiationIR =
    | annotationList typeIR constructorTargetIR ( argumentListIR ) nameIR objectInitializerOptIR ; hint(prose_fields "annotations" "type" "constructor target" "arguments" "name" "object initializer")
 
-syntax objectDeclarationIR = 
+syntax objectDeclarationIR =
    | annotationList functionPrototypeIR blockStatementIR
    | annotationList typeIR constructorTargetIR ( argumentListIR ) nameIR objectInitializerOptIR ; hint(prose_fields "annotations" "type" "constructor target" "arguments" "name" "object initializer")
 
@@ -7291,38 +7291,38 @@ def $flatten_objectInitializerOptIR(objectInitializerOptIR) : objectDeclarationL
   -- if objectInitializerOptIR matches (_)
   -- let ?(={ objectDeclarationListIR }) = objectInitializerOptIR
 
-syntax errorDeclarationIR = 
+syntax errorDeclarationIR =
    | error{ nameListIR }
 
-syntax matchKindDeclarationIR = 
+syntax matchKindDeclarationIR =
    | match_kind{ nameListIR }
 
-syntax enumTypeDeclarationIR = 
+syntax enumTypeDeclarationIR =
    | annotationList enum nameIR { nameListIR }
    | annotationList enum typeIR nameIR { namedValueListIR }
 
-syntax typeFieldIR = 
+syntax typeFieldIR =
    | annotationList typeIR nameIR ;
 
 syntax typeFieldListIR = typeFieldIR*
 
-syntax structTypeDeclarationIR = 
+syntax structTypeDeclarationIR =
    | annotationList struct nameIR < typeParameterListIR >{ typeFieldListIR }
 
-syntax headerTypeDeclarationIR = 
+syntax headerTypeDeclarationIR =
    | annotationList header nameIR < typeParameterListIR >{ typeFieldListIR }
 
-syntax headerUnionTypeDeclarationIR = 
+syntax headerUnionTypeDeclarationIR =
    | annotationList header_union nameIR < typeParameterListIR >{ typeFieldListIR }
 
-syntax derivedTypeDeclarationIR = 
+syntax derivedTypeDeclarationIR =
    | annotationList enum nameIR { nameListIR }
    | annotationList enum typeIR nameIR { namedValueListIR }
    | annotationList struct nameIR < typeParameterListIR >{ typeFieldListIR }
    | annotationList header nameIR < typeParameterListIR >{ typeFieldListIR }
    | annotationList header_union nameIR < typeParameterListIR >{ typeFieldListIR }
 
-syntax typedefIR = 
+syntax typedefIR =
    | void
    | bool
    | error
@@ -7363,60 +7363,60 @@ syntax typedefIR =
    | annotationList header nameIR < typeParameterListIR >{ typeFieldListIR }
    | annotationList header_union nameIR < typeParameterListIR >{ typeFieldListIR }
 
-syntax typedefDeclarationIR = 
+syntax typedefDeclarationIR =
    | annotationList typedef typedefIR nameIR ;
    | annotationList type typeIR nameIR ;
 
-syntax externFunctionDeclarationIR = 
+syntax externFunctionDeclarationIR =
    | annotationList extern functionPrototypeIR ;
 
-syntax externConstructorPrototypeIR = 
+syntax externConstructorPrototypeIR =
    | annotationList nameIR <, typeParameterListIR >( parameterListIR );
 
 syntax externConstructorPrototypeListIR = externConstructorPrototypeIR*
 
-syntax externMethodPrototypeIR = 
+syntax externMethodPrototypeIR =
    | annotationList functionPrototypeIR ;
    | annotationList abstract functionPrototypeIR ;
 
 syntax externMethodPrototypeListIR = externMethodPrototypeIR*
 
-syntax externObjectDeclarationIR = 
+syntax externObjectDeclarationIR =
    | annotationList extern nameIR < typeParameterListIR ,>{ externConstructorPrototypeListIR externMethodPrototypeListIR }
 
-syntax externDeclarationIR = 
+syntax externDeclarationIR =
    | annotationList extern functionPrototypeIR ;
    | annotationList extern nameIR < typeParameterListIR ,>{ externConstructorPrototypeListIR externMethodPrototypeListIR }
 
-syntax selectCaseIR = 
+syntax selectCaseIR =
    | keysetExpressionIR : nameIR ;
 
 syntax selectCaseListIR = selectCaseIR*
 
-syntax selectExpressionIR = 
+syntax selectExpressionIR =
    | select( typedExpressionListIR ){ selectCaseListIR }
 
-syntax stateExpressionIR = 
+syntax stateExpressionIR =
    | nameIR ;
    | select( typedExpressionListIR ){ selectCaseListIR }
 
-syntax transitionStatementIR = 
+syntax transitionStatementIR =
    | transition stateExpressionIR
 
-syntax valueSetDeclarationIR = 
+syntax valueSetDeclarationIR =
    | annotationList value_set< typeIR >( typedExpressionIR ) nameIR ;
 
-syntax parserTypeDeclarationIR = 
+syntax parserTypeDeclarationIR =
    | annotationList parser nameIR < typeParameterListIR , typeParameterListIR >( parameterListIR );
 
-syntax parserBlockStatementIR = 
+syntax parserBlockStatementIR =
    | annotationList { parserStatementListIR }
 
-syntax parserConditionalStatementIR = 
+syntax parserConditionalStatementIR =
    | if( typedExpressionIR ) parserStatementIR
    | if( typedExpressionIR ) parserStatementIR else parserStatementIR
 
-syntax parserStatementIR = 
+syntax parserStatementIR =
    | annotationList const typeIR nameIR constantInitializerIR ;
    | annotationList typeIR nameIR initializerOptIR ;
    | ;
@@ -7429,12 +7429,12 @@ syntax parserStatementIR =
 
 syntax parserStatementListIR = parserStatementIR*
 
-syntax parserStateIR = 
+syntax parserStateIR =
    | annotationList state nameIR { parserStatementListIR transitionStatementIR }
 
 syntax parserStateListIR = parserStateIR*
 
-syntax parserLocalDeclarationIR = 
+syntax parserLocalDeclarationIR =
    | annotationList const typeIR nameIR constantInitializerIR ;
    | annotationList typeIR constructorTargetIR ( argumentListIR ) nameIR objectInitializerOptIR ; hint(prose_fields "annotations" "type" "constructor target" "arguments" "name" "object initializer")
    | annotationList typeIR nameIR initializerOptIR ;
@@ -7442,55 +7442,55 @@ syntax parserLocalDeclarationIR =
 
 syntax parserLocalDeclarationListIR = parserLocalDeclarationIR*
 
-syntax parserDeclarationIR = 
+syntax parserDeclarationIR =
    | annotationList parser nameIR < typeParameterListIR , typeParameterListIR >( parameterListIR )( constructorParameterListIR ){ parserLocalDeclarationListIR parserStateListIR }
 
 syntax constIR = const
 
 syntax constOptIR = constIR?
 
-syntax tableKeyIR = 
+syntax tableKeyIR =
    | typedExpressionIR # nameIR : nameIR annotationList ;
 
 syntax tableKeyListIR = tableKeyIR*
 
 syntax controlPlaneNameIR = nameIR?
 
-syntax tableActionReferenceIR = 
+syntax tableActionReferenceIR =
    | prefixedNameIR controlPlaneNameIR ( argumentListIR )
 
-syntax tableActionIR = 
+syntax tableActionIR =
    | annotationList tableActionReferenceIR #( parameterListIR , parameterListIR );
 
 syntax tableActionListIR = tableActionIR*
 
-syntax tableEntryPriorityIR = 
+syntax tableEntryPriorityIR =
    | priority= integerLiteral :
 
 syntax tableEntryPriorityOptIR = tableEntryPriorityIR?
 
-syntax tableEntryIR = 
+syntax tableEntryIR =
    | constOptIR tableEntryPriorityOptIR keysetExpressionIR : tableActionReferenceIR annotationList ;
 
 syntax tableEntryListIR = tableEntryIR*
 
-syntax tableKeysPropertyIR = 
+syntax tableKeysPropertyIR =
    | key={ tableKeyListIR }
 
-syntax tableActionsPropertyIR = 
+syntax tableActionsPropertyIR =
    | actions={ tableActionListIR }
 
-syntax tableDefaultActionPropertyIR = 
+syntax tableDefaultActionPropertyIR =
    | annotationList constOptIR default_action= tableActionReferenceIR ;
 
-syntax tableEntriesPropertyIR = 
+syntax tableEntriesPropertyIR =
    | annotationList constOptIR entries={ tableEntryListIR }
 
-syntax tableCustomPropertyIR = 
+syntax tableCustomPropertyIR =
    | annotationList constOptIR custom nameIR initializerIR ;
    | annotationList constOptIR custom_const nameIR constantInitializerIR ;
 
-syntax tablePropertyIR = 
+syntax tablePropertyIR =
    | key={ tableKeyListIR }
    | actions={ tableActionListIR }
    | annotationList constOptIR default_action= tableActionReferenceIR ;
@@ -7500,15 +7500,15 @@ syntax tablePropertyIR =
 
 syntax tablePropertyListIR = tablePropertyIR*
 
-syntax tableDeclarationIR = 
+syntax tableDeclarationIR =
    | annotationList table typeIR nameIR { tablePropertyListIR } hint(print %0 TABLE %2 `{%3})
 
-syntax controlTypeDeclarationIR = 
+syntax controlTypeDeclarationIR =
    | annotationList control nameIR < typeParameterListIR , typeParameterListIR >( parameterListIR );
 
 syntax controlBodyIR = blockStatementIR
 
-syntax controlLocalDeclarationIR = 
+syntax controlLocalDeclarationIR =
    | annotationList const typeIR nameIR constantInitializerIR ;
    | annotationList typeIR constructorTargetIR ( argumentListIR ) nameIR objectInitializerOptIR ; hint(prose_fields "annotations" "type" "constructor target" "arguments" "name" "object initializer")
    | annotationList typeIR nameIR initializerOptIR ;
@@ -7517,13 +7517,13 @@ syntax controlLocalDeclarationIR =
 
 syntax controlLocalDeclarationListIR = controlLocalDeclarationIR*
 
-syntax controlDeclarationIR = 
+syntax controlDeclarationIR =
    | annotationList control nameIR < typeParameterListIR , typeParameterListIR >( parameterListIR )( constructorParameterListIR ){ controlLocalDeclarationListIR apply controlBodyIR }
 
-syntax packageTypeDeclarationIR = 
+syntax packageTypeDeclarationIR =
    | annotationList package nameIR < typeParameterListIR , typeParameterListIR >( parameterListIR );
 
-syntax typeDeclarationIR = 
+syntax typeDeclarationIR =
    | annotationList enum nameIR { nameListIR }
    | annotationList enum typeIR nameIR { namedValueListIR }
    | annotationList struct nameIR < typeParameterListIR >{ typeFieldListIR }
@@ -7535,9 +7535,9 @@ syntax typeDeclarationIR =
    | annotationList control nameIR < typeParameterListIR , typeParameterListIR >( parameterListIR );
    | annotationList package nameIR < typeParameterListIR , typeParameterListIR >( parameterListIR );
 
-syntax declarationIR = 
+syntax declarationIR =
    | annotationList const typeIR nameIR constantInitializerIR ;
-   | annotationList typeIR constructorTargetIR ( argumentListIR ) nameIR objectInitializerOptIR ; hint(prose_fields "annotations" "type" "constructor target" "arguments" "name" "object initializer")
+   | annotationList typeIR constructorTargetIR ( argumentListIR ) nameIR objectInitializerOptIR ; prose_fields "annotations" "type" "constructor target" "arguments" "name" "object initializer")
    | annotationList functionPrototypeIR blockStatementIR
    | annotationList action nameIR ( parameterListIR ) blockStatementIR
    | error{ nameListIR }
@@ -7557,7 +7557,7 @@ syntax declarationIR =
    | annotationList control nameIR < typeParameterListIR , typeParameterListIR >( parameterListIR );
    | annotationList package nameIR < typeParameterListIR , typeParameterListIR >( parameterListIR );
 
-syntax p4programIR = 
+syntax p4programIR =
    | declarationIR* ;
 
 def $partition_parameterListIR(parameterIR*, nameIR*, nameIR*) : (parameterIR*, parameterIR*, parameterIR*) =
@@ -7587,7 +7587,7 @@ def $partition_parameterListIR(parameterIR*, nameIR*, nameIR*) : (parameterIR*, 
   -- if ~nameIR_h <- nameIR_default*{nameIR_default <- nameIR_default*}
   -- if ~nameIR_h <- nameIR_optional*{nameIR_optional <- nameIR_optional*}
 
-syntax callAlign = 
+syntax callAlign =
    | given parameterIR* default parameterIR*
 
 def $align_parameterListIR(parameterIR*, argumentIR*, nameIR*, nameIR*) : callAlign =
@@ -7647,25 +7647,25 @@ def $align_parameterListIR_given(map<id, parameterIR>, parameterIR*, argumentIR*
   -- let ?(parameterIR_match) = parameterIR''?{parameterIR'' <- parameterIR''?}
   -- let parameterIR_aligned*{parameterIR_aligned <- parameterIR_aligned*} = $align_parameterListIR_given({ id : parameterIR*{id <- id*, parameterIR <- parameterIR*} }, parameterIR_t*{parameterIR_t <- parameterIR_t*}, argumentIR_t*{argumentIR_t <- argumentIR_t*})
 
-syntax callTargetKey = 
+syntax callTargetKey =
    | nameIR ( id?* )
 
-syntax namedCallTargetKey = 
+syntax namedCallTargetKey =
    | nameIR ( id* )
 
-syntax unnamedCallTargetKey = 
+syntax unnamedCallTargetKey =
    | nameIR ( nat )
 
-syntax callTargetParameter = 
+syntax callTargetParameter =
    | nameIR # bool # bool
 
 syntax callTargetValue = callTargetParameter*
 
-syntax callTargetMatch = 
+syntax callTargetMatch =
    | match id* id* hint(prose MATCH "with defaults" %0 and "optionals" %1)
    | nomatch
 
-syntax callResolution<V> = 
+syntax callResolution<V> =
    | callableId : V # nameIR* # nameIR* hint(prose_fields "call target id" "call target" "defaults" "optionals")
 
 def $callTargetKey(nameIR, argumentListIR) : callTargetKey =
@@ -8030,7 +8030,7 @@ def $subexpressions_of_argumentListIR(argumentListIR) : typedExpressionListIR =
 
   clause 0 : (argumentIR*{argumentIR <- argumentIR*}) = $concat_<typedExpressionIR>($subexpressions_of_argumentIR(argumentIR)*{argumentIR <- argumentIR*})
 
-syntax flow = 
+syntax flow =
    | cont
    | ret
 
@@ -8042,7 +8042,7 @@ def $join_flow(flow, flow) : flow =
 
   clause -1 : (f_a, f_b) = cont
 
-syntax varTypeIR = 
+syntax varTypeIR =
    | direction typeIR ctk value? hint(prose_fields "direction" "type" "compile-time known-ness" "default value")
 
 syntax typeFrame = map<id, varTypeIR>
@@ -8071,7 +8071,7 @@ def $empty_constructorTypeDefEnv : constructorTypeDefEnv =
 
 syntax globalTypingLayer = {constructor constructorTypeDefEnv, type typeDefEnv, callable callableTypeDefEnv, frame typeFrame}
 
-syntax blockKind = 
+syntax blockKind =
    | `empty
    | extern
    | parser
@@ -8080,31 +8080,31 @@ syntax blockKind =
 
 syntax blockTypingLayer = {kind blockKind, type typeDefEnv, callable callableTypeDefEnv, frame typeFrame}
 
-syntax actionLocalKind = 
+syntax actionLocalKind =
    | action
 
-syntax definedFunctionLocalKind = 
+syntax definedFunctionLocalKind =
    | function: typeIR
 
-syntax externFunctionLocalKind = 
+syntax externFunctionLocalKind =
    | extern_function: typeIR
 
-syntax functionLocalKind = 
+syntax functionLocalKind =
    | function: typeIR
    | extern_function: typeIR
 
-syntax externMethodLocalKind = 
+syntax externMethodLocalKind =
    | extern_method: typeIR
    | extern_methodabstract: typeIR
 
-syntax methodLocalKind = 
+syntax methodLocalKind =
    | extern_method: typeIR
    | extern_methodabstract: typeIR
    | parser_state
    | control_apply_method
    | table_apply_method
 
-syntax localKind = 
+syntax localKind =
    | `empty
    | action
    | function: typeIR
@@ -8548,17 +8548,17 @@ def $find_local_return_type_t(typingContext) : typeIR? =
 
   clause -1 : (TC) = ?()
 
-syntax matchKey = 
+syntax matchKey =
    | typeIR : nameIR
 
-syntax matchAction = 
+syntax matchAction =
    | prefixedNameIR ( parameterIR* @ argumentListIR )
 
 syntax matchPriority = {values nat*, init bool, delta nat, largest_wins bool}
 
 syntax matchEntries = {size nat, const bool}
 
-syntax matchMode = 
+syntax matchMode =
    | nopri
    | noprilpm nat
    | pri
@@ -8566,7 +8566,7 @@ syntax matchMode =
 
 syntax tableContext = {keys matchKey*, actions matchAction*, priorities matchPriority, entries matchEntries, mode matchMode}
 
-syntax tableEntryState = 
+syntax tableEntryState =
    | lpm nat
    | non_lpm
 
@@ -9132,7 +9132,7 @@ relation Type_wf: bound |- typeIR
 
 relation TypeDef_wf: bound |- typeDefIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -9141,7 +9141,7 @@ relation TypeDef_wf: bound |- typeDefIR
 
    paths
 
-    rulepath 
+    rulepath
     -- let (typeParameterIR_expl*{typeParameterIR_expl <- typeParameterIR_expl*}, typeParameterIR_impl*{typeParameterIR_impl <- typeParameterIR_impl*}) = $typeParameterListIR_of_typeDefIR(typeDefIR)
     -- let typeParameterIR*{typeParameterIR <- typeParameterIR*} = typeParameterIR_expl*{typeParameterIR_expl <- typeParameterIR_expl*} ++ typeParameterIR_impl*{typeParameterIR_impl <- typeParameterIR_impl*}
     -- if $distinct_<typeId>(typeParameterIR*{typeParameterIR <- typeParameterIR*})
@@ -9152,7 +9152,7 @@ relation TypeDef_wf: bound |- typeDefIR
 
 relation ParameterType_wf: bound |- parameterIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -9185,7 +9185,7 @@ relation ParameterType_wf: bound |- parameterIR
 
 relation ReturnType_wf: bound |- typeIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -9194,7 +9194,7 @@ relation ReturnType_wf: bound |- typeIR
 
    paths
 
-    rulepath 
+    rulepath
     -- if Type_wf: B |- typeIR_ret holds
     -- let typeIR_unroll = $unroll_typeIR(typeIR_ret)
     -- if ((~(typeIR_unroll = int as typeIR) /\ ~typeIR_unroll <: synthesizedTypeIR) /\ ~typeIR_unroll <: objectTypeIR)
@@ -9359,7 +9359,7 @@ relation CallableType_wf: bound |- callableTypeIR
 
 relation CallableTypeDef_wf: bound |- callableTypeDefIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -9368,7 +9368,7 @@ relation CallableTypeDef_wf: bound |- callableTypeDefIR
 
    paths
 
-    rulepath 
+    rulepath
     -- let (typeParameterIR_expl*{typeParameterIR_expl <- typeParameterIR_expl*}, typeParameterIR_impl*{typeParameterIR_impl <- typeParameterIR_impl*}) = $typeParameterListIR_of_callableTypeDefIR(callableTypeDefIR)
     -- let typeParameterIR*{typeParameterIR <- typeParameterIR*} = typeParameterIR_expl*{typeParameterIR_expl <- typeParameterIR_expl*} ++ typeParameterIR_impl*{typeParameterIR_impl <- typeParameterIR_impl*}
     -- if $distinct_<typeId>(typeParameterIR*{typeParameterIR <- typeParameterIR*})
@@ -9379,7 +9379,7 @@ relation CallableTypeDef_wf: bound |- callableTypeDefIR
 
 relation ConstructorParameterType_wf: bound |- parameterIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -9388,7 +9388,7 @@ relation ConstructorParameterType_wf: bound |- parameterIR
 
    paths
 
-    rulepath 
+    rulepath
     -- let _annotationList direction _typeIR _id _parameterInitializerOptIR = constructorParameterIR
     -- if direction matches ``EMPTY`
     -- if ParameterType_wf: B |- constructorParameterIR holds
@@ -9493,7 +9493,7 @@ relation ConstructorType_wf: bound |- constructorTypeIR
 
 relation ConstructorTypeDef_wf: bound |- constructorTypeDefIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -9502,7 +9502,7 @@ relation ConstructorTypeDef_wf: bound |- constructorTypeDefIR
 
    paths
 
-    rulepath 
+    rulepath
     -- let constructor< typeParameterIR_expl*{typeParameterIR_expl <- typeParameterIR_expl*} , typeParameterIR_impl*{typeParameterIR_impl <- typeParameterIR_impl*} >( parameterIR*{parameterIR <- parameterIR*} ): typeIR_object = constructorTypeDefIR
     -- if $definable_constructor(typeIR_object)
     -- let typeParameterIR*{typeParameterIR <- typeParameterIR*} = typeParameterIR_expl*{typeParameterIR_expl <- typeParameterIR_expl*} ++ typeParameterIR_impl*{typeParameterIR_impl <- typeParameterIR_impl*}
@@ -11269,7 +11269,7 @@ relation Type_ok: cursor typingContext |- typeOrVoid : typeIR # typeId*
 
 relation TypeParameterListOpt_ok: cursor typingContext |- typeParameterListOpt : typingContext typeId*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -11278,7 +11278,7 @@ relation TypeParameterListOpt_ok: cursor typingContext |- typeParameterListOpt :
 
    paths
 
-    rulepath 
+    rulepath
     -- let typeParameter*{typeParameter <- typeParameter*} = $flatten_typeParameterListOpt(typeParameterListOpt)
     -- (let typeId = $name(typeParameter))*{typeParameter <- typeParameter*, typeId -> typeId*}
     -- let TC_1 = $add_typeParameters_t(p, TC_0, typeId*{typeId <- typeId*})
@@ -11349,7 +11349,7 @@ relation TypeArgument_ok: cursor typingContext |- typeArgument : typeArgumentIR 
 
 relation TypeArguments_ok: cursor typingContext |- typeArgument* : typeArgumentListIR # typeId*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -11373,7 +11373,7 @@ relation TypeArguments_ok: cursor typingContext |- typeArgument* : typeArgumentL
 
 relation TypeArgumentList_ok: cursor typingContext |- typeArgumentList : typeArgumentListIR # typeId*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -11382,14 +11382,14 @@ relation TypeArgumentList_ok: cursor typingContext |- typeArgumentList : typeArg
 
    paths
 
-    rulepath 
+    rulepath
     -- let typeArgument*{typeArgument <- typeArgument*} = $flatten_typeArgumentList(typeArgumentList)
     -- TypeArguments_ok: p TC |- typeArgument*{typeArgument <- typeArgument*} : typeArgumentIR*{typeArgumentIR <- typeArgumentIR*} # typeId_impl*{typeId_impl <- typeId_impl*}
     -- output: % % |- % : typeArgumentIR*{typeArgumentIR <- typeArgumentIR*} # typeId_impl*{typeId_impl <- typeId_impl*}
 
 relation Cast_expl: typeIR -> typeIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -11803,7 +11803,7 @@ relation Cast_expl_neq: typeIR -> typeIR
 
 relation Cast_impl: typeIR -> typeIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -13260,7 +13260,7 @@ relation Argument_ok: cursor typingContext |- argument : argumentIR
 
 relation ArgumentList_ok: cursor typingContext |- argumentList : argumentListIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -13269,7 +13269,7 @@ relation ArgumentList_ok: cursor typingContext |- argumentList : argumentListIR
 
    paths
 
-    rulepath 
+    rulepath
     -- let argument*{argument <- argument*} = $flatten_argumentList(argumentList)
     -- (Argument_ok: p TC |- argument : argumentIR)*{argument <- argument*, argumentIR -> argumentIR*}
     -- output: % % |- % : argumentIR*{argumentIR <- argumentIR*}
@@ -13471,7 +13471,7 @@ relation Lvalue_ok: cursor typingContext |- lvalue : typedLvalueIR
     -- let typedLvalueIR = ( typedLvalueIR_base ) # ( typeIR_base )
     -- output: % % |- % : typedLvalueIR
 
-syntax loopctxt = 
+syntax loopctxt =
    | loop
    | noloop
 
@@ -13866,7 +13866,7 @@ relation Stmt_ok: cursor typingContext flow loopctxt |- statement : typingContex
 
 relation BlockElementStmt_ok: typingContext flow loopctxt |- blockElementStatement : typingContext flow blockElementStatementIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -13898,7 +13898,7 @@ relation BlockElementStmt_ok: typingContext flow loopctxt |- blockElementStateme
 
 relation BlockElementStmtList_ok: typingContext flow loopctxt |- blockElementStatementList : typingContext flow blockElementStatementIR*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -13907,14 +13907,14 @@ relation BlockElementStmtList_ok: typingContext flow loopctxt |- blockElementSta
 
    paths
 
-    rulepath 
+    rulepath
     -- let blockElementStatement*{blockElementStatement <- blockElementStatement*} = $flatten_blockElementStatementList(blockElementStatementList)
     -- BlockElementStmts_ok: TC_0 f l |- blockElementStatement*{blockElementStatement <- blockElementStatement*} : TC_1 f_post blockElementStatementIR*{blockElementStatementIR <- blockElementStatementIR*}
     -- output: % % % |- % : TC_1 f_post blockElementStatementIR*{blockElementStatementIR <- blockElementStatementIR*}
 
 relation Block_ok: typingContext flow loopctxt |- blockStatement : typingContext flow blockStatementIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -13923,14 +13923,14 @@ relation Block_ok: typingContext flow loopctxt |- blockStatement : typingContext
 
    paths
 
-    rulepath 
+    rulepath
     -- BlockElementStmtList_ok: TC_0 f l |- blockElementStatementList : TC_1 f_post blockElementStatementIR*{blockElementStatementIR <- blockElementStatementIR*}
     -- let blockStatementIR = annotationList { blockElementStatementIR*{blockElementStatementIR <- blockElementStatementIR*} }
     -- output: % % % |- % : TC_1 f_post blockStatementIR
 
 relation Parameter_ok: cursor typingContext |- parameter : typingContext parameterIR # typeId*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -13990,7 +13990,7 @@ relation Parameter_ok: cursor typingContext |- parameter : typingContext paramet
 
 relation ParameterList_ok: cursor typingContext |- parameterList : typingContext parameterListIR # typeId*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -13999,14 +13999,14 @@ relation ParameterList_ok: cursor typingContext |- parameterList : typingContext
 
    paths
 
-    rulepath 
+    rulepath
     -- let parameter*{parameter <- parameter*} = $flatten_parameterList(parameterList)
     -- ParameterList_ok_inner: p TC_0 |- parameter*{parameter <- parameter*} : TC_1 parameterListIR # typeId_fresh*{typeId_fresh <- typeId_fresh*}
     -- output: % % |- % : TC_1 parameterListIR # typeId_fresh*{typeId_fresh <- typeId_fresh*}
 
 relation ConstructorParameterListOpt_ok: typingContext |- constructorParameterListOpt : typingContext constructorParameterListIR # typeId*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -14015,7 +14015,7 @@ relation ConstructorParameterListOpt_ok: typingContext |- constructorParameterLi
 
    paths
 
-    rulepath 
+    rulepath
     -- let constructorParameter*{constructorParameter <- constructorParameter*} = $flatten_constructorParameterListOpt(constructorParameterListOpt)
     -- ParameterList_ok_inner: block TC_0 |- constructorParameter*{constructorParameter <- constructorParameter*} : TC_1 constructorParameterIR*{constructorParameterIR <- constructorParameterIR*} # typeId_fresh*{typeId_fresh <- typeId_fresh*}
     -- output: % |- % : TC_1 constructorParameterIR*{constructorParameterIR <- constructorParameterIR*} # typeId_fresh*{typeId_fresh <- typeId_fresh*}
@@ -14048,7 +14048,7 @@ def $constructorId_of_externConstructorPrototype(externConstructorPrototype) : c
 
 relation ExternMethod_ok: typingContext typeId |- externMethodPrototype : externMethodPrototypeIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -14093,7 +14093,7 @@ relation ExternMethod_ok: typingContext typeId |- externMethodPrototype : extern
 
 relation ExternConstructor_ok: typingContext typeId |- externConstructorPrototype : externConstructorPrototypeIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -14102,7 +14102,7 @@ relation ExternConstructor_ok: typingContext typeId |- externConstructorPrototyp
 
    paths
 
-    rulepath 
+    rulepath
     -- let nameIR = $name(typeIdentifier as name)
     -- if (nameIR = typeId_extern)
     -- ConstructorParameterListOpt_ok: TC_0 |- ( parameterList ) : TC_1 constructorParameterIR*{constructorParameterIR <- constructorParameterIR*} # typeId_impl*{typeId_impl <- typeId_impl*}
@@ -14121,7 +14121,7 @@ relation ExternConstructor_ok: typingContext typeId |- externConstructorPrototyp
 
 relation ParserSelect_ok: typingContext nameIR* |- selectExpression : selectExpressionIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -14130,7 +14130,7 @@ relation ParserSelect_ok: typingContext nameIR* |- selectExpression : selectExpr
 
    paths
 
-    rulepath 
+    rulepath
     -- let expression_key*{expression_key <- expression_key*} = $flatten_expressionList(expressionList_key)
     -- (Expr_ok: local TC_0 |- expression_key : typedExpressionIR_key)*{expression_key <- expression_key*, typedExpressionIR_key -> typedExpressionIR_key*}
     -- (let typedExpressionIR_key_reduced = $reduce_serenum(typedExpressionIR_key))*{typedExpressionIR_key <- typedExpressionIR_key*, typedExpressionIR_key_reduced -> typedExpressionIR_key_reduced*}
@@ -14143,7 +14143,7 @@ relation ParserSelect_ok: typingContext nameIR* |- selectExpression : selectExpr
 
 relation ParserTransition_ok: typingContext nameIR* |- transitionStatement : transitionStatementIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -14333,7 +14333,7 @@ relation ParserStmt_ok: typingContext |- parserStatement : typingContext parserS
 
 relation ParserStmtList_ok: typingContext |- parserStatementList : typingContext parserStatementIR*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -14342,14 +14342,14 @@ relation ParserStmtList_ok: typingContext |- parserStatementList : typingContext
 
    paths
 
-    rulepath 
+    rulepath
     -- let parserStatement*{parserStatement <- parserStatement*} = $flatten_parserStatementList(parserStatementList)
     -- ParserStmts_ok: TC_0 |- parserStatement*{parserStatement <- parserStatement*} : TC_1 parserStatementIR*{parserStatementIR <- parserStatementIR*}
     -- output: % |- % : TC_1 parserStatementIR*{parserStatementIR <- parserStatementIR*}
 
 relation ParserState_ok: typingContext nameIR* |- parserState : parserStateIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -14358,7 +14358,7 @@ relation ParserState_ok: typingContext nameIR* |- parserState : parserStateIR
 
    paths
 
-    rulepath 
+    rulepath
     -- let annotationList state name { parserStatementList transitionStatement } = parserState
     -- let nameIR = $name(name)
     -- let TC_1 = $enter_t(TC_0)
@@ -14371,7 +14371,7 @@ relation ParserState_ok: typingContext nameIR* |- parserState : parserStateIR
 
 relation ParserStateList_ok: typingContext |- parserStateList : parserStateIR*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -14380,7 +14380,7 @@ relation ParserStateList_ok: typingContext |- parserStateList : parserStateIR*
 
    paths
 
-    rulepath 
+    rulepath
     -- let parserState*{parserState <- parserState*} = $flatten_parserStateList(parserStateList)
     -- (let _annotationList state name_state { _parserStatementList _transitionStatement } = parserState)*{parserState <- parserState*, _annotationList -> _annotationList*, _parserStatementList -> _parserStatementList*, _transitionStatement -> _transitionStatement*, name_state -> name_state*}
     -- (let nameIR_state = $name(name_state))*{name_state <- name_state*, nameIR_state -> nameIR_state*}
@@ -14463,7 +14463,7 @@ relation ParserLocalDecl_ok: typingContext |- parserLocalDeclaration : typingCon
 
 relation ParserLocalDeclList_ok: typingContext |- parserLocalDeclarationList : typingContext parserLocalDeclarationIR*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -14472,14 +14472,14 @@ relation ParserLocalDeclList_ok: typingContext |- parserLocalDeclarationList : t
 
    paths
 
-    rulepath 
+    rulepath
     -- let parserLocalDeclaration*{parserLocalDeclaration <- parserLocalDeclaration*} = $flatten_parserLocalDeclarationList(parserLocalDeclarationList)
     -- ParserLocalDecls_ok: TC_0 |- parserLocalDeclaration*{parserLocalDeclaration <- parserLocalDeclaration*} : TC_1 parserLocalDeclarationIR*{parserLocalDeclarationIR <- parserLocalDeclarationIR*}
     -- output: % |- % : TC_1 parserLocalDeclarationIR*{parserLocalDeclarationIR <- parserLocalDeclarationIR*}
 
 relation TableKey_ok: typingContext tableContext |- tableKey : tableContext tableKeyIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -14488,7 +14488,7 @@ relation TableKey_ok: typingContext tableContext |- tableKey : tableContext tabl
 
    paths
 
-    rulepath 
+    rulepath
     -- Expr_ok: local TC |- expression : typedExpressionIR
     -- let typeIR = $type_of_typedExpressionIR(typedExpressionIR)
     -- if Type_wf: $bound(local, TC) |- set< typeIR > as typeIR holds
@@ -14504,7 +14504,7 @@ relation TableKey_ok: typingContext tableContext |- tableKey : tableContext tabl
 
 relation TableKeys_ok: typingContext tableContext |- tableKey* : tableContext tableKeyListIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -14529,7 +14529,7 @@ relation TableKeys_ok: typingContext tableContext |- tableKey* : tableContext ta
 
 relation Call_action_partial_ok: typingContext |- parameterIR* @ argumentListIR : parameterIR* , parameterIR* @ argumentListIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -14538,7 +14538,7 @@ relation Call_action_partial_ok: typingContext |- parameterIR* @ argumentListIR 
 
    paths
 
-    rulepath 
+    rulepath
     -- let (parameterIR_data*{parameterIR_data <- parameterIR_data*}, parameterIR_control*{parameterIR_control <- parameterIR_control*}) = $split_dataplane_parameters(parameterIR*{parameterIR <- parameterIR*})
     -- if (|parameterIR_data*{parameterIR_data <- parameterIR_data*}| = |argumentIR*{argumentIR <- argumentIR*}|)
     -- let typedExpressionIR_sub*{typedExpressionIR_sub <- typedExpressionIR_sub*} = $subexpressions_of_argumentListIR(argumentIR*{argumentIR <- argumentIR*})
@@ -14548,7 +14548,7 @@ relation Call_action_partial_ok: typingContext |- parameterIR* @ argumentListIR 
 
 relation TableAction_ok: typingContext tableContext |- tableAction : tableContext tableActionIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -14595,7 +14595,7 @@ relation TableAction_ok: typingContext tableContext |- tableAction : tableContex
 
 relation TableActions_ok: typingContext tableContext |- tableAction* : tableContext tableActionListIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -14620,7 +14620,7 @@ relation TableActions_ok: typingContext tableContext |- tableAction* : tableCont
 
 relation Call_action_default_ok: typingContext |- parameterIR* @ argumentListIR : parameterIR* , parameterIR* @ argumentListIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -14629,7 +14629,7 @@ relation Call_action_default_ok: typingContext |- parameterIR* @ argumentListIR 
 
    paths
 
-    rulepath 
+    rulepath
     -- let (parameterIR_data*{parameterIR_data <- parameterIR_data*}, parameterIR_control*{parameterIR_control <- parameterIR_control*}) = $split_dataplane_parameters(parameterIR*{parameterIR <- parameterIR*})
     -- let typedExpressionIR_sub*{typedExpressionIR_sub <- typedExpressionIR_sub*} = $subexpressions_of_argumentListIR(argumentIR*{argumentIR <- argumentIR*})
     -- if $forall_(~$is_table_application(typedExpressionIR_sub)*{typedExpressionIR_sub <- typedExpressionIR_sub*})
@@ -14638,7 +14638,7 @@ relation Call_action_default_ok: typingContext |- parameterIR* @ argumentListIR 
 
 relation TableDefaultAction_ok: typingContext tableContext |- initializer : tableActionReferenceIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -14856,7 +14856,7 @@ relation TableEntry_keyset_ok: typingContext tableContext |- keysetExpression : 
 
 relation TableEntry_action_ok: typingContext tableContext |- tableActionReference : tableActionReferenceIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -15023,7 +15023,7 @@ relation TableEntry_priority_ok: typingContext tableContext tableEntryState |- t
 
 relation TableEntry_ok: typingContext tableContext |- tableEntry : tableContext tableEntryIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -15056,7 +15056,7 @@ relation TableEntry_ok: typingContext tableContext |- tableEntry : tableContext 
 
 relation TableEntries_ok: typingContext tableContext |- tableEntry* : tableContext tableEntryListIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -15226,7 +15226,7 @@ relation TableProperty_ok: typingContext tableContext |- tableProperty : tableCo
 
 relation TableProperties_ok: typingContext tableContext |- tableProperty* : tableContext tablePropertyListIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -15251,7 +15251,7 @@ relation TableProperties_ok: typingContext tableContext |- tableProperty* : tabl
 
 relation Table_ok: typingContext |- tableProperty* : tableContext tablePropertyListIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -15280,7 +15280,7 @@ relation Table_ok: typingContext |- tableProperty* : tableContext tablePropertyL
 
 relation TableType_ok: typingContext tableContext |- name : typingContext typeIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -15289,7 +15289,7 @@ relation TableType_ok: typingContext tableContext |- name : typingContext typeIR
 
    paths
 
-    rulepath 
+    rulepath
     -- let nameIR = $name(name)
     -- let typeId_enum = "action_list(" ++ nameIR ++ ")"
     -- let prefixedNameIR_action ( _parameterIR*{_parameterIR <- _parameterIR*} @ _argumentListIR )*{_argumentListIR <- _argumentListIR*, _parameterIR* <- _parameterIR**, prefixedNameIR_action <- prefixedNameIR_action*} = TBLC.actions
@@ -15389,7 +15389,7 @@ relation ControlLocalDecl_ok: typingContext |- controlLocalDeclaration : typingC
 
 relation ControlLocalDeclList_ok: typingContext |- controlLocalDeclarationList : typingContext controlLocalDeclarationIR*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -15398,14 +15398,14 @@ relation ControlLocalDeclList_ok: typingContext |- controlLocalDeclarationList :
 
    paths
 
-    rulepath 
+    rulepath
     -- let controlLocalDeclaration*{controlLocalDeclaration <- controlLocalDeclaration*} = $flatten_controlLocalDeclarationList(controlLocalDeclarationList)
     -- ControlLocalDecls_ok: TC_0 |- controlLocalDeclaration*{controlLocalDeclaration <- controlLocalDeclaration*} : TC_1 controlLocalDeclarationIR*{controlLocalDeclarationIR <- controlLocalDeclarationIR*}
     -- output: % |- % : TC_1 controlLocalDeclarationIR*{controlLocalDeclarationIR <- controlLocalDeclarationIR*}
 
 relation VarDecl_ok: cursor typingContext |- variableDeclaration : typingContext variableDeclarationIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -15444,7 +15444,7 @@ relation VarDecl_ok: cursor typingContext |- variableDeclaration : typingContext
 
 relation ConstDecl_ok: cursor typingContext |- constantDeclaration : typingContext constantDeclarationIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -15453,7 +15453,7 @@ relation ConstDecl_ok: cursor typingContext |- constantDeclaration : typingConte
 
    paths
 
-    rulepath 
+    rulepath
     -- Type_ok: p TC_0 |- type as typeOrVoid : typeIR # typeId*{typeId <- typeId*}
     -- if typeId*{typeId <- typeId*} matches []
     -- if Type_wf: $bound(p, TC_0) |- typeIR holds
@@ -15470,7 +15470,7 @@ relation ConstDecl_ok: cursor typingContext |- constantDeclaration : typingConte
 
 relation InstDecl_ok: cursor typingContext |- instantiation : typingContext instantiationIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -15517,7 +15517,7 @@ relation InstDecl_ok: cursor typingContext |- instantiation : typingContext inst
 
 relation FuncDecl_ok: cursor typingContext |- functionDeclaration : typingContext functionDeclarationIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -15526,7 +15526,7 @@ relation FuncDecl_ok: cursor typingContext |- functionDeclaration : typingContex
 
    paths
 
-    rulepath 
+    rulepath
     -- TypeParameterListOpt_ok: local TC_0 |- typeParameterListOpt : TC_1 typeId_expl*{typeId_expl <- typeId_expl*}
     -- Type_ok: local TC_1 |- typeOrVoid : typeIR_ret # typeId*{typeId <- typeId*}
     -- if typeId*{typeId <- typeId*} matches []
@@ -15544,7 +15544,7 @@ relation FuncDecl_ok: cursor typingContext |- functionDeclaration : typingContex
 
 relation ActionDecl_ok: cursor typingContext |- actionDeclaration : typingContext actionDeclarationIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -15553,7 +15553,7 @@ relation ActionDecl_ok: cursor typingContext |- actionDeclaration : typingContex
 
    paths
 
-    rulepath 
+    rulepath
     -- let TC_1 = TC_0[local.kind = action as localKind]
     -- ParameterList_ok: local TC_1 |- parameterList : TC_2 parameterIR*{parameterIR <- parameterIR*} # typeId*{typeId <- typeId*}
     -- if typeId*{typeId <- typeId*} matches []
@@ -16095,7 +16095,7 @@ relation Decl_ok: typingContext |- declaration : typingContext declarationIR
 
 relation Decls_ok: typingContext |- declaration* : typingContext declarationIR*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -16120,7 +16120,7 @@ relation Decls_ok: typingContext |- declaration* : typingContext declarationIR*
 
 relation Program_ok: |- p4program : p4programIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -16129,13 +16129,13 @@ relation Program_ok: |- p4program : p4programIR
 
    paths
 
-    rulepath 
+    rulepath
     -- let declaration*{declaration <- declaration*} = $flatten_p4program(p4program)
     -- let TC_0 = $empty_typingContext
     -- Decls_ok: TC_0 |- declaration*{declaration <- declaration*} : TC_1 declarationIR*{declarationIR <- declarationIR*}
     -- output: |- % : declarationIR*{declarationIR <- declarationIR*} ;
 
-syntax actctxt = 
+syntax actctxt =
    | action
    | noaction
 
@@ -16263,7 +16263,7 @@ relation Call_convention_argument_ok: cursor typingContext actctxt |- parameterI
 
 relation Call_convention_ok: cursor typingContext actctxt |- parameterIR* @ argumentListIR : argumentListIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -16313,7 +16313,7 @@ def $is_static_assert_callableTypeIR(callableTypeIR) : bool =
 
 relation CallableTarget_ok: cursor typingContext |- callableTarget : callableTargetIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -16362,7 +16362,7 @@ relation CallableTarget_ok: cursor typingContext |- callableTarget : callableTar
 
 relation CallableTarget_lvalue_ok: cursor typingContext |- lvalue : callableTargetIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -16371,7 +16371,7 @@ relation CallableTarget_lvalue_ok: cursor typingContext |- lvalue : callableTarg
 
    paths
 
-    rulepath 
+    rulepath
     -- let expression = $lvalue_as_expression(lvalue)
     -- CallableTarget_ok: p TC |- expression : callableTargetIR
     -- output: % % |- % : callableTargetIR
@@ -16822,7 +16822,7 @@ relation Call_ok: cursor typingContext |- callableTypeIR < typeArgumentListIR # 
 
 relation ConstructorType_ok: cursor typingContext |- constructorTargetIR ( argumentIR* ): constructorTypeIR <# typeId* >(# id* # id* )
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -16872,7 +16872,7 @@ relation ConstructorType_ok: cursor typingContext |- constructorTargetIR ( argum
     -- if ConstructorType_wf: B |- constructorTypeIR holds
     -- output: % % |- % ( % ): constructorTypeIR <# typeId_impl*{typeId_impl <- typeId_impl*} >(# id_default*{id_default <- id_default*} # id_optional*{id_optional <- id_optional*} )
 
-syntax instctxt = 
+syntax instctxt =
    | named
    | anon
 
@@ -17602,7 +17602,7 @@ def $is_concrete_extern_object''(externMethodTypeDefIR) : bool =
 
 relation ParameterList_ok_inner: cursor typingContext |- parameter* : typingContext parameterListIR # typeId*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -17629,7 +17629,7 @@ relation ParameterList_ok_inner: cursor typingContext |- parameter* : typingCont
 
 relation ForUpdateStmt_ok: typingContext |- forUpdateStatement : forUpdateStatementIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -17668,7 +17668,7 @@ relation ForUpdateStmt_ok: typingContext |- forUpdateStatement : forUpdateStatem
 
 relation ForUpdateStmtList_ok: typingContext |- forUpdateStatementList : forUpdateStatementIR*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -17677,14 +17677,14 @@ relation ForUpdateStmtList_ok: typingContext |- forUpdateStatementList : forUpda
 
    paths
 
-    rulepath 
+    rulepath
     -- let forUpdateStatement*{forUpdateStatement <- forUpdateStatement*} = $flatten_forUpdateStatementList(forUpdateStatementList)
     -- (ForUpdateStmt_ok: TC |- forUpdateStatement : forUpdateStatementIR)*{forUpdateStatement <- forUpdateStatement*, forUpdateStatementIR -> forUpdateStatementIR*}
     -- output: % |- % : forUpdateStatementIR*{forUpdateStatementIR <- forUpdateStatementIR*}
 
 relation ForInitStmt_ok: typingContext |- forInitStatement : typingContext forInitStatementIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -17736,7 +17736,7 @@ relation ForInitStmt_ok: typingContext |- forInitStatement : typingContext forIn
 
 relation ForInitStmts_ok: typingContext |- forInitStatement* : typingContext forInitStatementIR*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -17761,7 +17761,7 @@ relation ForInitStmts_ok: typingContext |- forInitStatement* : typingContext for
 
 relation ForInitStmtList_ok: typingContext |- forInitStatementList : typingContext forInitStatementIR*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -17770,14 +17770,14 @@ relation ForInitStmtList_ok: typingContext |- forInitStatementList : typingConte
 
    paths
 
-    rulepath 
+    rulepath
     -- let forInitStatement*{forInitStatement <- forInitStatement*} = $flatten_forInitStatementList(forInitStatementList)
     -- ForInitStmts_ok: TC_0 |- forInitStatement*{forInitStatement <- forInitStatement*} : TC_1 forInitStatementIR*{forInitStatementIR <- forInitStatementIR*}
     -- output: % |- % : TC_1 forInitStatementIR*{forInitStatementIR <- forInitStatementIR*}
 
 relation ForCollectionExpr_ok: typingContext typeIR |- forCollectionExpression : forCollectionExpressionIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -17882,7 +17882,7 @@ def $check_switchLabel_default(switchLabel*) : bool =
 
 relation SwitchLabel_table_ok: typingContext typeId |- switchLabel : switchLabelIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -17915,7 +17915,7 @@ relation SwitchLabel_table_ok: typingContext typeId |- switchLabel : switchLabel
 
 relation SwitchCase_table_ok: typingContext flow loopctxt typeId |- switchCase : flow switchCaseIR # switchLabel
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -17943,7 +17943,7 @@ relation SwitchCase_table_ok: typingContext flow loopctxt typeId |- switchCase :
 
 relation SwitchCases_table_ok: typingContext flow loopctxt typeId |- switchCase* : flow switchCaseListIR # switchLabel*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -17966,7 +17966,7 @@ relation SwitchCases_table_ok: typingContext flow loopctxt typeId |- switchCase*
 
 relation SwitchCaseList_table_ok: typingContext flow loopctxt typeId |- switchCaseList : flow switchCaseListIR # switchLabel*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -17975,14 +17975,14 @@ relation SwitchCaseList_table_ok: typingContext flow loopctxt typeId |- switchCa
 
    paths
 
-    rulepath 
+    rulepath
     -- let switchCase*{switchCase <- switchCase*} = $flatten_switchCaseList(switchCaseList)
     -- SwitchCases_table_ok: TC f l typeId_table |- switchCase*{switchCase <- switchCase*} : f_post switchCaseIR*{switchCaseIR <- switchCaseIR*} # switchLabel*{switchLabel <- switchLabel*}
     -- output: % % % % |- % : f_post switchCaseIR*{switchCaseIR <- switchCaseIR*} # switchLabel*{switchLabel <- switchLabel*}
 
 relation SwitchLabel_general_ok: typingContext typeIR |- switchLabel : switchLabelIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -18012,7 +18012,7 @@ relation SwitchLabel_general_ok: typingContext typeIR |- switchLabel : switchLab
 
 relation SwitchCase_general_ok: typingContext flow loopctxt typeIR |- switchCase : flow switchCaseIR # switchLabel
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -18040,7 +18040,7 @@ relation SwitchCase_general_ok: typingContext flow loopctxt typeIR |- switchCase
 
 relation SwitchCases_general_ok: typingContext flow loopctxt typeIR |- switchCase* : flow switchCaseListIR # switchLabel*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -18063,7 +18063,7 @@ relation SwitchCases_general_ok: typingContext flow loopctxt typeIR |- switchCas
 
 relation SwitchCaseList_general_ok: typingContext flow loopctxt typeIR |- switchCaseList : flow switchCaseListIR # switchLabel*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -18072,7 +18072,7 @@ relation SwitchCaseList_general_ok: typingContext flow loopctxt typeIR |- switch
 
    paths
 
-    rulepath 
+    rulepath
     -- let switchCase*{switchCase <- switchCase*} = $flatten_switchCaseList(switchCaseList)
     -- SwitchCases_general_ok: TC f l typeIR_switch |- switchCase*{switchCase <- switchCase*} : f_post switchCaseIR*{switchCaseIR <- switchCaseIR*} # switchLabel*{switchLabel <- switchLabel*}
     -- output: % % % % |- % : f_post switchCaseIR*{switchCaseIR <- switchCaseIR*} # switchLabel*{switchLabel <- switchLabel*}
@@ -18110,7 +18110,7 @@ tbl def $compat_switch(typeIR) : bool =
 
 relation BlockElementStmts_ok: typingContext flow loopctxt |- blockElementStatement* : typingContext flow blockElementStatementIR*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -18137,7 +18137,7 @@ relation BlockElementStmts_ok: typingContext flow loopctxt |- blockElementStatem
 
 relation InstDecl_non_objectInitializer_ok: cursor typingContext |- annotationList prefixedTypeName < typeArgumentList >( argumentList ) name ;: typingContext instantiationIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -18146,7 +18146,7 @@ relation InstDecl_non_objectInitializer_ok: cursor typingContext |- annotationLi
 
    paths
 
-    rulepath 
+    rulepath
     -- TypeArgumentList_ok: p TC_0 |- typeArgumentList : typeArgumentIR*{typeArgumentIR <- typeArgumentIR*} # typeId_impl*{typeId_impl <- typeId_impl*}
     -- ArgumentList_ok: p TC_0 |- argumentList : argumentIR*{argumentIR <- argumentIR*}
     -- let prefixedNameIR = $prefixedTypeName(prefixedTypeName)
@@ -18162,7 +18162,7 @@ relation InstDecl_non_objectInitializer_ok: cursor typingContext |- annotationLi
 
 relation ObjectDecl_ok: cursor typingContext typeFrame externMethodTypeDefEnv |- objectDeclaration : typeFrame externMethodTypeDefEnv objectDeclarationIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -18206,7 +18206,7 @@ relation ObjectDecl_ok: cursor typingContext typeFrame externMethodTypeDefEnv |-
 
 relation ObjectDecls_ok: cursor typingContext typeFrame externMethodTypeDefEnv |- objectDeclaration* : typeFrame externMethodTypeDefEnv objectDeclarationListIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -18233,7 +18233,7 @@ relation ObjectDecls_ok: cursor typingContext typeFrame externMethodTypeDefEnv |
 
 relation ObjectDeclList_ok: cursor typingContext |- objectDeclarationList : typeFrame externMethodTypeDefEnv objectDeclarationListIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -18242,7 +18242,7 @@ relation ObjectDeclList_ok: cursor typingContext |- objectDeclarationList : type
 
    paths
 
-    rulepath 
+    rulepath
     -- let objectDeclaration*{objectDeclaration <- objectDeclaration*} = $flatten_objectDeclarationList(objectDeclarationList)
     -- ObjectDecls_ok: p TC { [] } { [] } |- objectDeclaration*{objectDeclaration <- objectDeclaration*} : typeFrame externMethodTypeDefEnv objectDeclarationListIR
     -- output: % % |- % : typeFrame externMethodTypeDefEnv objectDeclarationListIR
@@ -18268,7 +18268,7 @@ def $subst_externMethodTypeDefEnv(externMethodTypeDefEnv, externMethodTypeDefEnv
 
 relation InstDecl_objectInitializer_ok: cursor typingContext |- annotationList prefixedTypeName < typeArgumentList >( argumentList ) name ={ objectDeclarationList };: typingContext instantiationIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -18277,7 +18277,7 @@ relation InstDecl_objectInitializer_ok: cursor typingContext |- annotationList p
 
    paths
 
-    rulepath 
+    rulepath
     -- TypeArgumentList_ok: p TC_0 |- typeArgumentList : typeArgumentIR*{typeArgumentIR <- typeArgumentIR*} # typeId_impl*{typeId_impl <- typeId_impl*}
     -- ArgumentList_ok: p TC_0 |- argumentList : argumentIR*{argumentIR <- argumentIR*}
     -- let prefixedNameIR = $prefixedTypeName(prefixedTypeName)
@@ -18318,7 +18318,7 @@ def $constructorTypeDef_of_externConstructorPrototypeIR(typeParameterListIR, typ
 
 relation Enum_serializable_field_ok: typingContext nameIR typeIR |- namedExpression : typingContext namedValueIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -18327,7 +18327,7 @@ relation Enum_serializable_field_ok: typingContext nameIR typeIR |- namedExpress
 
    paths
 
-    rulepath 
+    rulepath
     -- Expr_ok: block TC_0 |- expression : typedExpressionIR
     -- let typedExpressionIR'?{typedExpressionIR' <- typedExpressionIR'?} = $cast_unary(typedExpressionIR, typeIR)
     -- if typedExpressionIR'?{typedExpressionIR' <- typedExpressionIR'?} matches (_)
@@ -18341,7 +18341,7 @@ relation Enum_serializable_field_ok: typingContext nameIR typeIR |- namedExpress
 
 relation Enum_serializable_fields_ok: typingContext nameIR typeIR |- namedExpression* : typingContext namedValueIR*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -18367,7 +18367,7 @@ relation Enum_serializable_fields_ok: typingContext nameIR typeIR |- namedExpres
 
 relation Enum_serializable_fieldList_ok: typingContext nameIR typeIR |- namedExpressionList : typingContext namedValueIR*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -18376,7 +18376,7 @@ relation Enum_serializable_fieldList_ok: typingContext nameIR typeIR |- namedExp
 
    paths
 
-    rulepath 
+    rulepath
     -- let namedExpression*{namedExpression <- namedExpression*} = $flatten_namedExpressionList(namedExpressionList)
     -- Enum_serializable_fields_ok: TC_0 nameIR_enum typeIR |- namedExpression*{namedExpression <- namedExpression*} : TC_1 namedValueIR*{namedValueIR <- namedValueIR*}
     -- output: % % % |- % : TC_1 namedValueIR*{namedValueIR <- namedValueIR*}
@@ -18712,7 +18712,7 @@ relation SelectCase_keyset_ok: typingContext typeIR* |- keysetExpression : keyse
 
 relation SelectCase_ok: typingContext nameIR* typeIR* |- selectCase : selectCaseIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -18721,7 +18721,7 @@ relation SelectCase_ok: typingContext nameIR* typeIR* |- selectCase : selectCase
 
    paths
 
-    rulepath 
+    rulepath
     -- SelectCase_keyset_ok: TC typeIR_key*{typeIR_key <- typeIR_key*} |- keysetExpression : keysetExpressionIR
     -- let nameIR = $name(name)
     -- if nameIR <- nameIR_state*{nameIR_state <- nameIR_state*}
@@ -18729,7 +18729,7 @@ relation SelectCase_ok: typingContext nameIR* typeIR* |- selectCase : selectCase
 
 relation ParserStmts_ok: typingContext |- parserStatement* : typingContext parserStatementIR*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -18754,7 +18754,7 @@ relation ParserStmts_ok: typingContext |- parserStatement* : typingContext parse
 
 relation ParserLocalDecls_ok: typingContext |- parserLocalDeclaration* : typingContext parserLocalDeclarationIR*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -19087,7 +19087,7 @@ def $is_singleton_list_expression(expression) : bool =
 
 relation TableEntry_keysets_simple_ok: typingContext tableContext tableEntryState |- matchKey* @ simpleKeysetExpression* : tableEntryState simpleKeysetExpressionIR*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -19176,7 +19176,7 @@ def $insert_NoAction_tablePropertyIR(tableContext, tablePropertyIR*) : (tableCon
 
 relation ControlLocalDecls_ok: typingContext |- controlLocalDeclaration* : typingContext controlLocalDeclarationIR*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -19280,7 +19280,7 @@ relation Expr_lvalue_ok: cursor typingContext |- typedExpressionIR
     -- if Expr_lvalue_ok: p TC |- typedExpressionIR_base holds
     -- the relation holds
 
-syntax infer = 
+syntax infer =
    | knownas typeIR
    | unknown
 
@@ -19764,47 +19764,47 @@ def $callableId_IR(nameIR, parameterListIR) : callableId =
   clause 0 : (nameIR, parameterIR*{parameterIR <- parameterIR*}) = nameIR ( id*{id <- id*} )
   -- (let _annotationList _direction _typeIR id _parameterInitializerOptIR = parameterIR)*{parameterIR <- parameterIR*, _annotationList -> _annotationList*, _direction -> _direction*, _parameterInitializerOptIR -> _parameterInitializerOptIR*, _typeIR -> _typeIR*, id -> id*}
 
-syntax storageReference = 
+syntax storageReference =
    | ` nameIR hint(print %0)
    | . nameIR
    | storageReference . nameIR
    | storageReference [ value ]
    | storageReference [ value : value ]
 
-syntax actionDef = 
+syntax actionDef =
    | annotationList action nameIR ( parameterListIR ) blockStatementIR
 
-syntax definedFunctionDef = 
+syntax definedFunctionDef =
    | function nameIR < typeParameterListIR >( parameterListIR ) blockStatementIR
 
-syntax externFunctionDef = 
+syntax externFunctionDef =
    | extern_function nameIR < typeParameterListIR >( parameterListIR )
 
-syntax functionDef = 
+syntax functionDef =
    | function nameIR < typeParameterListIR >( parameterListIR ) blockStatementIR
    | extern_function nameIR < typeParameterListIR >( parameterListIR )
 
-syntax externMethodDef = 
+syntax externMethodDef =
    | extern_method nameIR < typeParameterListIR >( parameterListIR ) blockStatementIR?
    | extern_methodabstract nameIR < typeParameterListIR >( parameterListIR )
 
-syntax parserApplyMethodDef = 
+syntax parserApplyMethodDef =
    | parser_apply( parameterListIR ){ parserLocalDeclarationListIR ; stateEnv }
 
-syntax controlApplyMethodDef = 
+syntax controlApplyMethodDef =
    | control_apply( parameterListIR ){ controlLocalDeclarationListIR ; actionDefEnv ; controlBodyIR }
 
-syntax tableApplyMethodDef = 
+syntax tableApplyMethodDef =
    | table_apply{ tablePropertyListIR }
 
-syntax methodDef = 
+syntax methodDef =
    | extern_method nameIR < typeParameterListIR >( parameterListIR ) blockStatementIR?
    | extern_methodabstract nameIR < typeParameterListIR >( parameterListIR )
    | parser_apply( parameterListIR ){ parserLocalDeclarationListIR ; stateEnv }
    | control_apply( parameterListIR ){ controlLocalDeclarationListIR ; actionDefEnv ; controlBodyIR }
    | table_apply{ tablePropertyListIR }
 
-syntax callableDef = 
+syntax callableDef =
    | annotationList action nameIR ( parameterListIR ) blockStatementIR
    | function nameIR < typeParameterListIR >( parameterListIR ) blockStatementIR
    | extern_function nameIR < typeParameterListIR >( parameterListIR )
@@ -19886,42 +19886,42 @@ def $parameterListIR_of_tableApplyMethodDef(tableApplyMethodDef) : parameterIR* 
 
   clause 0 : (table_apply{ _tablePropertyListIR }) = []
 
-syntax actionCallee = 
+syntax actionCallee =
    | action cursor . nameIR ( parameterListIR # id* ) blockStatementIR
 
-syntax definedFunctionCallee = 
+syntax definedFunctionCallee =
    | function nameIR < typeParameterListIR >( parameterListIR # id* ) blockStatementIR
 
-syntax externFunctionCallee = 
+syntax externFunctionCallee =
    | extern_function nameIR < typeParameterListIR >( parameterListIR # id* # id* )
 
-syntax functionCallee = 
+syntax functionCallee =
    | function nameIR < typeParameterListIR >( parameterListIR # id* ) blockStatementIR
    | extern_function nameIR < typeParameterListIR >( parameterListIR # id* # id* )
 
-syntax builtinMethodCallee = 
+syntax builtinMethodCallee =
    | builtin_method storageReference . nameIR < typeArgumentListIR >( parameterListIR )
 
-syntax externMethodCallee = 
+syntax externMethodCallee =
    | extern_method objectId . nameIR < typeParameterListIR >( parameterListIR # id* # id* ){ theta ; frame ; blockStatementIR? }
 
-syntax parserApplyMethodCallee = 
+syntax parserApplyMethodCallee =
    | parser objectId .apply( parameterListIR # id* ){ theta ; frame ; parserLocalDeclarationListIR ; stateEnv }
 
-syntax controlApplyMethodCallee = 
+syntax controlApplyMethodCallee =
    | control objectId .apply( parameterListIR # id* ){ theta ; frame ; controlLocalDeclarationListIR ; actionDefEnv ; controlBodyIR }
 
-syntax tableApplyMethodCallee = 
+syntax tableApplyMethodCallee =
    | table objectId .apply{ frame ; tableObjectProperty }
 
-syntax methodCallee = 
+syntax methodCallee =
    | builtin_method storageReference . nameIR < typeArgumentListIR >( parameterListIR )
    | extern_method objectId . nameIR < typeParameterListIR >( parameterListIR # id* # id* ){ theta ; frame ; blockStatementIR? }
    | parser objectId .apply( parameterListIR # id* ){ theta ; frame ; parserLocalDeclarationListIR ; stateEnv }
    | control objectId .apply( parameterListIR # id* ){ theta ; frame ; controlLocalDeclarationListIR ; actionDefEnv ; controlBodyIR }
    | table objectId .apply{ frame ; tableObjectProperty }
 
-syntax callee = 
+syntax callee =
    | action cursor . nameIR ( parameterListIR # id* ) blockStatementIR
    | function nameIR < typeParameterListIR >( parameterListIR # id* ) blockStatementIR
    | extern_function nameIR < typeParameterListIR >( parameterListIR # id* # id* )
@@ -19931,19 +19931,19 @@ syntax callee =
    | control objectId .apply( parameterListIR # id* ){ theta ; frame ; controlLocalDeclarationListIR ; actionDefEnv ; controlBodyIR }
    | table objectId .apply{ frame ; tableObjectProperty }
 
-syntax externObjectConstructorDef = 
+syntax externObjectConstructorDef =
    | extern nameIR < typeParameterListIR >( constructorParameterListIR ){ externMethodPrototypeListIR }
 
-syntax parserObjectConstructorDef = 
+syntax parserObjectConstructorDef =
    | parser< typeParameterListIR >( parameterListIR )( constructorParameterListIR ){ parserLocalDeclarationListIR parserStateListIR }
 
-syntax controlObjectConstructorDef = 
+syntax controlObjectConstructorDef =
    | control< typeParameterListIR >( parameterListIR )( constructorParameterListIR ){ controlLocalDeclarationListIR apply controlBodyIR }
 
-syntax packageObjectConstructorDef = 
+syntax packageObjectConstructorDef =
    | package< typeParameterListIR >( constructorParameterListIR )
 
-syntax constructorDef = 
+syntax constructorDef =
    | extern nameIR < typeParameterListIR >( constructorParameterListIR ){ externMethodPrototypeListIR }
    | parser< typeParameterListIR >( parameterListIR )( constructorParameterListIR ){ parserLocalDeclarationListIR parserStateListIR }
    | control< typeParameterListIR >( parameterListIR )( constructorParameterListIR ){ controlLocalDeclarationListIR apply controlBodyIR }
@@ -19973,29 +19973,29 @@ syntax externMethodDefEnv = map<callableId, externMethodDef>
 
 extern def $init_objectState(nameIR, typeIR*, value*) : objectState
 
-syntax externObject = 
+syntax externObject =
    | extern typeId < theta >{ objectState frame externMethodDefEnv }
 
-syntax parserObject = 
+syntax parserObject =
    | parser< theta >( parameterListIR ){ frame parserLocalDeclarationListIR stateEnv }
 
 syntax actionDefEnv = map<callableId, actionDef>
 
-syntax controlObject = 
+syntax controlObject =
    | control< theta >( parameterListIR ){ frame controlLocalDeclarationListIR actionDefEnv controlBodyIR }
 
-syntax packageObject = 
+syntax packageObject =
    | package< theta >{ frame }
 
 syntax tableObjectProperty = {keys tableKeysPropertyIR, actions tableActionsPropertyIR, default_action tableDefaultActionPropertyIR, entries tableEntriesPropertyIR, customs tableCustomPropertyIR*}
 
-syntax tableObject = 
+syntax tableObject =
    | table typeId { frame tableObjectProperty }
 
-syntax valueSetObject = 
+syntax valueSetObject =
    | value_set{ value* ( nat )}
 
-syntax object = 
+syntax object =
    | extern typeId < theta >{ objectState frame externMethodDefEnv }
    | parser< theta >( parameterListIR ){ frame parserLocalDeclarationListIR stateEnv }
    | control< theta >( parameterListIR ){ frame controlLocalDeclarationListIR actionDefEnv controlBodyIR }
@@ -20815,7 +20815,7 @@ relation Expr_inst: cursor instContext store |- typedExpressionIR : store value
 
 relation Exprs_inst: cursor instContext store |- typedExpressionIR* : store value*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -20872,7 +20872,7 @@ relation Argument_inst: cursor instContext store |- argumentIR : store value
 
 relation DirectApplicationStmt_inst: cursor instContext store |- directApplicationStatementIR : store constantDeclarationIR callStatementIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -20881,7 +20881,7 @@ relation DirectApplicationStmt_inst: cursor instContext store |- directApplicati
 
    paths
 
-    rulepath 
+    rulepath
     -- let prefixedNameIR < typeArgumentListIR > = constructorTargetIR
     -- Constructor_inst: p IC |- prefixedNameIR < typeArgumentListIR >( [] ): constructorDef < typeArgumentListIR_inst >(# id_default*{id_default <- id_default*} # id_optional*{id_optional <- id_optional*} )
     -- let typeId = $flatten_prefixedNameIR(prefixedNameIR)
@@ -21122,7 +21122,7 @@ relation Stmt_inst: cursor instContext store |- statementIR : instContext store 
 
 relation BlockElementStmt_inst: instContext store |- blockElementStatementIR : instContext store blockElementStatementIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -21159,7 +21159,7 @@ relation BlockElementStmt_inst: instContext store |- blockElementStatementIR : i
 
 relation BlockElementStmtList_inst: instContext store |- blockElementStatementListIR : instContext store blockElementStatementIR*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -21186,7 +21186,7 @@ relation BlockElementStmtList_inst: instContext store |- blockElementStatementLi
 
 relation Block_inst: instContext store |- blockStatementIR : instContext store blockStatementIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -21195,7 +21195,7 @@ relation Block_inst: instContext store |- blockStatementIR : instContext store b
 
    paths
 
-    rulepath 
+    rulepath
     -- BlockElementStmtList_inst: IC_0 STO_0 |- blockElementStatementListIR : IC_1 STO_1 blockElementStatementListIR_inst
     -- output: % % |- % : IC_1 STO_1 annotationList { blockElementStatementListIR_inst }
 
@@ -21237,7 +21237,7 @@ relation ExternMethod_inst: instContext |- externMethodPrototypeIR : instContext
 
 relation ExternMethods_inst: instContext |- externMethodPrototypeIR* : instContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -21402,7 +21402,7 @@ relation ParserStmt_inst: instContext store |- parserStatementIR : instContext s
 
 relation ParserStmts_inst: instContext store |- parserStatementIR* : instContext store parserStatementIR*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -21429,7 +21429,7 @@ relation ParserStmts_inst: instContext store |- parserStatementIR* : instContext
 
 relation ParserState_inst: instContext store |- parserStateIR : instContext store
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -21438,7 +21438,7 @@ relation ParserState_inst: instContext store |- parserStateIR : instContext stor
 
    paths
 
-    rulepath 
+    rulepath
     -- let annotationList state nameIR { parserStatementListIR transitionStatementIR } = parserStateIR
     -- ParserStmts_inst: IC_0 STO_0 |- parserStatementListIR : IC_1 STO_1 parserStatementListIR_inst
     -- let parserStateIR_inst = annotationList state nameIR { parserStatementListIR_inst transitionStatementIR }
@@ -21447,7 +21447,7 @@ relation ParserState_inst: instContext store |- parserStateIR : instContext stor
 
 relation ParserStates_inst: instContext store |- parserStateIR* : instContext store
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -21546,7 +21546,7 @@ relation ParserLocalDecl_inst: instContext store |- parserLocalDeclarationIR : i
 
 relation ParserLocalDecls_inst: instContext store |- parserLocalDeclarationIR* : instContext store parserLocalDeclarationIR*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -21573,7 +21573,7 @@ relation ParserLocalDecls_inst: instContext store |- parserLocalDeclarationIR* :
 
 relation TableAction_inst: instContext store |- tableActionIR : store tableActionIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -21632,7 +21632,7 @@ relation TableAction_inst: instContext store |- tableActionIR : store tableActio
 
 relation TableActions_inst: instContext store |- tableActionIR* : store tableActionIR*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -21746,7 +21746,7 @@ relation TableProperty_inst: instContext store |- tablePropertyIR : store tableP
 
 relation TableProperties_inst: instContext store |- tablePropertyIR* : store tablePropertyIR*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -21881,7 +21881,7 @@ relation ControlLocalDecl_inst: instContext store |- controlLocalDeclarationIR :
 
 relation ControlLocalDecls_inst: instContext store |- controlLocalDeclarationIR* : instContext store controlLocalDeclarationIR*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -21921,7 +21921,7 @@ relation ControlLocalDecls_inst: instContext store |- controlLocalDeclarationIR*
 
 relation ConstDecl_inst: cursor instContext |- constantDeclarationIR : instContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -21930,13 +21930,13 @@ relation ConstDecl_inst: cursor instContext |- constantDeclarationIR : instConte
 
    paths
 
-    rulepath 
+    rulepath
     -- let IC_1 = $add_var_i(p, IC_0, nameIR, value)
     -- output: % % |- % : IC_1
 
 relation InstDecl_inst: cursor instContext store |- instantiationIR : instContext store constantDeclarationIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -21980,7 +21980,7 @@ relation InstDecl_inst: cursor instContext store |- instantiationIR : instContex
 
 relation FuncDecl_inst: cursor instContext |- functionDeclarationIR : instContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -21989,7 +21989,7 @@ relation FuncDecl_inst: cursor instContext |- functionDeclarationIR : instContex
 
    paths
 
-    rulepath 
+    rulepath
     -- let callableId = $callableId_IR(nameIR, parameterListIR)
     -- let typeParameterListIR = typeParameterListIR_expl ++ typeParameterListIR_impl
     -- let definedFunctionDef = function nameIR < typeParameterListIR >( parameterListIR ) blockStatementIR
@@ -21998,7 +21998,7 @@ relation FuncDecl_inst: cursor instContext |- functionDeclarationIR : instContex
 
 relation ActionDecl_inst: cursor instContext |- actionDeclarationIR : instContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -22007,7 +22007,7 @@ relation ActionDecl_inst: cursor instContext |- actionDeclarationIR : instContex
 
    paths
 
-    rulepath 
+    rulepath
     -- let callableId = $callableId_IR(nameIR, parameterListIR)
     -- let actionDef = annotationList action nameIR ( parameterListIR ) blockStatementIR
     -- let IC_1 = $add_callableDef_non_overload_i(p, IC_0, callableId, actionDef as callableDef)
@@ -22419,7 +22419,7 @@ relation Decl_inst: instContext store |- declarationIR : instContext store
 
 relation Decls_inst: instContext store |- declarationIR* : instContext store
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -22446,7 +22446,7 @@ relation Decls_inst: instContext store |- declarationIR* : instContext store
 
 relation Program_inst: |- p4program : globalInstLayer store
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -22455,7 +22455,7 @@ relation Program_inst: |- p4program : globalInstLayer store
 
    paths
 
-    rulepath 
+    rulepath
     -- Program_ok: |- p4program : declarationIR*{declarationIR <- declarationIR*} ;
     -- let IC_0 = $empty_instContext
     -- let STO_0 = $empty_store
@@ -22464,7 +22464,7 @@ relation Program_inst: |- p4program : globalInstLayer store
 
 relation Copy_in_argument_inst: store cursor instContext argumentIR @ cursor instContext id ~> store instContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -22473,7 +22473,7 @@ relation Copy_in_argument_inst: store cursor instContext argumentIR @ cursor ins
 
    paths
 
-    rulepath 
+    rulepath
     -- let IC_caller_inner = $enter_path_i(IC_caller, id)
     -- Argument_inst: p_caller IC_caller_inner STO_0 |- argumentIR : STO_1 value
     -- let IC_callee_1 = $add_var_i(p_callee, IC_callee_0, id, value)
@@ -22481,7 +22481,7 @@ relation Copy_in_argument_inst: store cursor instContext argumentIR @ cursor ins
 
 relation Copy_in_inst: store cursor instContext argumentIR* @ cursor instContext id* ~> store instContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -22512,7 +22512,7 @@ relation Copy_in_inst: store cursor instContext argumentIR* @ cursor instContext
 
 relation Copy_in_argument_inst_default: store cursor instContext @ cursor instContext parameterIR ~> store instContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -22545,7 +22545,7 @@ relation Copy_in_argument_inst_default: store cursor instContext @ cursor instCo
 
 relation Copy_in_inst_default: store cursor instContext @ cursor instContext parameterIR* ~> store instContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -22572,7 +22572,7 @@ relation Copy_in_inst_default: store cursor instContext @ cursor instContext par
 
 relation Constructor_inst: cursor instContext |- prefixedNameIR < typeArgumentListIR >( argumentListIR ): constructorDef < typeArgumentListIR >(# id* # id* )
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -22737,7 +22737,7 @@ relation Constructor_call: cursor instContext store |- constructorDef < typeArgu
 
 relation SwitchCase_inst: cursor instContext store |- switchCaseIR : store switchCaseIR
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -22765,7 +22765,7 @@ relation SwitchCase_inst: cursor instContext store |- switchCaseIR : store switc
 
 relation SwitchCases_inst: cursor instContext store |- switchCaseIR* : store switchCaseIR*
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -22808,7 +22808,7 @@ def $merge_externMethodDefEnvs(externMethodDefEnv, callableDefEnv) : externMetho
 
 relation ObjectDecl_inst: instContext store |- objectDeclarationIR : instContext store
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -22835,7 +22835,7 @@ relation ObjectDecl_inst: instContext store |- objectDeclarationIR : instContext
 
 relation ObjectDecls_inst: instContext store |- objectDeclarationListIR : instContext store
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -23310,32 +23310,32 @@ def $update_objectState_e(arch, objectId, objectState) : arch? =
 
   clause -1 : (ARCH, objectId, objectState) = ?()
 
-syntax continueEmptyResult = 
+syntax continueEmptyResult =
    | `empty
 
-syntax continueResult<X> = 
+syntax continueResult<X> =
    | ` X
 
-syntax exitResult = 
+syntax exitResult =
    | exit
 
-syntax returnResult = 
+syntax returnResult =
    | return value?
 
-syntax acceptTransitionResult = 
+syntax acceptTransitionResult =
    | accept
 
-syntax rejectTransitionResult = 
+syntax rejectTransitionResult =
    | reject errorValue
 
-syntax stateTransitionResult = 
+syntax stateTransitionResult =
    | state id
 
-syntax abortResult = 
+syntax abortResult =
    | exit
    | reject errorValue
 
-syntax expressionResult = 
+syntax expressionResult =
    | ` value
    | exit
    | reject errorValue
@@ -24010,14 +24010,14 @@ relation Expr_eval: cursor evalContext arch |- typedExpressionIR : evalContext a
     -- Expr_eval: p EC_0 ARCH_0 |- typedExpressionIR : EC_1 ARCH_1 expressionResult
     -- output: % % % |- % : EC_1 ARCH_1 expressionResult
 
-syntax expressionListResult = 
+syntax expressionListResult =
    | ` value*
    | exit
    | reject errorValue
 
 relation Exprs_eval: cursor evalContext arch |- typedExpressionIR* : evalContext arch expressionListResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -24071,14 +24071,14 @@ relation Exprs_eval: cursor evalContext arch |- typedExpressionIR* : evalContext
     -- let ` value_t*{value_t <- value_t*} = expressionListResult as continueResult<value*>
     -- output: % % % |- % : EC_2 ARCH_2 ` value_h :: value_t*{value_t <- value_t*} as expressionListResult
 
-syntax keysetExpressionResult = 
+syntax keysetExpressionResult =
    | ` setValue*
    | exit
    | reject errorValue
 
 relation Expr_eval_keyset: evalContext arch |- keysetExpressionIR : evalContext arch keysetExpressionResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -24087,7 +24087,7 @@ relation Expr_eval_keyset: evalContext arch |- keysetExpressionIR : evalContext 
 
    paths
 
-    rulepath 
+    rulepath
     -- let simpleKeysetExpressionListIR = $flatten_keysetExpressionIR(keysetExpressionIR)
     -- Exprs_eval_keyset_simple: EC_0 ARCH_0 |- simpleKeysetExpressionListIR : EC_1 ARCH_1 keysetExpressionResult
     -- output: % % |- % : EC_1 ARCH_1 keysetExpressionResult
@@ -24124,7 +24124,7 @@ relation Argument_eval: cursor evalContext arch |- argumentIR : evalContext arch
     -- Expr_eval: p EC_0 ARCH_0 |- typedExpressionIR : EC_1 ARCH_1 expressionResult
     -- output: % % % |- % : EC_1 ARCH_1 expressionResult
 
-syntax storageReferenceResult = 
+syntax storageReferenceResult =
    | ` storageReference?
    | exit
    | reject errorValue
@@ -24667,22 +24667,22 @@ relation Lvalue_write: cursor evalContext arch |- storageReference -> value : ev
     -- Lvalue_write: p EC_0 ARCH |- storageReference -> value_base_update : EC_1
     -- output: % % % |- % -> % : EC_1
 
-syntax callResult = 
+syntax callResult =
    | exit
    | reject errorValue
    | return value?
 
-syntax forBreakResult = 
+syntax forBreakResult =
    | break
 
-syntax forContinueResult = 
+syntax forContinueResult =
    | continue
 
-syntax forResult = 
+syntax forResult =
    | break
    | continue
 
-syntax statementResult = 
+syntax statementResult =
    | `empty
    | exit
    | reject errorValue
@@ -25098,7 +25098,7 @@ relation Stmt_eval: cursor evalContext arch |- statementIR : evalContext arch st
 
 relation BlockElementStmt_eval: evalContext arch |- blockElementStatementIR : evalContext arch statementResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -25133,7 +25133,7 @@ relation BlockElementStmt_eval: evalContext arch |- blockElementStatementIR : ev
 
 relation BlockElementStmtList_eval: evalContext arch |- blockElementStatementListIR : evalContext arch statementResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -25173,7 +25173,7 @@ relation BlockElementStmtList_eval: evalContext arch |- blockElementStatementLis
 
 relation Block_eval: evalContext arch |- blockStatementIR : evalContext arch statementResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -25182,11 +25182,11 @@ relation Block_eval: evalContext arch |- blockStatementIR : evalContext arch sta
 
    paths
 
-    rulepath 
+    rulepath
     -- BlockElementStmtList_eval: EC_0 ARCH_0 |- blockElementStatementListIR : EC_1 ARCH_1 statementResult
     -- output: % % |- % : EC_1 ARCH_1 statementResult
 
-syntax parserStatementResult = 
+syntax parserStatementResult =
    | `empty
    | reject errorValue
 
@@ -25371,7 +25371,7 @@ relation ParserStmt_eval: evalContext arch |- parserStatementIR : evalContext ar
 
 relation ParserStmts_eval: evalContext arch |- parserStatementListIR : evalContext arch parserStatementResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -25410,14 +25410,14 @@ relation ParserStmts_eval: evalContext arch |- parserStatementListIR : evalConte
     -- ParserStmts_eval: EC_1 ARCH_1 |- parserStatementIR_t*{parserStatementIR_t <- parserStatementIR_t*} : EC_2 ARCH_2 parserStatementResult
     -- output: % % |- % : EC_2 ARCH_2 parserStatementResult
 
-syntax transitionResult = 
+syntax transitionResult =
    | accept
    | reject errorValue
    | state id
 
 relation ParserSelect_eval: evalContext arch |- selectExpressionIR : evalContext arch transitionResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -25470,7 +25470,7 @@ relation ParserSelect_eval: evalContext arch |- selectExpressionIR : evalContext
 
 relation ParserTransition_eval: evalContext arch |- transitionStatementIR : evalContext arch transitionResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -25518,7 +25518,7 @@ relation ParserTransition_eval: evalContext arch |- transitionStatementIR : eval
 
 relation ParserState_eval: evalContext arch |- parserStateIR : evalContext arch transitionResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -25545,7 +25545,7 @@ relation ParserState_eval: evalContext arch |- parserStateIR : evalContext arch 
 
 relation ParserState_trans: evalContext arch |-transition nameIR : evalContext arch transitionResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -25628,7 +25628,7 @@ relation ParserLocalDecl_eval: evalContext arch |- parserLocalDeclarationIR : ev
 
 relation ParserLocalDecls_eval: evalContext arch |- parserLocalDeclarationIR* : evalContext arch parserDeclarationResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -25666,13 +25666,13 @@ relation ParserLocalDecls_eval: evalContext arch |- parserLocalDeclarationIR* : 
     -- ParserLocalDecls_eval: EC_1 ARCH_1 |- parserLocalDeclarationListIR_t : EC_2 ARCH_2 parserStatementResult
     -- output: % % |- % : EC_2 ARCH_2 parserStatementResult
 
-syntax tableResult = 
+syntax tableResult =
    | exit
    | return value?
 
 relation Table_eval: evalContext arch |- typeId tableObjectProperty : evalContext arch tableResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -25737,13 +25737,13 @@ relation Table_eval: evalContext arch |- typeId tableObjectProperty : evalContex
     -- let tableMetadataStructValue = table_struct "apply_result(" ++ typeId ++ ")" {hit `b b_hit ;miss `b b_miss ;action_run tableMetadataEnumValue ;}
     -- output: % % |- % % : EC_3 ARCH_3 return ?(tableMetadataStructValue as value) as tableResult
 
-syntax controlBodyResult = 
+syntax controlBodyResult =
    | exit
    | return value?
 
 relation ControlBody_eval: evalContext arch |- controlBodyIR : evalContext arch controlBodyResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -25771,7 +25771,7 @@ relation ControlBody_eval: evalContext arch |- controlBodyIR : evalContext arch 
     -- if (statementResult = return ?() as statementResult)
     -- output: % % |- % : EC_1 ARCH_1 return ?() as controlBodyResult
 
-syntax controlLocalDeclarationResult = 
+syntax controlLocalDeclarationResult =
    | `empty
    | exit
 
@@ -25819,7 +25819,7 @@ relation ControlLocalDecl_eval: evalContext arch |- controlLocalDeclarationIR : 
 
 relation ControlLocalDecls_eval: evalContext arch |- controlLocalDeclarationIR* : evalContext arch controlLocalDeclarationResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -25859,14 +25859,14 @@ relation ControlLocalDecls_eval: evalContext arch |- controlLocalDeclarationIR* 
     -- ControlLocalDecls_eval: EC_1 ARCH_1 |- controlLocalDeclarationListIR_t : EC_2 ARCH_2 controlLocalDeclarationResult
     -- output: % % |- % : EC_2 ARCH_2 controlLocalDeclarationResult
 
-syntax declarationResult = 
+syntax declarationResult =
    | `empty
    | exit
    | reject errorValue
 
 relation VarDecl_eval: cursor evalContext arch |- variableDeclarationIR : evalContext arch declarationResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -25906,7 +25906,7 @@ relation VarDecl_eval: cursor evalContext arch |- variableDeclarationIR : evalCo
 
 relation ConstDecl_eval: cursor evalContext |- constantDeclarationIR : evalContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -25915,11 +25915,11 @@ relation ConstDecl_eval: cursor evalContext |- constantDeclarationIR : evalConte
 
    paths
 
-    rulepath 
+    rulepath
     -- let EC_1 = $add_var_e(p, EC_0, ` nameIR, value)
     -- output: % % |- % : EC_1
 
-syntax calleeResult = 
+syntax calleeResult =
    | ` callee
    | exit
    | reject errorValue
@@ -26271,7 +26271,7 @@ relation Callee_eval: cursor evalContext arch |- callableTargetIR <_>( argumentL
     -- let tableApplyMethodCallee = table objectId .apply{ frame ; TBL }
     -- output: % % % |- % <_>( % ): EC_1 ARCH_1 ` tableApplyMethodCallee as callee as calleeResult
 
-syntax copyInArgumentResult = 
+syntax copyInArgumentResult =
    | ` storageReference?
    | exit
    | reject errorValue
@@ -26353,14 +26353,14 @@ relation Copy_in_argument: arch |- cursor evalContext parameterIR @ cursor evalC
     -- let EC_callee_1 = $add_var_e(p_callee, EC_callee_0, ` nameIR, value_init)
     -- output: % |- % % % @ % % % ~> ARCH_1 EC_caller_1 EC_callee_1 # ` storageReference?{storageReference <- storageReference?} as copyInArgumentResult
 
-syntax copyInResult = 
+syntax copyInResult =
    | ` storageReference?*
    | exit
    | reject errorValue
 
 relation Copy_in: cursor arch |- cursor evalContext parameterListIR @ cursor evalContext argumentListIR ~> arch evalContext evalContext # copyInResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -26430,7 +26430,7 @@ relation Copy_in: cursor arch |- cursor evalContext parameterListIR @ cursor eva
 
 relation Copy_in_default: parameterListIR @ cursor evalContext ~> evalContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -26439,7 +26439,7 @@ relation Copy_in_default: parameterListIR @ cursor evalContext ~> evalContext
 
    paths
 
-    rulepath 
+    rulepath
     -- (let _annotationList _direction _typeIR nameIR parameterInitializerOptIR = parameterIR)*{parameterIR <- parameterIR*, _annotationList -> _annotationList*, _direction -> _direction*, _typeIR -> _typeIR*, nameIR -> nameIR*, parameterInitializerOptIR -> parameterInitializerOptIR*}
     -- (if parameterInitializerOptIR matches (_))*{parameterInitializerOptIR <- parameterInitializerOptIR*}
     -- (let ?(parameterInitializerIR) = parameterInitializerOptIR)*{parameterInitializerOptIR <- parameterInitializerOptIR*, parameterInitializerIR -> parameterInitializerIR*}
@@ -26491,7 +26491,7 @@ relation Copy_out_argument: arch |- cursor evalContext parameterIR @ cursor eval
 
 relation Copy_out: cursor arch |- cursor evalContext parameterListIR @ cursor evalContext storageReference?* ~> evalContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -26500,7 +26500,7 @@ relation Copy_out: cursor arch |- cursor evalContext parameterListIR @ cursor ev
 
    paths
 
-    rulepath 
+    rulepath
     -- let EC_caller_1 = $copy_e(p_shared, EC_callee, EC_caller_0)
     -- Copy_out_inner: ARCH |- p_caller EC_caller_1 parameterListIR @ p_callee EC_callee storageReference?{storageReference <- storageReference?}*{storageReference? <- storageReference?*} ~> EC_caller_2
     -- output: % % |- % % % @ % % % ~> EC_caller_2
@@ -27220,7 +27220,7 @@ def $match_keyset(setValue, value) : bool =
   -- if setValue matches `SET{%..%}`
   -- let set{ value_base .. value_limit } = setValue
 
-syntax simpleKeysetExpressionResult = 
+syntax simpleKeysetExpressionResult =
    | ` setValue
    | exit
    | reject errorValue
@@ -27354,7 +27354,7 @@ relation Expr_eval_keyset_simple: evalContext arch |- simpleKeysetExpressionIR :
 
 relation Exprs_eval_keyset_simple: evalContext arch |- simpleKeysetExpressionListIR : evalContext arch keysetExpressionResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -27411,7 +27411,7 @@ relation Exprs_eval_keyset_simple: evalContext arch |- simpleKeysetExpressionLis
 
 relation ForUpdateStmt_eval: evalContext arch |- forUpdateStatementIR : evalContext arch statementResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -27436,7 +27436,7 @@ relation ForUpdateStmt_eval: evalContext arch |- forUpdateStatementIR : evalCont
 
 relation ForUpdateStmts_eval: evalContext arch |- forUpdateStatementListIR : evalContext arch statementResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -27478,7 +27478,7 @@ relation ForUpdateStmts_eval: evalContext arch |- forUpdateStatementListIR : eva
 
 relation ForInitStmt_eval: evalContext arch |- forInitStatementIR : evalContext arch statementResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -27533,7 +27533,7 @@ relation ForInitStmt_eval: evalContext arch |- forInitStatementIR : evalContext 
 
 relation ForInitStmts_eval: evalContext arch |- forInitStatementListIR : evalContext arch statementResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -27574,7 +27574,7 @@ relation ForInitStmts_eval: evalContext arch |- forInitStatementListIR : evalCon
 
 relation ForThreeClauseStmt_eval: evalContext arch |- typedExpressionIR statementIR forUpdateStatementListIR : evalContext arch statementResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -27644,7 +27644,7 @@ relation ForThreeClauseStmt_eval: evalContext arch |- typedExpressionIR statemen
 
 relation ForCollectionExpr_eval: evalContext arch |- forCollectionExpressionIR : evalContext arch expressionListResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -27737,7 +27737,7 @@ def $values_of_setValue(setTypeIR, setValue) : value* =
 
 relation ForInStmt_eval: evalContext arch |- nameIR value* statementIR : evalContext arch statementResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -27803,7 +27803,7 @@ relation ForInStmt_eval: evalContext arch |- nameIR value* statementIR : evalCon
 
 relation Switch_table_eval: evalContext arch |-switch( id ){ switchCaseIR* }: evalContext arch statementResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -27842,7 +27842,7 @@ def $match_switchLabelIR_table(id, switchLabelIR) : bool =
 
 relation SwitchCases_table_eval: id |- switchCaseListIR : blockStatementIR?
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -27914,7 +27914,7 @@ def $is_non_fallthrough_switchCaseIR(switchCaseIR) : bool =
 
 relation Switch_general_eval: evalContext arch |-switch( value ){ switchCaseIR* }: evalContext arch statementResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -27937,7 +27937,7 @@ relation Switch_general_eval: evalContext arch |-switch( value ){ switchCaseIR* 
 
 relation SwitchLabel_general_eval: cursor evalContext arch |- switchLabelIR : evalContext arch expressionResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -27969,7 +27969,7 @@ def $match_switchLabelIR_general(value, value) : bool =
 
 relation SwitchCases_general_eval: cursor evalContext arch value |- switchCaseListIR : evalContext arch blockStatementIR?
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -28042,13 +28042,13 @@ relation SwitchCases_general_eval: cursor evalContext arch value |- switchCaseLi
     -- SwitchCases_general_eval: local EC_1 ARCH_1 value |- switchCaseIR_t*{switchCaseIR_t <- switchCaseIR_t*} : EC_2 ARCH_2 blockStatementIR?{blockStatementIR <- blockStatementIR?}
     -- output: % % % % |- % : EC_2 ARCH_2 blockStatementIR?{blockStatementIR <- blockStatementIR?}
 
-syntax selectCaseMatchResult = 
+syntax selectCaseMatchResult =
    | ` nameIR?
    | reject errorValue
 
 relation SelectCase_match: evalContext arch value* |- selectCaseIR : evalContext arch selectCaseMatchResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -28079,7 +28079,7 @@ relation SelectCase_match: evalContext arch value* |- selectCaseIR : evalContext
 
 relation SelectCases_match: evalContext arch value* |- selectCaseListIR : evalContext arch selectCaseMatchResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -28129,16 +28129,16 @@ relation SelectCases_match: evalContext arch value* |- selectCaseListIR : evalCo
     -- SelectCases_match: EC_1 ARCH_1 value_key*{value_key <- value_key*} |- selectCaseIR_t*{selectCaseIR_t <- selectCaseIR_t*} : EC_2 ARCH_2 selectCaseMatchResult
     -- output: % % % |- % : EC_2 ARCH_2 selectCaseMatchResult
 
-syntax tableKeyValue = 
+syntax tableKeyValue =
    | value : nameIR
 
-syntax tableKeyResult = 
+syntax tableKeyResult =
    | ` tableKeyValue
    | exit
 
 relation TableKey_eval: evalContext arch |- tableKeyIR : evalContext arch tableKeyResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -28161,13 +28161,13 @@ relation TableKey_eval: evalContext arch |- tableKeyIR : evalContext arch tableK
     -- let tableKeyValue = value : nameIR
     -- output: % % |- % : EC_1 ARCH_1 ` tableKeyValue as tableKeyResult
 
-syntax tableKeysResult = 
+syntax tableKeysResult =
    | ` tableKeyValue*
    | exit
 
 relation TableKeys_eval: evalContext arch |- tableKeyListIR : evalContext arch tableKeysResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -28236,16 +28236,16 @@ def $get_tableEntryPriority(tableEntryPriorityIR?) : nat? =
   -- if nat?{nat <- nat?} matches (_)
   -- let ?(n) = nat?{nat <- nat?}
 
-syntax tableMatch = 
+syntax tableMatch =
    | nat? : tableActionReferenceIR
 
-syntax tableMatchResult = 
+syntax tableMatchResult =
    | ` tableMatch?
    | exit
 
 relation TableMatch_eval: evalContext arch |- tableKeyValue* @ tableEntryIR : evalContext arch tableMatchResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -28284,13 +28284,13 @@ relation TableMatch_eval: evalContext arch |- tableKeyValue* @ tableEntryIR : ev
     -- let tableMatch = n_priority?{n_priority <- n_priority?} : tableActionReferenceIR
     -- output: % % |- % @ % : EC_1 ARCH_1 ` ?(tableMatch) as tableMatchResult
 
-syntax tableMatchesResult = 
+syntax tableMatchesResult =
    | ` tableMatch*
    | exit
 
 relation TableMatches_eval: evalContext arch |- tableKeyValue* @ tableEntryListIR : evalContext arch tableMatchesResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -28407,7 +28407,7 @@ def $select_action(tableObjectProperty, tableMatch*) : tableActionReferenceIR =
 
 relation Copy_out_inner: arch |- cursor evalContext parameterListIR @ cursor evalContext storageReference?* ~> evalContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -28434,13 +28434,13 @@ relation Copy_out_inner: arch |- cursor evalContext parameterListIR @ cursor eva
     -- Copy_out_inner: ARCH |- p_caller EC_caller_1 parameterIR_t*{parameterIR_t <- parameterIR_t*} @ p_callee EC_callee storageReference_t?{storageReference_t <- storageReference_t?}*{storageReference_t? <- storageReference_t?*} ~> EC_caller_2
     -- output: % |- % % % @ % % % ~> EC_caller_2
 
-syntax actionResult = 
+syntax actionResult =
    | exit
    | return value?
 
 relation ActionBody_eval: evalContext arch |- blockStatementIR : evalContext arch actionResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -28468,13 +28468,13 @@ relation ActionBody_eval: evalContext arch |- blockStatementIR : evalContext arc
     -- if (statementResult = return ?() as statementResult)
     -- output: % % |- % : EC_1 ARCH_1 return ?() as actionResult
 
-syntax definedFunctionResult = 
+syntax definedFunctionResult =
    | exit
    | return value?
 
 relation DefinedFunctionBody_eval: evalContext arch |- blockStatementIR : evalContext arch definedFunctionResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -28509,7 +28509,7 @@ def $isValid_fieldValue(fieldValue) : bool =
 
 relation Var_init: evalContext |- typeIR nameIR : evalContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -28518,14 +28518,14 @@ relation Var_init: evalContext |- typeIR nameIR : evalContext
 
    paths
 
-    rulepath 
+    rulepath
     -- let value = $default(typeIR)
     -- let EC_1 = $add_var_e(global, EC_0, ` nameIR, value)
     -- output: % |- % % : EC_1
 
 relation Extern_init: evalContext arch |- nameIR nameIR : arch
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -28534,7 +28534,7 @@ relation Extern_init: evalContext arch |- nameIR nameIR : arch
 
    paths
 
-    rulepath 
+    rulepath
     -- let IC = {path [], global EC.global, block EC.block, local EC.local}
     -- Constructor_inst: global IC |- ` nameIR_extern < [] >( [] ): constructorDef < typeArgumentIR*{typeArgumentIR <- typeArgumentIR*} >(# id*{id <- id*} # id'*{id' <- id'*} )
     -- if typeArgumentIR*{typeArgumentIR <- typeArgumentIR*} matches []
@@ -28549,7 +28549,7 @@ relation Extern_init: evalContext arch |- nameIR nameIR : arch
 
 relation Program_init: |- p4program : evalContext store
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -28558,7 +28558,7 @@ relation Program_init: |- p4program : evalContext store
 
    paths
 
-    rulepath 
+    rulepath
     -- Program_inst: |- p4program : globalEvalLayer STO
     -- let blockEvalLayer = {type $empty_theta, callable $empty_callableDefEnv, state $empty_stateEnv, frame $empty_frame}
     -- let localEvalLayer = {type $empty_theta, frames [$empty_frame]}
@@ -28660,7 +28660,7 @@ def $reverse_bytes_of_hex'(text) : text =
 
 syntax tableEntryPriorityInterface = int?
 
-syntax tableKeyValueInterface = 
+syntax tableKeyValueInterface =
    | `bin text
    | `hex text
    | `dec text
@@ -29049,7 +29049,7 @@ def $tableObject_add_default_action(evalContext, tableObject, tableActionInterfa
 
 relation V1Model_init: |- p4program : evalContext arch
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -29058,14 +29058,14 @@ relation V1Model_init: |- p4program : evalContext arch
 
    paths
 
-    rulepath 
+    rulepath
     -- Program_init: |- p4program : EC STO
     -- let ARCH = {state $init_archState, store STO}
     -- output: |- % : EC ARCH
 
 relation V1Model_init_packet_in: evalContext arch |- objectState : evalContext arch
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -29074,7 +29074,7 @@ relation V1Model_init_packet_in: evalContext arch |- objectState : evalContext a
 
    paths
 
-    rulepath 
+    rulepath
     -- Extern_init: EC_0 ARCH_0 |- "packet_in" "packet_in" : ARCH_1
     -- let EC_1 = $add_var_e(global, EC_0, ` "packet_in", ref ["packet_in"] as value)
     -- let object'?{object' <- object'?} = $find_object_e(ARCH_1, ["packet_in"])
@@ -29089,7 +29089,7 @@ relation V1Model_init_packet_in: evalContext arch |- objectState : evalContext a
 
 relation V1Model_init_packet_out: evalContext arch |- objectState : evalContext arch
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -29098,7 +29098,7 @@ relation V1Model_init_packet_out: evalContext arch |- objectState : evalContext 
 
    paths
 
-    rulepath 
+    rulepath
     -- Extern_init: EC_0 ARCH_0 |- "packet_out" "packet_out" : ARCH_1
     -- let EC_1 = $add_var_e(global, EC_0, ` "packet_out", ref ["packet_out"] as value)
     -- let object'?{object' <- object'?} = $find_object_e(ARCH_1, ["packet_out"])
@@ -29113,7 +29113,7 @@ relation V1Model_init_packet_out: evalContext arch |- objectState : evalContext 
 
 relation V1Model_init_globals: evalContext arch |- int : evalContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -29122,7 +29122,7 @@ relation V1Model_init_globals: evalContext arch |- int : evalContext
 
    paths
 
-    rulepath 
+    rulepath
     -- let object'?{object' <- object'?} = $find_object_e(ARCH, ["main"])
     -- if object'?{object' <- object'?} matches (_)
     -- let ?(object) = object'?{object' <- object'?}
@@ -29338,7 +29338,7 @@ def $V1Model_setup_deparse_callee(evalContext, arch, typedExpressionIR) : typedE
 
 relation V1Model_parser: evalContext arch |- evalContext arch transitionResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -29378,7 +29378,7 @@ relation V1Model_parser: evalContext arch |- evalContext arch transitionResult
 
 relation V1Model_verify: evalContext arch |- evalContext arch callResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -29415,7 +29415,7 @@ relation V1Model_verify: evalContext arch |- evalContext arch callResult
 
 relation V1Model_ingress: evalContext arch |- evalContext arch callResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -29454,7 +29454,7 @@ relation V1Model_ingress: evalContext arch |- evalContext arch callResult
 
 relation V1Model_egress: evalContext arch |- evalContext arch callResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -29493,7 +29493,7 @@ relation V1Model_egress: evalContext arch |- evalContext arch callResult
 
 relation V1Model_check: evalContext arch |- evalContext arch callResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -29530,7 +29530,7 @@ relation V1Model_check: evalContext arch |- evalContext arch callResult
 
 relation V1Model_deparse: evalContext arch |- evalContext arch callResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -29641,7 +29641,7 @@ def $V1Model_meta_fields_of_index(arch, integerLiteral) : nameIR* =
 
 relation V1Model_copy_meta_fields: evalContext evalContext arch |- nameIR* : evalContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -29666,7 +29666,7 @@ relation V1Model_copy_meta_fields: evalContext evalContext arch |- nameIR* : eva
 
 relation V1Model_setup_preserved_meta_fields: evalContext arch |- integerLiteral : evalContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -29675,7 +29675,7 @@ relation V1Model_setup_preserved_meta_fields: evalContext arch |- integerLiteral
 
    paths
 
-    rulepath 
+    rulepath
     -- let object'?{object' <- object'?} = $find_object_e(ARCH, ["main"])
     -- if object'?{object' <- object'?} matches (_)
     -- let ?(object) = object'?{object' <- object'?}
@@ -29691,7 +29691,7 @@ relation V1Model_setup_preserved_meta_fields: evalContext arch |- integerLiteral
 
 relation EBPF_init: |- p4program : evalContext arch
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -29700,14 +29700,14 @@ relation EBPF_init: |- p4program : evalContext arch
 
    paths
 
-    rulepath 
+    rulepath
     -- Program_init: |- p4program : EC STO
     -- let ARCH = {state $init_archState, store STO}
     -- output: |- % : EC ARCH
 
 relation EBPF_init_packet_in: evalContext arch |- objectState : evalContext arch
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -29716,7 +29716,7 @@ relation EBPF_init_packet_in: evalContext arch |- objectState : evalContext arch
 
    paths
 
-    rulepath 
+    rulepath
     -- Extern_init: EC_0 ARCH_0 |- "packet_in" "packet_in" : ARCH_1
     -- let EC_1 = $add_var_e(global, EC_0, ` "packet_in", ref ["packet_in"] as value)
     -- let object'?{object' <- object'?} = $find_object_e(ARCH_1, ["packet_in"])
@@ -29731,7 +29731,7 @@ relation EBPF_init_packet_in: evalContext arch |- objectState : evalContext arch
 
 relation EBPF_init_globals: evalContext arch |- evalContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -29740,7 +29740,7 @@ relation EBPF_init_globals: evalContext arch |- evalContext
 
    paths
 
-    rulepath 
+    rulepath
     -- let object'?{object' <- object'?} = $find_object_e(ARCH, ["main"])
     -- if object'?{object' <- object'?} matches (_)
     -- let ?(object) = object'?{object' <- object'?}
@@ -29828,7 +29828,7 @@ def $eBPF_setup_filter_callee(evalContext, arch, typedExpressionIR) : typedExpre
 
 relation EBPF_parse: evalContext arch |- evalContext arch transitionResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -29864,7 +29864,7 @@ relation EBPF_parse: evalContext arch |- evalContext arch transitionResult
 
 relation EBPF_filter: evalContext arch |- evalContext arch callResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -29901,7 +29901,7 @@ relation EBPF_filter: evalContext arch |- evalContext arch callResult
 
 relation PSA_init: |- p4program : evalContext arch
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -29910,7 +29910,7 @@ relation PSA_init: |- p4program : evalContext arch
 
    paths
 
-    rulepath 
+    rulepath
     -- Program_init: |- p4program : EC STO
     -- let ARCH = {state $init_archState, store STO}
     -- output: |- % : EC ARCH
@@ -30024,7 +30024,7 @@ def $PSA_setup_main_callee(evalContext, arch) : typedExpressionIR =
 
 relation PSA_ingress_init_packet_in: evalContext arch |- objectState : evalContext arch
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -30033,7 +30033,7 @@ relation PSA_ingress_init_packet_in: evalContext arch |- objectState : evalConte
 
    paths
 
-    rulepath 
+    rulepath
     -- Extern_init: EC_0 ARCH_0 |- "packet_in" "ingress_packet_in" : ARCH_1
     -- let EC_1 = $add_var_e(global, EC_0, ` "ingress_packet_in", ref ["ingress_packet_in"] as value)
     -- let object'?{object' <- object'?} = $find_object_e(ARCH_1, ["ingress_packet_in"])
@@ -30048,7 +30048,7 @@ relation PSA_ingress_init_packet_in: evalContext arch |- objectState : evalConte
 
 relation PSA_ingress_init_packet_out: evalContext arch |- objectState : evalContext arch
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -30057,7 +30057,7 @@ relation PSA_ingress_init_packet_out: evalContext arch |- objectState : evalCont
 
    paths
 
-    rulepath 
+    rulepath
     -- Extern_init: EC_0 ARCH_0 |- "packet_out" "ingress_packet_out" : ARCH_1
     -- let EC_1 = $add_var_e(global, EC_0, ` "ingress_packet_out", ref ["ingress_packet_out"] as value)
     -- let object'?{object' <- object'?} = $find_object_e(ARCH_1, ["ingress_packet_out"])
@@ -30072,7 +30072,7 @@ relation PSA_ingress_init_packet_out: evalContext arch |- objectState : evalCont
 
 relation PSA_ingress_init_parser_input_metadata: evalContext arch |- int text : evalContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -30081,7 +30081,7 @@ relation PSA_ingress_init_parser_input_metadata: evalContext arch |- int text : 
 
    paths
 
-    rulepath 
+    rulepath
     -- let storageReference_parser_input_port = ` "ingress_parser_input_metadata" as storageReference . "ingress_port"
     -- let value_port = 32 w i_port as value
     -- Lvalue_write: global EC_0 ARCH |- storageReference_parser_input_port -> value_port : EC_1
@@ -30092,7 +30092,7 @@ relation PSA_ingress_init_parser_input_metadata: evalContext arch |- int text : 
 
 relation PSA_ingress_init_input_metadata: evalContext arch |- int text : evalContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -30101,7 +30101,7 @@ relation PSA_ingress_init_input_metadata: evalContext arch |- int text : evalCon
 
    paths
 
-    rulepath 
+    rulepath
     -- let storageReference_input_port = ` "ingress_input_metadata" as storageReference . "ingress_port"
     -- let value_port = 32 w i_port as value
     -- Lvalue_write: global EC_0 ARCH |- storageReference_input_port -> value_port : EC_1
@@ -30115,7 +30115,7 @@ relation PSA_ingress_init_input_metadata: evalContext arch |- int text : evalCon
 
 relation PSA_ingress_init_output_metadata: evalContext arch |- evalContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -30124,7 +30124,7 @@ relation PSA_ingress_init_output_metadata: evalContext arch |- evalContext
 
    paths
 
-    rulepath 
+    rulepath
     -- let storageReference_output_cos = ` "ingress_output_metadata" as storageReference . "class_of_service"
     -- let value_cos = 8 w 0 as int as value
     -- Lvalue_write: global EC_0 ARCH |- storageReference_output_cos -> value_cos : EC_1
@@ -30144,7 +30144,7 @@ relation PSA_ingress_init_output_metadata: evalContext arch |- evalContext
 
 relation PSA_ingress_init_metadata: evalContext arch |- int text : evalContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -30153,7 +30153,7 @@ relation PSA_ingress_init_metadata: evalContext arch |- int text : evalContext
 
    paths
 
-    rulepath 
+    rulepath
     -- PSA_ingress_init_parser_input_metadata: EC_0 ARCH |- i_port t_path : EC_1
     -- PSA_ingress_init_input_metadata: EC_1 ARCH |- i_port t_path : EC_2
     -- PSA_ingress_init_output_metadata: EC_2 ARCH |- EC_3
@@ -30161,7 +30161,7 @@ relation PSA_ingress_init_metadata: evalContext arch |- int text : evalContext
 
 relation PSA_ingress_init_globals: evalContext arch |- int : evalContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -30170,7 +30170,7 @@ relation PSA_ingress_init_globals: evalContext arch |- int : evalContext
 
    paths
 
-    rulepath 
+    rulepath
     -- let object'?{object' <- object'?} = $find_object_e(ARCH, ["main"])
     -- if object'?{object' <- object'?} matches (_)
     -- let ?(object) = object'?{object' <- object'?}
@@ -30402,7 +30402,7 @@ def $PSA_setup_ingress_deparser_callee(evalContext, arch, typedExpressionIR) : t
 
 relation PSA_ingress_parser: evalContext arch |- evalContext arch transitionResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -30448,7 +30448,7 @@ relation PSA_ingress_parser: evalContext arch |- evalContext arch transitionResu
 
 relation PSA_ingress: evalContext arch |- evalContext arch callResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -30491,7 +30491,7 @@ relation PSA_ingress: evalContext arch |- evalContext arch callResult
 
 relation PSA_ingress_deparser: evalContext arch |- evalContext arch callResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -30540,7 +30540,7 @@ relation PSA_ingress_deparser: evalContext arch |- evalContext arch callResult
 
 relation PSA_egress_init_packet_in: evalContext arch |- objectState : evalContext arch
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -30549,7 +30549,7 @@ relation PSA_egress_init_packet_in: evalContext arch |- objectState : evalContex
 
    paths
 
-    rulepath 
+    rulepath
     -- Extern_init: EC_0 ARCH_0 |- "packet_in" "egress_packet_in" : ARCH_1
     -- let EC_1 = $add_var_e(global, EC_0, ` "egress_packet_in", ref ["egress_packet_in"] as value)
     -- let object'?{object' <- object'?} = $find_object_e(ARCH_1, ["egress_packet_in"])
@@ -30564,7 +30564,7 @@ relation PSA_egress_init_packet_in: evalContext arch |- objectState : evalContex
 
 relation PSA_egress_init_packet_out: evalContext arch |- objectState : evalContext arch
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -30573,7 +30573,7 @@ relation PSA_egress_init_packet_out: evalContext arch |- objectState : evalConte
 
    paths
 
-    rulepath 
+    rulepath
     -- Extern_init: EC_0 ARCH_0 |- "packet_out" "egress_packet_out" : ARCH_1
     -- let EC_1 = $add_var_e(global, EC_0, ` "egress_packet_out", ref ["egress_packet_out"] as value)
     -- let object'?{object' <- object'?} = $find_object_e(ARCH_1, ["egress_packet_out"])
@@ -30588,7 +30588,7 @@ relation PSA_egress_init_packet_out: evalContext arch |- objectState : evalConte
 
 relation PSA_egress_init_parser_input_metadata: evalContext arch |- int text : evalContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -30597,7 +30597,7 @@ relation PSA_egress_init_parser_input_metadata: evalContext arch |- int text : e
 
    paths
 
-    rulepath 
+    rulepath
     -- let storageReference_parser_input_port = ` "egress_parser_input_metadata" as storageReference . "egress_port"
     -- let value_port = 32 w i_port as value
     -- Lvalue_write: global EC_0 ARCH |- storageReference_parser_input_port -> value_port : EC_1
@@ -30608,7 +30608,7 @@ relation PSA_egress_init_parser_input_metadata: evalContext arch |- int text : e
 
 relation PSA_egress_init_input_metadata: evalContext arch |- int text int int : evalContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -30617,7 +30617,7 @@ relation PSA_egress_init_input_metadata: evalContext arch |- int text int int : 
 
    paths
 
-    rulepath 
+    rulepath
     -- let storageReference_input_cos = ` "egress_input_metadata" as storageReference . "class_of_service"
     -- let value_cos = 8 w i_cos as value
     -- Lvalue_write: global EC_0 ARCH |- storageReference_input_cos -> value_cos : EC_1
@@ -30637,7 +30637,7 @@ relation PSA_egress_init_input_metadata: evalContext arch |- int text int int : 
 
 relation PSA_egress_init_output_metadata: evalContext arch |- evalContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -30646,7 +30646,7 @@ relation PSA_egress_init_output_metadata: evalContext arch |- evalContext
 
    paths
 
-    rulepath 
+    rulepath
     -- let storageReference_output_clone = ` "egress_output_metadata" as storageReference . "clone"
     -- let value_clone = `b false as value
     -- Lvalue_write: global EC_0 ARCH |- storageReference_output_clone -> value_clone : EC_1
@@ -30657,7 +30657,7 @@ relation PSA_egress_init_output_metadata: evalContext arch |- evalContext
 
 relation PSA_egress_init_deparser_input_metadata: evalContext arch |- int : evalContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -30666,7 +30666,7 @@ relation PSA_egress_init_deparser_input_metadata: evalContext arch |- int : eval
 
    paths
 
-    rulepath 
+    rulepath
     -- let storageReference_deparser_input_port = ` "egress_deparser_input_metadata" as storageReference . "egress_port"
     -- let value_port = 32 w i_port as value
     -- Lvalue_write: global EC_0 ARCH |- storageReference_deparser_input_port -> value_port : EC_1
@@ -30674,7 +30674,7 @@ relation PSA_egress_init_deparser_input_metadata: evalContext arch |- int : eval
 
 relation PSA_egress_init_metadata: evalContext arch |- int text int int : evalContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -30683,7 +30683,7 @@ relation PSA_egress_init_metadata: evalContext arch |- int text int int : evalCo
 
    paths
 
-    rulepath 
+    rulepath
     -- PSA_egress_init_parser_input_metadata: EC_0 ARCH |- i_port t_path : EC_1
     -- PSA_egress_init_input_metadata: EC_1 ARCH |- i_port t_path i_cos i_inst : EC_2
     -- PSA_egress_init_output_metadata: EC_2 ARCH |- EC_3
@@ -30692,7 +30692,7 @@ relation PSA_egress_init_metadata: evalContext arch |- int text int int : evalCo
 
 relation PSA_egress_init_globals: evalContext arch |- int : evalContext
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -30701,7 +30701,7 @@ relation PSA_egress_init_globals: evalContext arch |- int : evalContext
 
    paths
 
-    rulepath 
+    rulepath
     -- let object'?{object' <- object'?} = $find_object_e(ARCH, ["main"])
     -- if object'?{object' <- object'?} matches (_)
     -- let ?(object) = object'?{object' <- object'?}
@@ -30940,7 +30940,7 @@ def $PSA_setup_egress_deparser_callee(evalContext, arch, typedExpressionIR) : ty
 
 relation PSA_egress_parser: evalContext arch |- evalContext arch transitionResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -30988,7 +30988,7 @@ relation PSA_egress_parser: evalContext arch |- evalContext arch transitionResul
 
 relation PSA_egress: evalContext arch |- evalContext arch callResult
 
-  rulegroup 
+  rulegroup
 
    match
 
@@ -31031,7 +31031,7 @@ relation PSA_egress: evalContext arch |- evalContext arch callResult
 
 relation PSA_egress_deparser: evalContext arch |- evalContext arch callResult
 
-  rulegroup 
+  rulegroup
 
    match
 

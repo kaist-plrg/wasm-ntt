@@ -6,6 +6,7 @@ module DCov_single = Coverage.Dangling.Single
 module DCov_multi = Coverage.Dangling.Multi
 open Runtime.Testgen_neg
 open Envs
+open Util.Source
 module Sim = Runtime.Sim.Simulator
 
 (* Hyperparameters for the fuzzing loop *)
@@ -141,11 +142,79 @@ let load_def (tdenv : TDEnv.t) (def : def) : TDEnv.t =
       TDEnv.add id td tdenv
   | _ -> tdenv
 
+let concrete_alias_of_hints (hints : hint list) : id option =
+  match hints with
+  | { hintid; hintexp } :: _ when hintid.it = "concrete" ->
+      (match hintexp.it with
+      | TextE id_alias -> Some (id_alias $ no_region)
+      | _ -> failwith "Expected concrete hint to have text expression")
+  | _ -> None
+
+let add_typdef_with_alias (id : id) (td : Typdef.t) (id_alias_opt : id option)
+  (tdenv : TDEnv.t) (tdenv_alias : TDEnv.t) : TDEnv.t * TDEnv.t =
+  match id_alias_opt with
+  | Some id_alias ->
+    let td_alias_opt = TDEnv.find_opt id_alias tdenv in
+    (match td_alias_opt with
+    | Some td_alias -> (TDEnv.add id td tdenv, TDEnv.add id td_alias tdenv_alias)
+    | None -> (TDEnv.add id td tdenv, tdenv_alias))
+  | None -> (TDEnv.add id td tdenv, tdenv_alias)
+
+let load_wasm_def (tdenvs : TDEnv.t * TDEnv.t) (def : def) : TDEnv.t * TDEnv.t =
+  let (tdenv, tdenv_alias) = tdenvs in
+  match def.it with
+  | ExternTypD (id, _) ->
+      let td = Typdef.Extern in
+      (TDEnv.add id td tdenv, tdenv_alias)
+  | TypD (id, tparams, deftyp, hints) ->
+      let id_alias = concrete_alias_of_hints hints in
+      let td = Typdef.Defined (tparams, deftyp) in
+      add_typdef_with_alias id td id_alias tdenv tdenv_alias
+  | _ -> (tdenv, tdenv_alias)
+
+let load_wasm_def2 (tdenv : TDEnv.t) (def : def) : TDEnv.t =
+  match def.it with
+  | ExternTypD (id, _) ->
+      let td = Typdef.Extern in
+      TDEnv.add id td tdenv
+  | TypD (id, tparams, deftyp, hints) ->
+      let id_alias_opt = concrete_alias_of_hints hints in
+      let td = Option.bind id_alias_opt (fun id_alias -> TDEnv.find_opt id_alias tdenv)
+            |> Option.value ~default:(Typdef.Defined (tparams, deftyp))
+      in
+      TDEnv.add id td tdenv
+  | _ -> tdenv
+
+let update_def_alias (tdenv : TDEnv.t) (def : def) : TDEnv.t =
+  match def.it with
+  | ExternTypD _ -> tdenv
+  | TypD (id, _, _, hints) ->
+      let id_alias_opt = concrete_alias_of_hints hints in
+      (match id_alias_opt with
+      | Some id_alias when TDEnv.mem id_alias tdenv ->
+        let td_alias = TDEnv.find id_alias tdenv in
+        TDEnv.add id td_alias tdenv
+      | _ -> tdenv)
+  | _ -> tdenv
+
 (* Loader *)
 
 let load_spec (tdenv : TDEnv.t) (mixopenv : MixopEnv.t) (spec : spec) :
     TDEnv.t * MixopEnv.t =
   let tdenv = List.fold_left load_def tdenv spec in
+  let mixopenv = List.fold_left load_mixops mixopenv spec in
+  (tdenv, mixopenv)
+
+let load_wasm_spec (tdenv : TDEnv.t) (tdenv_alias : TDEnv.t) (mixopenv : MixopEnv.t) (spec : spec) :
+    TDEnv.t * TDEnv.t * MixopEnv.t =
+  let (tdenv, tdenv_alias) = List.fold_left load_wasm_def (tdenv, tdenv_alias) spec in
+  let mixopenv = List.fold_left load_mixops mixopenv spec in
+  (tdenv, tdenv_alias, mixopenv)
+
+let load_wasm_spec2 (tdenv : TDEnv.t) (mixopenv : MixopEnv.t) (spec : spec) :
+    TDEnv.t * MixopEnv.t =
+  let tdenv = List.fold_left load_def tdenv spec in
+  let tdenv = List.fold_left update_def_alias tdenv spec in
   let mixopenv = List.fold_left load_mixops mixopenv spec in
   (tdenv, mixopenv)
 
@@ -172,7 +241,7 @@ let init_wasm_specenv (spec : spec) (relname : string) : wasm_specenv =
       |> Wasm_interpreter.Arrange.module_with_custom
       |> Wasm_interpreter.Sexpr.to_string 80
   in
-  let tdenv, mixopenv = load_spec TDEnv.empty MixopEnv.empty spec in
+  let tdenv, mixopenv = load_wasm_spec2 TDEnv.empty MixopEnv.empty spec in
   let spec = Sim.SL spec in
   { driver; printer; spec; relname; tdenv; mixopenv; }
 

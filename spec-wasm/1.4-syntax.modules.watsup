@@ -41,7 +41,7 @@ syntax active = {
   OFFSET const
 }
 
-syntax segmentmode =
+syntax elemmode =
   | Passive
   | Active active
   | Declarative
@@ -49,12 +49,16 @@ syntax segmentmode =
 syntax elem = {
   ETYPE reftype,
   EINIT const*,
-  EMODE segmentmode
+  EMODE elemmode
 }
+
+syntax datamode =
+  | Passive
+  | Active active
 
 syntax data = {
   DINIT text,
-  DMODE segmentmode
+  DMODE datamode
 }
 
 syntax importdesc =

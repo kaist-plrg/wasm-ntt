@@ -10,6 +10,11 @@ open Util.Source
 module Xl = Lang.Xl
 module F = Format
 
+let trace_typ_def =
+  match Sys.getenv_opt "P4SPEC_TRACE_TYPDEF" with
+  | Some "1" | Some "true" | Some "TRUE" | Some "yes" | Some "YES" -> true
+  | _ -> false
+
 (* Checks *)
 
 (* Identifiers *)

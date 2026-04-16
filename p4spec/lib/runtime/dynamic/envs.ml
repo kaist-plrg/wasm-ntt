@@ -49,4 +49,7 @@ module TDEnv = struct
     | _ -> typ
 end
 
+module TDEnvAlias = MakeTIdEnv (Id)
+
+(* Atom generators *)
 module TDTbl = MakeTIdTbl (Typdef)
