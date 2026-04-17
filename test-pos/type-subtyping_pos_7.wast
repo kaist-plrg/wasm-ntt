@@ -1,0 +1,20 @@
+(module
+  (rec
+    (type $t1 (sub (func (param i32 (ref $t3)))))
+    (type $t2 (sub $t1 (func (param i32 (ref $t2)))))
+    (type $t3 (sub $t2 (func (param i32 (ref $t1)))))
+  )
+
+  (func $f1 (param $r (ref $t1))
+    (call $f1 (local.get $r))
+  )
+  (func $f2 (param $r (ref $t2))
+    (call $f1 (local.get $r))
+    (call $f2 (local.get $r))
+  )
+  (func $f3 (param $r (ref $t3))
+    (call $f1 (local.get $r))
+    (call $f2 (local.get $r))
+    (call $f3 (local.get $r))
+  )
+)

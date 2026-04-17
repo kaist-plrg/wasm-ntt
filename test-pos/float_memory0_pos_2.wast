@@ -1,0 +1,10 @@
+(module
+  (memory 0 0)
+  (memory $m (data "\00\00\00\00\00\00\f4\7f"))
+
+  (func (export "f64.load") (result f64) (f64.load $m (i32.const 0)))
+  (func (export "i64.load") (result i64) (i64.load $m (i32.const 0)))
+  (func (export "f64.store") (f64.store $m (i32.const 0) (f64.const nan:0x4000000000000)))
+  (func (export "i64.store") (i64.store $m (i32.const 0) (i64.const 0x7ff4000000000000)))
+  (func (export "reset") (i64.store $m (i32.const 0) (i64.const 0)))
+)

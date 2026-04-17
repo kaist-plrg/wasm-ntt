@@ -1,0 +1,10 @@
+(module
+  (rec
+    (type $t1 (func (param i32 (ref $t1))))
+    (type $t2 (func (param i32 (ref $t3))))
+    (type $t3 (func (param i32 (ref $t2))))
+  )
+  (func (import "Mr2" "f1") (param (ref $t1)))
+  (func (import "Mr2" "f2") (param (ref $t2)))
+  (func (import "Mr2" "f3") (param (ref $t3)))
+)
