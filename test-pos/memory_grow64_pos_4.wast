@@ -1,0 +1,20 @@
+(module
+  (memory i64 1)
+  (func (export "grow") (param i64) (result i64)
+    (memory.grow (local.get 0))
+  )
+  (func (export "check-memory-zero") (param i64 i64) (result i32)
+    (local i32)
+    (local.set 2 (i32.const 1))
+    (block
+      (loop
+        (local.set 2 (i32.load8_u (local.get 0)))
+        (br_if 1 (i32.ne (local.get 2) (i32.const 0)))
+        (br_if 1 (i64.ge_u (local.get 0) (local.get 1)))
+        (local.set 0 (i64.add (local.get 0) (i64.const 1)))
+        (br_if 0 (i64.le_u (local.get 0) (local.get 1)))
+      )
+    )
+    (local.get 2)
+  )
+)

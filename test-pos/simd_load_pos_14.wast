@@ -1,0 +1,6 @@
+(module (memory 1)
+  (data (i32.const 0) "\00\01\02\03\04\05\06\07\08\09\0a\0b\0c\0d\0e\0f\00\01\02\03")
+  (func (export "as-br-value") (result v128)
+    (block (result v128) (br 0 (v128.load (i32.const 0))))
+  )
+)

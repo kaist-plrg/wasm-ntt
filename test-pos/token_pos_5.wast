@@ -1,0 +1,3 @@
+(module
+  (func $f(nop))
+)
