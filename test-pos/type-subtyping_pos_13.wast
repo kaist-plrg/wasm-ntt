@@ -1,0 +1,10 @@
+(module
+  (rec (type $f11 (sub (func (result (ref func))))) (type $f12 (sub $f11 (func (result (ref $f11))))))
+  (rec (type $f21 (sub (func (result (ref func))))) (type $f22 (sub $f21 (func (result (ref $f21))))))
+  (func $f11 (type $f11) (unreachable))
+  (func $f12 (type $f12) (unreachable))
+  (global (ref $f11) (ref.func $f11))
+  (global (ref $f21) (ref.func $f11))
+  (global (ref $f12) (ref.func $f12))
+  (global (ref $f22) (ref.func $f12))
+)
