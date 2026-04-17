@@ -377,6 +377,133 @@ let find_parent (vdg : Dep.Graph.t) (vid_source : vid) : vid option =
   assert (List.length parents <= 1);
   parents |> Rand.random_select
 
+let rec choose_one (l : 'a option list) : 'a option =
+  match l with
+  | [] -> None
+  | Some a :: _ -> Some a
+  | None :: t -> choose_one t
+
+let patch_program (tdenv : TDEnv.t) (value_to_mutate : value) (value_program : value) : value =
+  (* Patching the type annotation of a value *)
+  let patch_value (typ : typ') (value : value) : value =
+    { value with note = { value.note with typ } }
+  in
+  (* Walker *)
+  let rec walk (value : value) : value =
+    let typ = value.note.typ in
+    let value_patched =
+      match typ, value.it with
+      | BoolT, _ | NumT _, _ | TextT, _ -> value
+      | VarT (id, targs), _ -> patch id targs value
+      | TupleT typs, TupleV values ->
+        assert (List.length typs = List.length values);
+        let values_patched = List.map2 (fun typ value -> patch_value typ.it value) typs values in
+        { value with it = TupleV values_patched }
+      | IterT (typ_inner, Opt), OptV value_opt -> (
+          match value_opt with
+          | None -> value
+          | Some value_inner ->
+              let value_patched = patch_value typ_inner.it value_inner in
+              { value with it = OptV (Some value_patched) })
+      | IterT (typ_inner, List), ListV values ->
+          let values_patched = List.map (patch_value typ_inner.it) values in
+          { value with it = ListV values_patched }
+      | FuncT, _ -> value
+      | _ -> value
+    in
+    match value_patched.it with
+    | BoolV _ | NumV _ | TextV _ -> value_patched
+    | StructV valuefields ->
+      let atoms, values = List.split valuefields in
+      let values_inner_patched = List.map walk values in
+      let valuefields_patched = List.combine atoms values_inner_patched in
+      { value_patched with it = StructV valuefields_patched }
+    | CaseV (mixop, values) ->
+      let values_inner_patched = List.map walk values in
+      { value_patched with it = CaseV (mixop, values_inner_patched) }
+    | TupleV values ->
+      let values_inner_patched = List.map walk values in
+      { value_patched with it = TupleV values_inner_patched }
+    | OptV None -> value_patched
+    | OptV (Some value) ->
+      let value_inner_patched = walk value in
+      { value_patched with it = OptV (Some value_inner_patched) }
+    | ListV values ->
+      let values_inner_patched = List.map walk values in
+      { value_patched with it = ListV values_inner_patched }
+    | FuncV _ | ExternV _ -> value_patched
+  (* Patcher *)
+  and patch (id : TId.t) (targs : targ list) (value : value) : value =
+    let td_alias = TDEnv.find id tdenv in
+    match td_alias with
+    | Defined (tparams, deftyp) -> (
+        assert (List.length tparams = List.length targs);
+        let theta = List.combine tparams targs |> TIdMap.of_list in
+        match (deftyp.it, value.it) with
+        | VariantT typcases, CaseV (mixop_value, values_sub) ->
+            let typs_sub =
+              match
+                List.find_map
+                  (fun (nottyp, _) ->
+                    let mixop_typ, typs_sub = nottyp.it in
+                    if Mixop.eq mixop_typ mixop_value then Some typs_sub else None)
+                  typcases
+              with
+              | Some typs_sub -> typs_sub
+              | None -> failwith "patch: no typcase for mixop"
+            in
+            let typs_sub = Typ.subst_typs theta typs_sub in
+            let values_sub =
+              List.map2 (fun typ_sub value_sub -> patch_value typ_sub.it value_sub) typs_sub values_sub
+            in
+            let typ_patch = VarT (id, targs) in
+            patch_value typ_patch { value with it = CaseV (mixop_value, values_sub) }
+        | StructT typfields, StructV valuefields ->
+            let valuefields =
+              List.map2
+                (fun typfield valuefield ->
+                  let atom_typ, typ_sub = typfield in
+                  let atom_value, value_sub = valuefield in
+                  assert (Atom.eq atom_typ.it atom_value.it);
+                  let typ_sub = Typ.subst_typ theta typ_sub in
+                  let value_sub = patch_value typ_sub.it value_sub in
+                  (atom_value, value_sub))
+                typfields valuefields
+            in
+            let typ_patch = VarT (id, targs) in
+            patch_value typ_patch { value with it = StructV valuefields }
+        (* Not quite sure *)
+        | PlainT typ, _ ->
+            let typ = Typ.subst_typ theta typ in
+            patch_value typ.it value
+         | _ -> failwith "patch: type mismatch between deftyp and value"
+            )
+    | _ -> assert false
+  in
+  (* Picker *)
+  let vid_target = value_to_mutate.note.vid in
+  let rec pick (value : value) : value option =
+    if value.note.vid = vid_target then Some value
+    else
+      match value.it with
+      | BoolV _ | NumV _ | TextV _ -> None
+      | StructV valuefields ->
+        let _, values = List.split valuefields in
+        values |> List.map pick |> choose_one
+      | CaseV (_, values) -> values |> List.map pick |> choose_one
+      | TupleV values -> values |> List.map pick |> choose_one
+      | OptV None -> None
+      | OptV (Some value) -> pick value
+      | ListV values -> values |> List.map pick |> choose_one
+      | FuncV _ | ExternV _ -> None
+  in
+  let value_program_input = value_program in
+  let value_program = walk value_program_input in
+  let value_to_mutate_opt = pick value_program in
+  match value_to_mutate_opt with
+  | Some value_to_mutate -> value_to_mutate
+  | None -> failwith "patch_program: pick returned None"
+
 (* Entry point for mutation *)
 
 let mutate (tdenv : TDEnv.t) (mixopenv : MixopEnv.t) (texts : value' list)
@@ -400,6 +527,34 @@ let mutate (tdenv : TDEnv.t) (mixopenv : MixopEnv.t) (texts : value' list)
   let* kind, value_mutated = mutate_walk tdenv mixopenv texts value_to_mutate in
   (kind, value_to_mutate, value_mutated) |> Option.some
 
+let mutatew (tdenv : TDEnv.t) (mixopenv : MixopEnv.t) (texts : value' list)
+    (vdg : Dep.Graph.t) (vid_source : vid) : (kind * value * value) option =
+  (* Expand the node randomly *)
+  let expansions =
+    [
+      (fun () -> find_parent vdg vid_source);
+      (fun () -> vid_source |> Option.some);
+    ]
+  in
+  let expansion = Rand.random_select expansions |> Option.get in
+  let vid_to_mutate =
+    match expansion () with Some vid_parent -> vid_parent | None -> vid_source
+  in
+  (* reassemble value from vid *)
+  (* 이 value_to_mutate의 type annotation을 typeConcrete annotation으로 바꿔주어야 함 *)
+  let value_to_mutate =
+    Dep.Graph.reassemble_graph vdg VIdMap.empty vid_to_mutate
+  in
+  let value_program =
+    Dep.Graph.reassemble_graph_from_root vdg VIdMap.empty
+  in
+  let value_to_mutate_concrete =
+    patch_program tdenv value_to_mutate value_program
+  in
+  (* Mutate the node *)
+  let* kind, value_mutated = mutate_walk tdenv mixopenv texts value_to_mutate_concrete in
+  (kind, value_to_mutate_concrete, value_mutated) |> Option.some
+
 let mutates (fuel_mutate : int) (tdenv : TDEnv.t) (mixopenv : MixopEnv.t)
     (vdg : Dep.Graph.t) (vid_source : vid) : (kind * value * value) list =
   (* Collect the text pool *)
@@ -412,4 +567,18 @@ let mutates (fuel_mutate : int) (tdenv : TDEnv.t) (mixopenv : MixopEnv.t)
   let texts = texts @ [ TextV "lazy"; TextV "fox" ] in
   (* Do mutations *)
   List.init fuel_mutate (fun _ -> mutate tdenv mixopenv texts vdg vid_source)
+  |> List.filter_map Fun.id
+
+let mutatesw (fuel_mutate : int) (tdenv : TDEnv.t) (mixopenv : MixopEnv.t)
+    (vdg : Dep.Graph.t) (vid_source : vid) : (kind * value * value) list =
+  (* Collect the text pool *)
+  let texts =
+    List.init (vdg.root + 1) Fun.id
+    |> List.filter_map (fun vid ->
+           let* mirror, _ = Dep.Graph.find_node vdg vid in
+           match mirror.it with TextN text -> Some (TextV text) | _ -> None)
+  in
+  let texts = texts @ [ TextV "lazy"; TextV "fox" ] in
+  (* Do mutations *)
+  List.init fuel_mutate (fun _ -> mutatew tdenv mixopenv texts vdg vid_source)
   |> List.filter_map Fun.id

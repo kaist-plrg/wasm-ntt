@@ -6,6 +6,7 @@ module DCov_single = Coverage.Dangling.Single
 module DCov_multi = Coverage.Dangling.Multi
 open Runtime.Testgen_neg
 open Envs
+open Util.Source
 module Sim = Runtime.Sim.Simulator
 
 (* Hyperparameters for the fuzzing loop *)
@@ -141,11 +142,38 @@ let load_def (tdenv : TDEnv.t) (def : def) : TDEnv.t =
       TDEnv.add id td tdenv
   | _ -> tdenv
 
+let concrete_alias_of_hints (hints : hint list) : id option =
+  match hints with
+  | { hintid; hintexp } :: _ when hintid.it = "concrete" ->
+      (match hintexp.it with
+      | TextE id_alias -> Some (id_alias $ no_region)
+      | _ -> failwith "Expected concrete hint to have text expression")
+  | _ -> None
+
+let update_def_alias (tdenv : TDEnv.t) (def : def) : TDEnv.t =
+  match def.it with
+  | ExternTypD _ -> tdenv
+  | TypD (id, _, _, hints) ->
+      let id_alias_opt = concrete_alias_of_hints hints in
+      (match id_alias_opt with
+      | Some id_alias when TDEnv.mem id_alias tdenv ->
+        let td_alias = TDEnv.find id_alias tdenv in
+        TDEnv.add id td_alias tdenv
+      | _ -> tdenv)
+  | _ -> tdenv
+
 (* Loader *)
 
 let load_spec (tdenv : TDEnv.t) (mixopenv : MixopEnv.t) (spec : spec) :
     TDEnv.t * MixopEnv.t =
   let tdenv = List.fold_left load_def tdenv spec in
+  let mixopenv = List.fold_left load_mixops mixopenv spec in
+  (tdenv, mixopenv)
+
+let load_wasm_spec (tdenv : TDEnv.t) (mixopenv : MixopEnv.t) (spec : spec) :
+    TDEnv.t * MixopEnv.t =
+  let tdenv = List.fold_left load_def tdenv spec in
+  let tdenv = List.fold_left update_def_alias tdenv spec in
   let mixopenv = List.fold_left load_mixops mixopenv spec in
   (tdenv, mixopenv)
 
@@ -172,7 +200,7 @@ let init_wasm_specenv (spec : spec) (relname : string) : wasm_specenv =
       |> Wasm_interpreter.Arrange.module_with_custom
       |> Wasm_interpreter.Sexpr.to_string 80
   in
-  let tdenv, mixopenv = load_spec TDEnv.empty MixopEnv.empty spec in
+  let tdenv, mixopenv = load_wasm_spec TDEnv.empty MixopEnv.empty spec in
   let spec = Sim.SL spec in
   { driver; printer; spec; relname; tdenv; mixopenv; }
 
