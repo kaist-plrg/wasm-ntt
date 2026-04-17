@@ -17,10 +17,10 @@ relation Tag_ok: context |- tag : context                   hint(input %0 %1)
 relation Tags_ok: context |- tag* : context                 hint(input %0 %1)
 relation Elem_ok: context |- elem : context                 hint(input %0 %1)
 relation Elems_ok: context |- elem* : context               hint(input %0 %1)
-relation Elemmode_ok: context reftype |- segmentmode : OK   hint(input %0 %1 %2)
+relation Elemmode_ok: context reftype |- elemmode : OK   hint(input %0 %1 %2)
 relation Data_ok: context |- data : context                 hint(input %0 %1)
 relation Datas_ok: context |- data* : context               hint(input %0 %1)
-relation Datamode_ok: context |- segmentmode : OK           hint(input %0 %1)
+relation Datamode_ok: context |- datamode : OK           hint(input %0 %1)
 relation Start_ok: context |- start? : OK                   hint(input %0 %1)
 relation Exports_ok: context nameset |- export* : nameset   hint(input %0 %1 %2)
 relation Export_ok: context nameset |- export : nameset     hint(input %0 %1 %2)
@@ -214,10 +214,10 @@ rule Elemmode_ok/declarative:
   C_0 rt |- Declarative : OK
 
 rule Elem_ok:
-  C_0 |- { ETYPE rt, EINIT const*, EMODE segmentmode } : C_1
+  C_0 |- { ETYPE rt, EINIT const*, EMODE elemmode } : C_1
   -- Reftype_ok: C_0 |- rt : OK
   -- (Const_ok: C_0 (RefT rt) |- const : OK)*
-  -- Elemmode_ok: C_0 rt |- segmentmode : OK
+  -- Elemmode_ok: C_0 rt |- elemmode : OK
   -- if C_1 = C_0[ .ELEMS = C_0.ELEMS ++ [rt] ]
 
 rule Datas_ok/cons:
@@ -237,8 +237,8 @@ rule Datamode_ok/active:
   -- Const_ok: C_0 (NumT $numtype_of_addrtype(at)) |- const : OK
 
 rule Data_ok:
-  C_0 |- { DINIT _, DMODE segmentmode } : C_1
-  -- Datamode_ok: C_0 |- segmentmode : OK
+  C_0 |- { DINIT _, DMODE datamode } : C_1
+  -- Datamode_ok: C_0 |- datamode : OK
   -- if C_1 = C_0[ .DATAS = C_0.DATAS ++ [OK] ]
 
 rule Start_ok/some:
