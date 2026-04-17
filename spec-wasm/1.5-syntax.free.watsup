@@ -279,20 +279,29 @@ def $free_func(func) = free[ .LOCALS = $empty_set<localidx> ]
 
 def $free_start(start) = $update_funcs(`{ [start.SFUNC] })
 
-dec $free_segmentmode(def $f(set<tableidx>) : free, segmentmode) : free
-def $free_segmentmode(def $f, segmentmode) = $free_empty
-  -- if segmentmode = Passive \/ segmentmode = Declarative
-def $free_segmentmode(def $f, segmentmode) = $free_union(free_1, free_2)
-  -- if segmentmode = Active { INDEX idx, OFFSET instr* }
+dec $free_elemmode(def $f(set<tableidx>) : free, elemmode) : free
+def $free_elemmode(def $f, elemmode) = $free_empty
+  -- if elemmode = Passive \/ elemmode = Declarative
+def $free_elemmode(def $f, elemmode) = $free_union(free_1, free_2)
+  -- if elemmode = Active { INDEX idx, OFFSET instr* }
   -- if free_1 = $f(`{ [idx] })
   -- if free_2 = $free_const(instr*)
 
+dec $free_datamode(def $f(set<memidx>) : free, datamode) : free
+def $free_datamode(def $f, datamode) = $free_empty
+  -- if datamode = Passive
+def $free_datamode(def $f, datamode) = $free_union(free_1, free_2)
+  -- if datamode = Active { INDEX idx, OFFSET instr* }
+  -- if free_1 = $f(`{ [idx] })
+  -- if free_2 = $free_const(instr*)
+
+
 def $free_elem(elem) = free
   -- if free_1 = $free_list<const>(def $free_const, elem.EINIT)
-  -- if free_2 = $free_segmentmode(def $update_tables, elem.EMODE)
+  -- if free_2 = $free_elemmode(def $update_tables, elem.EMODE)
   -- if free = $free_union(free_1, free_2)
 
-def $free_data(data) = $free_segmentmode(def $update_mems, data.DMODE)
+def $free_data(data) = $free_datamode(def $update_mems, data.DMODE)
 
 dec $free_importdesc(importdesc) : free
 def $free_importdesc(FuncImport x) = $update_types($free_idx(x))
