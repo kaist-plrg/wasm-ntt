@@ -275,7 +275,7 @@ and il_of_addr_type = function
 and il_of_limits limits =
   wrap_struct_v "limits" [
     (wrap_atom "MIN", with_typ (wrap_var_t "i64") (NumV (`Int (bigint_of_z_int (Z.of_int64_unsigned limits.min)))));
-    (wrap_atom "MAX", Option.map (fun i -> with_typ (wrap_var_t "i64") (NumV (`Int ((bigint_of_z_int (Z.of_int64_unsigned i)))))) limits.max |> wrap_opt_v_typed (wrap_iter_t Opt (wrap_var_t "i64")))
+    (wrap_atom "MAX", Option.map (fun i -> with_typ (wrap_var_t "i64") (NumV (`Int ((bigint_of_z_int (Z.of_int64_unsigned i)))))) limits.max |> wrap_opt_v "i64")
   ]
 
 and il_of_table_type = function
@@ -441,49 +441,55 @@ let il_of_vop ?(vflag=false) f1 f2 = function
       let iid = id_of_case_v v in
       let ftarg = if vflag then (wrap_var_t "void") $ no_region else (wrap_var_t (vec_rename_i_to_f iid)) $ no_region in
       let opname = vec_op_name iid in
-      let id = wrap_var_t' opname [ (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; ftarg; ftarg ] in
+      let id = wrap_var_t' "laneop" [ (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; ftarg; ftarg ] in
       let v2 = [ Term "I8x16"; NT v ]  |> wrap_case_v |> with_typ id in
-      [ Term "V128"; NT v2 ] #@ (opname ^ "_")
+      let vid = wrap_var_t' "vecop" [ (wrap_var_t opname) $ no_region; ] in
+      [ Term "V128"; NT v2 ] |> wrap_case_v |> with_typ vid
     | V128.I16x8 op ->
       let v = f1 op in
       let iid = id_of_case_v v in
       let ftarg = if vflag then (wrap_var_t "void") $ no_region else (wrap_var_t (vec_rename_i_to_f iid)) $ no_region in
       let opname = vec_op_name iid in
-      let id = wrap_var_t' opname [ (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; ftarg; ftarg ] in
+      let id = wrap_var_t' "laneop" [ (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; ftarg; ftarg ] in
       let v2 = [ Term "I16x8"; NT v ]  |> wrap_case_v |> with_typ id in
-      [ Term "V128"; NT v2 ] #@ (opname ^ "_")
+      let vid = wrap_var_t' "vecop" [ (wrap_var_t opname) $ no_region; ] in
+      [ Term "V128"; NT v2 ] |> wrap_case_v |> with_typ vid
     | V128.I32x4 op ->
       let v = f1 op in
       let iid = id_of_case_v v in
       let ftarg = if vflag then (wrap_var_t "void") $ no_region else (wrap_var_t (vec_rename_i_to_f iid)) $ no_region in
       let opname = vec_op_name iid in
-      let id = wrap_var_t' opname [ (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; ftarg; ftarg ] in
+      let id = wrap_var_t' "laneop" [ (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; ftarg; ftarg ] in
       let v2 = [ Term "I32x4"; NT v ]  |> wrap_case_v |> with_typ id in
-      [ Term "V128"; NT v2 ] #@ (opname ^ "_")
+      let vid = wrap_var_t' "vecop" [ (wrap_var_t opname) $ no_region; ] in
+      [ Term "V128"; NT v2 ] |> wrap_case_v |> with_typ vid
     | V128.I64x2 op ->
       let v = f1 op in
       let iid = id_of_case_v v in
       let ftarg = if vflag then (wrap_var_t "void") $ no_region else (wrap_var_t (vec_rename_i_to_f iid)) $ no_region in
       let opname = vec_op_name iid in
-      let id = wrap_var_t' opname [ (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; ftarg; ftarg ] in
+      let id = wrap_var_t' "laneop" [ (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; ftarg; ftarg ] in
       let v2 = [ Term "I64x2"; NT v ]  |> wrap_case_v |> with_typ id in
-      [ Term "V128"; NT v2 ] #@ (opname ^ "_")
+      let vid = wrap_var_t' "vecop" [ (wrap_var_t opname) $ no_region; ] in
+      [ Term "V128"; NT v2 ] |> wrap_case_v |> with_typ vid
     | V128.F32x4 op ->
       let v = f2 op in
       let iid = id_of_case_v v in
       let ftarg = if vflag then (wrap_var_t "void") $ no_region else (wrap_var_t (vec_rename_i_to_f iid)) $ no_region in
       let opname = vec_op_name iid in
-      let id = wrap_var_t' opname [ (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; ftarg; ftarg ] in
+      let id = wrap_var_t' "laneop" [ (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; ftarg; ftarg ] in
       let v2 = [ Term "F32x4"; NT v ]  |> wrap_case_v |> with_typ id in
-      [ Term "V128"; NT v2 ] #@ (opname ^ "_")
+      let vid = wrap_var_t' "vecop" [ (wrap_var_t opname) $ no_region; ] in
+      [ Term "V128"; NT v2 ] |> wrap_case_v |> with_typ vid
     | V128.F64x2 op ->
       let v = f2 op in
       let iid = id_of_case_v v in
       let ftarg = if vflag then (wrap_var_t "void") $ no_region else (wrap_var_t (vec_rename_i_to_f iid)) $ no_region in
       let opname = vec_op_name iid in
-      let id = wrap_var_t' opname [ (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; ftarg; ftarg ] in
+      let id = wrap_var_t' "laneop" [ (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; (wrap_var_t iid) $ no_region; ftarg; ftarg ] in
       let v2 = [ Term "F64x2"; NT v ]  |> wrap_case_v |> with_typ id in
-      [ Term "V128"; NT v2 ] #@ (opname ^ "_")
+      let vid = wrap_var_t' "vecop" [ (wrap_var_t opname) $ no_region; ] in
+      [ Term "V128"; NT v2 ] |> wrap_case_v |> with_typ vid
   )
 
 let il_of_int_vtestop : V128Op.itestop -> Lang.Il.value = function
@@ -796,45 +802,47 @@ let il_of_vnsplatop : V128Op.nsplatop -> Lang.Il.value = function
 
 let il_of_vsplatop = il_of_vop il_of_vnsplatop il_of_vnsplatop
 
-let il_of_int_vnextractop : Pack.extension V128Op.nextractop -> Lang.Il.value = function
+let il_of_vnextractop : Pack.extension V128Op.nextractop -> Lang.Il.value = function
   | V128Op.Extract (i, ext) ->
     let open Util.Source in
-    let vs = [ (il_of_int i); (il_of_extension ext) ] in
+    let vs = [ wrap_num_v_nat (bigint_of_nat i); (il_of_extension ext) ] in
     let typs = List.map (fun (v: Lang.Il.value) -> v.note.typ $ no_region) vs in
     let symbols = [ Term "Extract"; NT (with_typ (TupleT typs) (TupleV vs)) ] in
-    symbols #@ "vnextractop"
+    let id = wrap_var_t' "vnextractop" [ wrap_var_t "extension" $ no_region; ] in
+    symbols |> wrap_case_v |> with_typ id
 
-let il_of_float_vnextractop : unit V128Op.nextractop -> Lang.Il.value = function
+let il_of_vnextractop' : unit V128Op.nextractop -> Lang.Il.value = function
   | V128Op.Extract (i, _) ->
     let open Util.Source in
-    let vs = [ (il_of_int i); (il_of_void ()) ] in
+    let vs = [ wrap_num_v_nat (bigint_of_nat i); (il_of_void ()) ] in
     let typs = List.map (fun (v: Lang.Il.value) -> v.note.typ $ no_region) vs in
     let symbols = [ Term "Extract"; NT (with_typ (TupleT typs) (TupleV vs)) ] in
-    symbols #@ "vnextractop"
+    let id = wrap_var_t' "vnextractop" [ wrap_var_t "void" $ no_region; ] in
+    symbols |> wrap_case_v |> with_typ id
 
 let il_of_vextractop = function
   | V128 (V128.I8x16 op) ->
-    let symbols = [ Term "V128"; NT ([ Term "I8x16"; NT (il_of_int_vnextractop op) ] #@ "vextractop") ] in
+    let symbols = [ Term "V128"; NT ([ Term "I8x16"; NT (il_of_vnextractop op) ] #@ "vextractop") ] in
     symbols #@ "vextractop_"
   | V128 (V128.I16x8 op) ->
-    let symbols = [ Term "V128"; NT ([ Term "I16x8"; NT (il_of_int_vnextractop op) ] #@ "vextractop") ] in
+    let symbols = [ Term "V128"; NT ([ Term "I16x8"; NT (il_of_vnextractop op) ] #@ "vextractop") ] in
     symbols #@ "vextractop_"
   | V128 (V128.I32x4 op) ->
-    let symbols = [ Term "V128"; NT ([ Term "I32x4"; NT (il_of_float_vnextractop op) ] #@ "vextractop") ] in
+    let symbols = [ Term "V128"; NT ([ Term "I32x4"; NT (il_of_vnextractop' op) ] #@ "vextractop") ] in
     symbols #@ "vextractop_"
   | V128 (V128.I64x2 op) ->
-    let symbols = [ Term "V128"; NT ([ Term "I64x2"; NT (il_of_float_vnextractop op) ] #@ "vextractop") ] in
+    let symbols = [ Term "V128"; NT ([ Term "I64x2"; NT (il_of_vnextractop' op) ] #@ "vextractop") ] in
     symbols #@ "vextractop_"
   | V128 (V128.F32x4 op) ->
-    let symbols = [ Term "V128"; NT ([ Term "F32x4"; NT (il_of_float_vnextractop op) ] #@ "vextractop") ] in
+    let symbols = [ Term "V128"; NT ([ Term "F32x4"; NT (il_of_vnextractop' op) ] #@ "vextractop") ] in
     symbols #@ "vextractop_"
   | V128 (V128.F64x2 op) ->
-    let symbols = [ Term "V128"; NT ([ Term "F64x2"; NT (il_of_float_vnextractop op) ] #@ "vextractop") ] in
+    let symbols = [ Term "V128"; NT ([ Term "F64x2"; NT (il_of_vnextractop' op) ] #@ "vextractop") ] in
     symbols #@ "vextractop_"
 
 let il_of_vnreplaceop : V128Op.nreplaceop -> Lang.Il.value = function
   | V128Op.Replace i ->
-    let symbols = [ Term "Replace"; NT (il_of_int i) ] in
+    let symbols = [ Term "Replace"; NT (wrap_num_v_nat (bigint_of_nat i)) ] in
     symbols #@ "vnreplaceop"
 
 let il_of_vreplaceop = il_of_vop il_of_vnreplaceop il_of_vnreplaceop
@@ -1165,27 +1173,37 @@ let il_of_start start =
   wrap_struct_v "start" [
     (wrap_atom "SFUNC", il_of_idx "funcidx" start.it.sfunc) ]
 
-let il_of_segment segment =
+let il_of_elemmode segment =
   match segment.it with
   | Passive ->
-    [ Term "Passive" ] #@ "segmentmode"
+    [ Term "Passive" ] #@ "elemmode"
   | Active { index; offset } ->
     let symbols =
       [ Term "Active"; NT (wrap_struct_v "active" [(wrap_atom "INDEX", wrap_num_v_nat (bigint_of_nat32 index.it)); (wrap_atom "OFFSET", il_of_const offset)]) ] in
-    symbols #@ "segmentmode"
+    symbols #@ "elemmode"
   | Declarative ->
-    [ Term "Declarative" ] #@ "segmentmode"
+    [ Term "Declarative" ] #@ "elemmode"
 
 let il_of_elem elem =
   wrap_struct_v "elem" [
     (wrap_atom "ETYPE", il_of_ref_type elem.it.etype);
     (wrap_atom "EINIT", il_of_list "const" il_of_const elem.it.einit);
-    (wrap_atom "EMODE", il_of_segment elem.it.emode); ]
+    (wrap_atom "EMODE", il_of_elemmode elem.it.emode); ]
+
+let il_of_datamode segment =
+  match segment.it with
+  | Passive ->
+    [ Term "Passive" ] #@ "datamode"
+  | Active { index; offset } ->
+    let symbols =
+      [ Term "Active"; NT (wrap_struct_v "active" [(wrap_atom "INDEX", wrap_num_v_nat (bigint_of_nat32 index.it)); (wrap_atom "OFFSET", il_of_const offset)]) ] in
+    symbols #@ "datamode"
+  | _ -> failwith "invalid datamode"
 
 let il_of_data data =
   wrap_struct_v "data" [
     (wrap_atom "DINIT", wrap_text_v data.it.dinit);
-    (wrap_atom "DMODE", il_of_segment data.it.dmode); ]
+    (wrap_atom "DMODE", il_of_datamode data.it.dmode); ]
 
 let il_of_import_desc _ idesc =
   match idesc.it with
