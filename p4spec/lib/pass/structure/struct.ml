@@ -198,7 +198,7 @@ let struct_tablerow_path ((prems, exp_output) : prem list * exp) :
 
 (* Structuring definitions *)
 
-let rec struct_def (tdenv : TDEnv.t) (def : def) : Sl.def =
+let rec struct_def ~(final : bool) (tdenv : TDEnv.t) (def : def) : Sl.def =
   let at = def.at in
   match def.it with
   | ExternTypD (id, hints) -> Sl.ExternTypD (id, hints) $ at
@@ -207,16 +207,16 @@ let rec struct_def (tdenv : TDEnv.t) (def : def) : Sl.def =
   | ExternRelD (id, nottyp, inputs, hints) ->
       struct_extern_rel_def at id nottyp inputs hints
   | RelD (id, nottyp, inputs, rulegroups, elsegroup_opt, hints) ->
-      struct_defined_rel_def tdenv at id nottyp inputs rulegroups elsegroup_opt
+      struct_defined_rel_def ~final tdenv at id nottyp inputs rulegroups elsegroup_opt
         hints
   | ExternDecD (id, tparams, params, typ, hints) ->
       struct_extern_dec_def at id tparams params typ hints
   | BuiltinDecD (id, tparams, params, typ, hints) ->
       struct_builtin_dec_def at id tparams params typ hints
   | TableDecD (id, params, typ, tablerows, hints) ->
-      struct_table_dec_def tdenv at id params tablerows typ hints
+      struct_table_dec_def ~final tdenv at id params tablerows typ hints
   | FuncDecD (id, tparams, params, typ, clauses, elseclause_opt, hints) ->
-      struct_func_dec_def tdenv at id tparams params typ clauses elseclause_opt
+      struct_func_dec_def ~final tdenv at id tparams params typ clauses elseclause_opt
         hints
 
 (* Structuring relation definitions *)
@@ -235,7 +235,7 @@ and struct_extern_rel_def (at : region) (id_rel : id) (nottyp : nottyp)
   let externrel = (id_rel, (nottyp, inputs), exps_match, hints) in
   Sl.ExternRelD externrel $ at
 
-and struct_defined_rel_def (tdenv : TDEnv.t) (at : region) (id_rel : id)
+and struct_defined_rel_def ~(final : bool) (tdenv : TDEnv.t) (at : region) (id_rel : id)
     (nottyp : nottyp) (inputs : int list) (rulegroups : rulegroup list)
     (elsegroup_opt : elsegroup option) (hints : hint list) : Sl.def =
   let frees =
@@ -308,7 +308,7 @@ and struct_defined_rel_def (tdenv : TDEnv.t) (at : region) (id_rel : id)
     | _ -> None
   in
   let block, elseblock_opt =
-    Optimize.optimize_with_else tdenv block elseblock_opt
+    Optimize.optimize_with_else ~final tdenv block elseblock_opt
   in
   let block, elseblock_opt = Totalize.totalize tdenv block elseblock_opt in
   let exps_match_unified, block, elseblock_opt =
@@ -333,7 +333,7 @@ and struct_builtin_dec_def (at : region) (id_dec : id) (tparams : tparam list)
   let builtinfunc = (id_dec, tparams, params, typ, hints) in
   Sl.BuiltinDecD builtinfunc $ at
 
-and struct_table_dec_def (tdenv : TDEnv.t) (at : region) (id_dec : id)
+and struct_table_dec_def ~(final : bool) (tdenv : TDEnv.t) (at : region) (id_dec : id)
     (params : param list) (tablerows : tablerow list) (typ : typ)
     (hints : hint list) : Sl.def =
   let exps_signature_group, clauses =
@@ -349,7 +349,7 @@ and struct_table_dec_def (tdenv : TDEnv.t) (at : region) (id_dec : id)
   let blocks_tablerows =
     paths
     |> List.map struct_tablerow_path
-    |> List.map (Optimize.optimize_without_else tdenv)
+    |> List.map (Optimize.optimize_without_else ~final tdenv)
     |> List.map (Totalize.totalize_without_else tdenv)
     |> List.map Instrument.instrument_without_else
   in
@@ -364,7 +364,7 @@ and struct_table_dec_def (tdenv : TDEnv.t) (at : region) (id_dec : id)
   let tablefunc = (id_dec, params, typ, tablerows, hints) in
   Sl.TableDecD tablefunc $ at
 
-and struct_func_dec_def (tdenv : TDEnv.t) (at : region) (id_dec : id)
+and struct_func_dec_def ~(final : bool) (tdenv : TDEnv.t) (at : region) (id_dec : id)
     (tparams : tparam list) (params : param list) (typ : typ)
     (clauses : clause list) (elseclause_opt : clause option) (hints : hint list)
     : Sl.def =
@@ -374,7 +374,7 @@ and struct_func_dec_def (tdenv : TDEnv.t) (at : region) (id_dec : id)
   let block = paths |> List.map struct_clause_path |> Merge.merge_blocks in
   let elseblock_opt = Option.map struct_elseclause_path path_else_opt in
   let block, elseblock_opt =
-    Optimize.optimize_with_else tdenv block elseblock_opt
+    Optimize.optimize_with_else ~final tdenv block elseblock_opt
   in
   let block, elseblock_opt = Totalize.totalize tdenv block elseblock_opt in
   let args_input, block, elseblock_opt =
@@ -402,6 +402,6 @@ let load_spec (tdenv : TDEnv.t) (spec : spec) : TDEnv.t =
 
 (* Entry point *)
 
-let struct_spec (spec : spec) : Sl.spec =
+let struct_spec ~(final : bool) (spec : spec) : Sl.spec =
   let tdenv = load_spec TDEnv.empty spec in
-  List.map (struct_def tdenv) spec
+  List.map (struct_def ~final tdenv) spec

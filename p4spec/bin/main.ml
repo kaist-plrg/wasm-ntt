@@ -14,13 +14,13 @@ let frontend filenames_spec =
 
 let elab filenames_spec = filenames_spec |> frontend |> Elaborate.Elab.elab_spec
 
-let structure filenames_spec =
-  filenames_spec |> elab |> Structure.Struct.struct_spec
+let structure ~(final : bool) filenames_spec =
+  filenames_spec |> elab |> Structure.Struct.struct_spec ~final
 
 let prosify filenames_spec =
-  filenames_spec |> structure |> Prose.Prosify.prosify_spec
+  filenames_spec |> structure ~final:false |> Prose.Prosify.prosify_spec
 
-let runner ?(cache = true) ?(det = false) ?(arch : string option) mode
+let runner ?(cache = true) ?(det = false) ?(arch : string option) ~(final : bool) mode
     filenames_spec =
   let spec_sim =
     match mode with
@@ -28,7 +28,7 @@ let runner ?(cache = true) ?(det = false) ?(arch : string option) mode
         let spec_il = elab filenames_spec in
         (Runtime.Sim.Simulator.IL spec_il : Runtime.Sim.Simulator.spec)
     | `SL ->
-        let spec_sl = structure filenames_spec in
+        let spec_sl = structure ~final filenames_spec in
         (Runtime.Sim.Simulator.SL spec_sl : Runtime.Sim.Simulator.spec)
   in
   let (module Driver) =
@@ -113,7 +113,7 @@ let sim_with_dangling (module Driver : Runtime.Sim.Simulator.DRIVER) spec_sim
 
 let cover_run_instr ?(arch : string option) mode filenames_spec relname
     includes_p4 filenames_p4 filename_cov =
-  let spec_sim, (module Driver) = runner ?arch mode filenames_spec in
+  let spec_sim, (module Driver) = runner ?arch ~final:true mode filenames_spec in
   let spec_sl =
     match spec_sim with
     | Runtime.Sim.Simulator.SL spec_sl -> spec_sl
@@ -136,7 +136,7 @@ let cover_run_instr ?(arch : string option) mode filenames_spec relname
 
 let wasm_cover_run_instr ?(arch : string option) mode filenames_spec relname
     filenames_wasm filename_cov =
-  let spec_sim, (module Driver) = runner ?arch mode filenames_spec in
+  let spec_sim, (module Driver) = runner ?arch ~final:true mode filenames_spec in
   let spec_sl =
     match spec_sim with
     | Runtime.Sim.Simulator.SL spec_sl -> spec_sl
@@ -159,7 +159,7 @@ let wasm_cover_run_instr ?(arch : string option) mode filenames_spec relname
 
 let cover_run_dangling ?(arch : string option) mode filenames_spec relname
     includes_p4 filenames_p4 filename_cov =
-  let spec_sim, (module Driver) = runner ?arch mode filenames_spec in
+  let spec_sim, (module Driver) = runner ?arch ~final:true mode filenames_spec in
   let spec_sl =
     match spec_sim with
     | Runtime.Sim.Simulator.SL spec_sl -> spec_sl
@@ -188,7 +188,7 @@ let cover_run_dangling ?(arch : string option) mode filenames_spec relname
 
 let wasm_cover_run_dangling ?(arch : string option) mode filenames_spec relname
     filenames_wasm filename_cov =
-  let spec_sim, (module Driver) = runner ?arch mode filenames_spec in
+  let spec_sim, (module Driver) = runner ?arch ~final:true mode filenames_spec in
   let spec_sl =
     match spec_sim with
     | Runtime.Sim.Simulator.SL spec_sl -> spec_sl
@@ -217,7 +217,7 @@ let wasm_cover_run_dangling ?(arch : string option) mode filenames_spec relname
 
 let cover_sim_instr ?(arch : string option) mode filenames_spec includes_p4
     filenames_p4 filenames_stf filename_cov =
-  let spec_sim, (module Driver) = runner ?arch mode filenames_spec in
+  let spec_sim, (module Driver) = runner ?arch ~final:true mode filenames_spec in
   let spec_sl =
     match spec_sim with
     | Runtime.Sim.Simulator.SL spec_sl -> spec_sl
@@ -240,7 +240,7 @@ let cover_sim_instr ?(arch : string option) mode filenames_spec includes_p4
 
 let cover_sim_dangling ?(arch : string option) mode filenames_spec includes_p4
     filenames_p4 filenames_stf filename_cov =
-  let spec_sim, (module Driver) = runner ?arch mode filenames_spec in
+  let spec_sim, (module Driver) = runner ?arch ~final:true mode filenames_spec in
   let spec_sl =
     match spec_sim with
     | Runtime.Sim.Simulator.SL spec_sl -> spec_sl
@@ -295,7 +295,7 @@ let struct_command =
      in
      fun () ->
        try
-         let spec_sl = structure filenames_spec in
+         let spec_sl = structure ~final:true filenames_spec in
          Format.printf "%s\n" (Sl.Print.string_of_spec spec_sl);
          ()
        with
@@ -344,7 +344,7 @@ let run_command =
        try
          let cache = not no_cache in
          let spec_sim, (module Driver) =
-           runner ~cache ~det mode filenames_spec
+           runner ~cache ~det ~final:true mode filenames_spec
          in
          let handlers =
            if profile then
@@ -390,7 +390,7 @@ let run_wasm_command =
        try
          let cache = not no_cache in
          let spec_sim, (module Driver) =
-           runner ~cache ~det mode filenames_spec
+           runner ~cache ~det ~final:true mode filenames_spec
          in
          let handlers =
            if profile then
@@ -441,7 +441,7 @@ let run_wasm_suite =
         in
         let cache = not no_cache in
         let spec_sim, (module Driver) =
-          runner ~cache ~det mode filenames_spec
+          runner ~cache ~det ~final:true mode filenames_spec
         in
         let handlers =
           if profile then
@@ -502,7 +502,7 @@ let sim_command =
        try
          let cache = not no_cache in
          let spec_sim, (module Driver) =
-           runner ~cache ~det ~arch mode filenames_spec
+           runner ~cache ~det ~final:true ~arch mode filenames_spec
          in
          let handlers =
            if profile then
@@ -689,7 +689,7 @@ let run_testgen_command =
      in
      fun () ->
        try
-         let spec_sl = structure filenames_spec in
+         let spec_sl = structure ~final:true filenames_spec in
          let logmode =
            if silent then Backend_testgen_neg.Modes.Silent
            else Backend_testgen_neg.Modes.Verbose
@@ -756,7 +756,7 @@ let wasm_run_testgen_command =
      in
      fun () ->
        try
-         let spec_sl = structure filenames_spec in
+         let spec_sl = structure ~final:true filenames_spec in
          let logmode =
            if silent then Backend_testgen_neg.Modes.Silent
            else Backend_testgen_neg.Modes.Verbose
@@ -806,7 +806,7 @@ let run_testgen_debug_command =
      and pid = flag "-pid" (required int) ~doc:"phantom id to close-miss" in
      fun () ->
        try
-         let spec_sl = structure filenames_spec in
+         let spec_sl = structure ~final:true filenames_spec in
          Backend_testgen_neg.Derive.debug_phantom spec_sl relname includes_p4
            filename_p4 debugdir pid
        with
@@ -831,7 +831,7 @@ let interesting_command =
      and filename_p4 = flag "-p" (required string) ~doc:"P4 program" in
      fun () ->
        try
-         let spec_sim, (module Driver) = runner `SL filenames_spec in
+         let spec_sim, (module Driver) = runner ~final:true `SL filenames_spec in
          let result, cover =
            run_with_dangling
              (module Driver)
@@ -1110,7 +1110,7 @@ let json_ast_command =
        match mode with
        | `Emit -> (
            try
-             let spec_sl = structure filenames in
+             let spec_sl = structure ~final:true filenames in
              let sl_ast_json = Sl.spec_to_yojson spec_sl in
              Yojson.Safe.pretty_print Format.std_formatter sl_ast_json;
              ()
@@ -1158,7 +1158,7 @@ let unparse_json_value_command =
      in
      fun () ->
        try
-         let spec_sl = structure filenames_spec in
+         let spec_sl = structure ~final:true filenames_spec in
          let json = Yojson.Safe.from_file filename_json in
          let value_result = Sl.value_of_yojson json in
          match value_result with
