@@ -11,6 +11,9 @@ module F = Format
 let derive_vid (vdg : Dep.Graph.t) (vid : vid) : VIdSet.t * int VIdMap.t =
   let vids_visited = ref (VIdSet.singleton vid) in
   let depths_visited = ref (VIdMap.singleton vid 0) in
+  let parent_edges_visited : (vid * Dep.Edges.label) VIdMap.t ref =
+    ref VIdMap.empty
+  in
   let vids_queue = Queue.create () in
   Queue.add (vid, 0) vids_queue;
   while not (Queue.is_empty vids_queue) do
@@ -18,15 +21,47 @@ let derive_vid (vdg : Dep.Graph.t) (vid : vid) : VIdSet.t * int VIdMap.t =
     match Dep.Graph.G.find_opt vdg.edges vid_current with
     | Some edges ->
         Dep.Edges.E.iter
-          (fun (_, vid_from) () ->
+          (fun (label, vid_from) () ->
             if not (VIdSet.mem vid_from !vids_visited) then (
               vids_visited := VIdSet.add vid_from !vids_visited;
               depths_visited :=
                 VIdMap.add vid_from (depth_current + 1) !depths_visited;
+              parent_edges_visited :=
+                VIdMap.add vid_from (vid_current, label) !parent_edges_visited;
               Queue.add (vid_from, depth_current + 1) vids_queue))
           edges
     | None -> ()
   done;
+  let path_edges_of_vid vid_target =
+    let rec gather vid_current path_edges =
+      if vid_current = vid then path_edges
+      else
+        match VIdMap.find_opt vid_current !parent_edges_visited with
+        | Some (vid_parent, label) ->
+            gather vid_parent ((vid_parent, label, vid_current) :: path_edges)
+        | None -> path_edges
+    in
+    gather vid_target []
+  in
+  let output_path_edges () =
+    F.printf "Derivation paths from vid %d:\n" vid;
+    VIdMap.iter
+      (fun vid_target depth ->
+        let path_edges = path_edges_of_vid vid_target in
+        let path =
+          path_edges
+          |> List.map (fun (vid_from, label, vid_to) ->
+                 F.asprintf "%d -[%s]-> %d" vid_from
+                   (Dep.Edges.dot_of_label label)
+                   vid_to)
+          |> String.concat " "
+        in
+        F.printf "  vid %d, depth %d: %s\n" vid_target depth path)
+      !depths_visited
+  in
+  (match Sys.getenv_opt "P4SPEC_DERIVE_PATHS" with
+  | Some ("1" | "true" | "TRUE" | "yes" | "YES") -> output_path_edges ()
+  | _ -> ());
   (!vids_visited, !depths_visited)
 
 (* Entry point for deriving close-ASTs *)
@@ -34,6 +69,8 @@ let derive_vid (vdg : Dep.Graph.t) (vid : vid) : VIdSet.t * int VIdMap.t =
 let derive_dangling (iid : iid) (vdg : Dep.Graph.t) (cover : DCov_single.t) :
     (vid * int) list =
   (* Find related values that contributed to the close-miss *)
+  (* dangling premise를 true로 만드는 여러 개의 vid가 존재할 수 있다. *)
+  (* close-miss 했다는 것은 해당 dangling premise를 여러번 true로 만들 수 있기 때문이다. *)
   let vids_related =
     let branch = DCov_single.Cover.find iid cover in
     match branch.status with Hit -> [] | Miss vids_related -> vids_related
@@ -154,98 +191,3 @@ let debug_dangling (spec : spec) (relname : string) (includes_p4 : string list)
                 derivations_source)
         vids_related
 
-let debug_phantom_wasm (spec : spec) (relname : string)
-  (filename_wasm : string) (dirname_debug : string) (pid : pid) : unit =
-let program_result, cover, vdg =
-  let spec = Sim.SL spec in
-  let (module Sim) = Backend_sim.Gen.gen_placeholder () in
-  Sim.init spec;
-  Runner.run_wasm_program_with_dangling_and_vdg ~derive:true
-    (module Sim)
-    spec relname filename_wasm
-in
-match program_result with
-| Fail _| ExpectedFail _ -> print_endline "failed"
-| Pass _ | UnexpectedPass _ ->
-    (* Find related values that contributed to the close-miss *)
-    let vids_related =
-      let branch = DCov_single.Cover.find pid cover in
-      match branch.status with Hit -> [] | Miss vids_related -> vids_related
-    in
-    F.asprintf "Found %d related values" (List.length vids_related)
-    |> print_endline;
-    (* Log if fail to derive a close-AST *)
-    List.iter
-      (fun vid_related ->
-        let vids_visited, depths_visited = derive_vid vdg vid_related in
-        let derivations_source =
-          vids_visited
-          |> VIdSet.filter (fun vid ->
-                  vid |> Dep.Graph.G.find vdg.nodes |> Dep.Node.taint
-                  |> Dep.Node.is_source)
-          |> VIdSet.elements
-          |> List.map (fun vid ->
-                  let depth = VIdMap.find vid depths_visited in
-                  (vid, depth))
-          |> List.sort (fun (_, depth_a) (_, depth_b) ->
-                  Int.compare depth_a depth_b)
-        in
-        let filename_dot =
-          F.asprintf "%s/%s_p%d_v%d.dot" dirname_debug
-            (Util.Filesys.base ~suffix:".wasm" filename_wasm)
-            pid vid_related
-        in
-        let oc_dot = open_out filename_dot in
-        Dep.Graph.dot_of_graph vdg |> output_string oc_dot;
-        close_out oc_dot;
-        let filename_dot_sub =
-          F.asprintf "%s/%s_p%d_v%d_sub.dot" dirname_debug
-            (Util.Filesys.base ~suffix:".wasm" filename_wasm)
-            pid vid_related
-        in
-        let oc_dot_sub = open_out filename_dot_sub in
-        "digraph dependencies {\n" |> output_string oc_dot_sub;
-        VIdSet.iter
-          (fun vid ->
-            let node = Dep.Graph.G.find vdg.nodes vid in
-            let dot = Dep.Node.dot_of_node vid node in
-            dot ^ "\n" |> output_string oc_dot_sub)
-          vids_visited;
-        VIdSet.iter
-          (fun vid ->
-            let edges = Dep.Graph.G.find vdg.edges vid in
-            Dep.Edges.E.iter
-              (fun (label, vid_to) () ->
-                let dot = Dep.Edges.dot_of_edge vid label vid_to in
-                dot ^ "\n" |> output_string oc_dot_sub)
-              edges)
-          vids_visited;
-        "}" |> output_string oc_dot_sub;
-        close_out oc_dot_sub;
-        match derivations_source with
-        | [] ->
-            F.asprintf "Failed to derive close-AST for pid %d" pid
-            |> print_endline
-        | _ ->
-            F.asprintf "Found close-AST for pid %d" pid |> print_endline;
-            let filename_value =
-              F.asprintf "%s/%s_p%d_v%d.value" dirname_debug
-                (Util.Filesys.base ~suffix:".wasm" filename_wasm)
-                pid vid_related
-            in
-            let oc_value = open_out filename_value in
-            let derivations_source =
-              derivations_source
-              |> List.map (fun (vid_source, depth) ->
-                      let value_source =
-                        Dep.Graph.reassemble_graph vdg VIdMap.empty vid_source
-                      in
-                      (vid_source, value_source, depth))
-            in
-            List.iter
-              (fun (vid_source, value_source, depth) ->
-                F.asprintf "/* depth: %d, vid: %d */ %s\n" depth vid_source
-                  (Sl.Print.string_of_value value_source)
-                |> output_string oc_value)
-              derivations_source)
-      vids_related

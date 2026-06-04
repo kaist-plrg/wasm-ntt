@@ -886,27 +886,6 @@ let run_testgen_debug_command =
        | ExternError (at, msg) ->
            Format.printf "%s\n" (string_of_error at msg))
 
-let wasm_run_testgen_debug_command =
-  Core.Command.basic
-    ~summary:"debug close-AST deriver in negative type checker generator for Wasm"
-    (let open Core.Command.Let_syntax in
-     let open Core.Command.Param in
-     let%map filenames_spec =
-       anon (non_empty_sequence_as_list ("filename" %: string))
-     and relname = flag "-rel" (required string) ~doc:"spec relation to run"
-     and filename_wasm = flag "-w" (required string) ~doc:"Wasm program"
-     and debugdir =
-       flag "-debug" (required string) ~doc:"directory for debug files"
-     and pid = flag "-pid" (required int) ~doc:"phantom id to close-miss" in
-     fun () ->
-       try
-         let spec_sl = structure ~final:true filenames_spec in
-         Backend_testgen_neg.Derive.debug_phantom_wasm spec_sl relname filename_wasm debugdir pid
-       with
-       | CommandError msg -> Format.printf "%s\n" msg
-       | ParseError (at, msg) | ElabError (at, msg) ->
-           Format.printf "%s\n" (string_of_error at msg))
-
 let interesting_command =
   Core.Command.basic ~summary:"interestingness test for reducing P4 programs"
     (let open Core.Command.Let_syntax in
@@ -1291,7 +1270,6 @@ let command =
       ("testgen", run_testgen_command);
       ("wasm-testgen", wasm_run_testgen_command);
       ("testgen-dbg", run_testgen_debug_command);
-      ("wasm-testgen-dbg", wasm_run_testgen_debug_command);
       ("interesting", interesting_command);
       (* Splicing *)
       ("splice", splice_command);
