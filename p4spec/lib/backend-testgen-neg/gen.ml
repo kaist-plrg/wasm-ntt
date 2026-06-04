@@ -1093,31 +1093,65 @@ let rec fuzz_loop (fuel : int) (config : Config.t) : Config.t =
     (* Proceed to the next fuel level *)
     fuzz_loop (fuel - 1) config
 
+let fuzz_loopw_once (fuel : int) (config : Config.tw) : unit =
+  (* Create a log for the current fuel *)
+  let logname = F.asprintf "%s/fuel%d.log" config.storage.dirname_log fuel in
+  let log = Logger.init logname in
+  (* Create q query for the current fuel *)
+  let queryname =
+    F.asprintf "%s/fuel%d.query" config.storage.dirname_query fuel
+  in
+  let query = Query.init queryname in
+  (* Fuzz single iteration *)
+  F.asprintf "[F %d] Start fuzzing loop" fuel
+  |> Logger.log config.modes.logmode log;
+  fuzz_phantomsw fuel config log query;
+  let total, hits, coverage = DCov_multi.measure_coverage config.seed.cover in
+  F.asprintf "[F %d] End fuzzing loop with coverage %d/%d (%.2f%%)" fuel hits
+    total coverage
+  |> Logger.log config.modes.logmode log;
+  (* Close the logger *)
+  Logger.close log;
+  (* Close the query *)
+  Query.close query
+
 let rec fuzz_loopw (fuel : int) (config : Config.tw) : Config.tw =
   if fuel = 0 then config
-  else
-    (* Create a log for the current fuel *)
-    let logname = F.asprintf "%s/fuel%d.log" config.storage.dirname_log fuel in
-    let log = Logger.init logname in
-    (* Create q query for the current fuel *)
-    let queryname =
-      F.asprintf "%s/fuel%d.query" config.storage.dirname_query fuel
-    in
-    let query = Query.init queryname in
-    (* Fuzz single iteration *)
-    F.asprintf "[F %d] Start fuzzing loop" fuel
-    |> Logger.log config.modes.logmode log;
-    fuzz_phantomsw fuel config log query;
-    let total, hits, coverage = DCov_multi.measure_coverage config.seed.cover in
-    F.asprintf "[F %d] End fuzzing loop with coverage %d/%d (%.2f%%)" fuel hits
-      total coverage
-    |> Logger.log config.modes.logmode log;
-    (* Close the logger *)
-    Logger.close log;
-    (* Close the query *)
-    Query.close query;
+  else (
+    fuzz_loopw_once fuel config;
     (* Proceed to the next fuel level *)
-    fuzz_loopw (fuel - 1) config
+    fuzz_loopw (fuel - 1) config)
+
+let focus_target_hit (config : Config.tw) : bool =
+  match config.focus with
+  | None -> false
+  | Some focus -> (
+      match DCov_multi.Cover.find_opt focus.pid config.seed.cover with
+      | None -> false
+      | Some branch -> (
+          match branch.status with Hit _ -> true | Miss _ -> false))
+
+let fuzz_loopw_until (timeout : int) (config : Config.tw) : Config.tw =
+  let start = Unix.gettimeofday () in
+  let deadline = start +. float_of_int timeout in
+  let logname = F.asprintf "%s/timeout.log" config.storage.dirname_log in
+  let log = Logger.init logname in
+  F.asprintf "[TIMEOUT] Start focused fuzzing for %d seconds" timeout
+  |> Logger.log config.modes.logmode log;
+  let rec loop fuel =
+    if Unix.gettimeofday () >= deadline then ("timeout reached", fuel - 1)
+    else if focus_target_hit config then ("focus target hit", fuel - 1)
+    else (
+      fuzz_loopw_once fuel config;
+      loop (fuel + 1))
+  in
+  let reason, attempts = loop 1 in
+  let elapsed = Unix.gettimeofday () -. start in
+  F.asprintf "[TIMEOUT] Stop focused fuzzing: %s after %d attempts (%.2fs)"
+    reason attempts elapsed
+  |> Logger.log config.modes.logmode log;
+  Logger.close log;
+  config
 
 (* Entry point to main fuzzing loop *)
 
@@ -1217,8 +1251,8 @@ let wasm_fuzzer_init (spec : spec) (relname : string)
     (dirname_gen : string) (name_campaign : string option)
     (randseed : int option) (logmode : Modes.logmode)
     (bootmode : Modes.bootmode) (mutationmode : Modes.mutationmode)
-    (covermode : Modes.covermode) (focus : Config.wasm_focus option) :
-    Config.tw =
+    (covermode : Modes.covermode) (focus : Config.wasm_focus option)
+    (budget : Config.wasm_budget) : Config.tw =
   (* Name the campaign *)
   let name_campaign =
     match name_campaign with
@@ -1241,7 +1275,7 @@ let wasm_fuzzer_init (spec : spec) (relname : string)
   let logname_init = storage.dirname_log ^ "/init.log" in
   let log_init = Logger.init logname_init in
   (* Log the command line arguments *)
-  F.asprintf "[COMMAND] testgen -gen %s%s%s%s%s" dirname_gen
+  F.asprintf "[COMMAND] testgen -gen %s%s%s%s%s%s" dirname_gen
     (match modes.bootmode with
     | Cold (excludes_p4, dirname_seed_p4) ->
         "-e" ^ String.concat " " excludes_p4 ^ "-cold " ^ dirname_seed_p4
@@ -1255,6 +1289,9 @@ let wasm_fuzzer_init (spec : spec) (relname : string)
     | Some focus ->
         F.asprintf " -focus -pid %d -w %s" focus.pid focus.filename_wasm
     | None -> "")
+    (match budget with
+    | Config.WasmFuel fuel -> F.asprintf " -fuel %d" fuel
+    | Config.WasmTimeout timeout -> F.asprintf " -timeout %d" timeout)
   |> Logger.log modes.logmode log_init;
   (* Create a spec environment *)
   "Loading type definitions from the spec file"
@@ -1294,7 +1331,7 @@ let wasm_fuzzer_init (spec : spec) (relname : string)
   let config = Config.initw ~focus randseed modes specenv storage seed in
   config
 
-let wasm_fuzzer (fuel : int) (spec : spec) (relname : string)
+let wasm_fuzzer (budget : Config.wasm_budget) (spec : spec) (relname : string)
     (dirname_gen : string) (name_campaign : string option)
     (randseed : int option) (logmode : Modes.logmode) (bootmode : Modes.bootmode)
     (mutationmode : Modes.mutationmode) (covermode : Modes.covermode)
@@ -1302,10 +1339,14 @@ let wasm_fuzzer (fuel : int) (spec : spec) (relname : string)
   (* Initialize the fuzzing configuration *)
   let config =
     wasm_fuzzer_init spec relname dirname_gen name_campaign randseed
-      logmode bootmode mutationmode covermode focus
+      logmode bootmode mutationmode covermode focus budget
   in
   (* Call the main fuzzing loop *)
-  let config = fuzz_loopw fuel config in
+  let config =
+    match budget with
+    | Config.WasmFuel fuel -> fuzz_loopw fuel config
+    | Config.WasmTimeout timeout -> fuzz_loopw_until timeout config
+  in
   (* Log the final coverage *)
   let filename_cov = config.storage.dirname_gen ^ "/final.coverage" in
   DCov_multi.log ~filename_cov_opt:(Some filename_cov) config.seed.cover

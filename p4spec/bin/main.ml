@@ -732,7 +732,10 @@ let wasm_run_testgen_command =
      let%map filenames_spec =
        anon (non_empty_sequence_as_list ("filename" %: string))
      and relname = flag "-rel" (required string) ~doc:"relation to run"
-     and fuel = flag "-fuel" (required int) ~doc:"fuel for test generation"
+     and fuel = flag "-fuel" (optional int) ~doc:"fuel for test generation"
+     and timeout =
+       flag "-timeout" (optional int)
+         ~doc:"seconds to run focused Wasm test generation"
      and gendir =
        flag "-gen-dir" (required string)
          ~doc:"directory for generated wasm programs"
@@ -804,7 +807,24 @@ let wasm_run_testgen_command =
                  (CommandError
                     "Error: -pid and -w are only valid with -focus")
          in
-         Backend_testgen_neg.Gen.wasm_fuzzer fuel spec_sl relname gendir
+         let budget =
+           match (fuel, timeout, focus) with
+           | Some _, Some _, _ ->
+               raise
+                 (CommandError
+                    "Error: should specify only one of -fuel or -timeout")
+           | Some fuel, None, _ -> Backend_testgen_neg.Config.WasmFuel fuel
+           | None, Some timeout, Some _ ->
+               if timeout <= 0 then
+                 raise (CommandError "Error: -timeout should be positive")
+               else Backend_testgen_neg.Config.WasmTimeout timeout
+           | None, Some _, None ->
+               raise (CommandError "Error: -timeout is only valid with -focus")
+           | None, None, _ ->
+               raise
+                 (CommandError "Error: should specify either -fuel or -timeout")
+         in
+         Backend_testgen_neg.Gen.wasm_fuzzer budget spec_sl relname gendir
            name_campaign randseed logmode bootmode mutationmode covermode focus
        with
        | CommandError msg -> Format.printf "%s\n" msg

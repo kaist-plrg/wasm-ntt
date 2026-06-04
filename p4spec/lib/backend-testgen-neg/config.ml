@@ -68,6 +68,8 @@ type seed = { mutable cover : DCov_multi.Cover.t }
 
 type wasm_focus = { pid : pid; filename_wasm : string }
 
+type wasm_budget = WasmFuel of int | WasmTimeout of int
+
 type t = {
   rand : int;
   modes : Modes.t;
