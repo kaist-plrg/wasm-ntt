@@ -753,6 +753,12 @@ let wasm_run_testgen_command =
      and strict =
        flag "-strict" no_arg
          ~doc:"cover a new phantom only if it was intended by a mutation"
+     and pid = flag "-pid" (optional int) ~doc:"phantom id to close-miss"
+     and filename_wasm =
+       flag "-w" (optional string) ~doc:"Wasm program to close-miss with"
+     and focus =
+       flag "-focus" no_arg
+         ~doc:"focus on one phantom ID and its close-missing Wasm program"
      in
      fun () ->
        try
@@ -784,8 +790,22 @@ let wasm_run_testgen_command =
            if strict then Backend_testgen_neg.Modes.Strict
            else Backend_testgen_neg.Modes.Relaxed
          in
+         let focus =
+           match (focus, pid, filename_wasm) with
+           | true, Some pid, Some filename_wasm ->
+               Some Backend_testgen_neg.Config.{ pid; filename_wasm }
+           | true, _, _ ->
+               raise
+                 (CommandError
+                    "Error: -focus requires both -pid and -w")
+           | false, None, None -> None
+           | false, _, _ ->
+               raise
+                 (CommandError
+                    "Error: -pid and -w are only valid with -focus")
+         in
          Backend_testgen_neg.Gen.wasm_fuzzer fuel spec_sl relname gendir
-           name_campaign randseed logmode bootmode mutationmode covermode
+           name_campaign randseed logmode bootmode mutationmode covermode focus
        with
        | CommandError msg -> Format.printf "%s\n" msg
        | ParseError (at, msg) | ElabError (at, msg) ->

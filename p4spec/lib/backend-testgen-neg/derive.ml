@@ -11,6 +11,9 @@ module F = Format
 let derive_vid (vdg : Dep.Graph.t) (vid : vid) : VIdSet.t * int VIdMap.t =
   let vids_visited = ref (VIdSet.singleton vid) in
   let depths_visited = ref (VIdMap.singleton vid 0) in
+  let parent_edges_visited : (vid * Dep.Edges.label) VIdMap.t ref =
+    ref VIdMap.empty
+  in
   let vids_queue = Queue.create () in
   Queue.add (vid, 0) vids_queue;
   while not (Queue.is_empty vids_queue) do
@@ -18,15 +21,47 @@ let derive_vid (vdg : Dep.Graph.t) (vid : vid) : VIdSet.t * int VIdMap.t =
     match Dep.Graph.G.find_opt vdg.edges vid_current with
     | Some edges ->
         Dep.Edges.E.iter
-          (fun (_, vid_from) () ->
+          (fun (label, vid_from) () ->
             if not (VIdSet.mem vid_from !vids_visited) then (
               vids_visited := VIdSet.add vid_from !vids_visited;
               depths_visited :=
                 VIdMap.add vid_from (depth_current + 1) !depths_visited;
+              parent_edges_visited :=
+                VIdMap.add vid_from (vid_current, label) !parent_edges_visited;
               Queue.add (vid_from, depth_current + 1) vids_queue))
           edges
     | None -> ()
   done;
+  let path_edges_of_vid vid_target =
+    let rec gather vid_current path_edges =
+      if vid_current = vid then path_edges
+      else
+        match VIdMap.find_opt vid_current !parent_edges_visited with
+        | Some (vid_parent, label) ->
+            gather vid_parent ((vid_parent, label, vid_current) :: path_edges)
+        | None -> path_edges
+    in
+    gather vid_target []
+  in
+  let output_path_edges () =
+    F.printf "Derivation paths from vid %d:\n" vid;
+    VIdMap.iter
+      (fun vid_target depth ->
+        let path_edges = path_edges_of_vid vid_target in
+        let path =
+          path_edges
+          |> List.map (fun (vid_from, label, vid_to) ->
+                 F.asprintf "%d -[%s]-> %d" vid_from
+                   (Dep.Edges.dot_of_label label)
+                   vid_to)
+          |> String.concat " "
+        in
+        F.printf "  vid %d, depth %d: %s\n" vid_target depth path)
+      !depths_visited
+  in
+  (match Sys.getenv_opt "P4SPEC_DERIVE_PATHS" with
+  | Some ("1" | "true" | "TRUE" | "yes" | "YES") -> output_path_edges ()
+  | _ -> ());
   (!vids_visited, !depths_visited)
 
 (* Entry point for deriving close-ASTs *)
@@ -34,6 +69,8 @@ let derive_vid (vdg : Dep.Graph.t) (vid : vid) : VIdSet.t * int VIdMap.t =
 let derive_phantom (pid : pid) (vdg : Dep.Graph.t) (cover : DCov_single.t) :
     (vid * int) list =
   (* Find related values that contributed to the close-miss *)
+  (* dangling premise를 true로 만드는 여러 개의 vid가 존재할 수 있다. *)
+  (* close-miss 했다는 것은 해당 dangling premise를 여러번 true로 만들 수 있기 때문이다. *)
   let vids_related =
     let branch = DCov_single.Cover.find pid cover in
     match branch.status with Hit -> [] | Miss vids_related -> vids_related
@@ -191,7 +228,7 @@ match program_result with
         in
         let filename_dot =
           F.asprintf "%s/%s_p%d_v%d.dot" dirname_debug
-            (Util.Filesys.base ~suffix:".wasm" filename_wasm)
+            (Util.Filesys.base ~suffix:".wast" filename_wasm)
             pid vid_related
         in
         let oc_dot = open_out filename_dot in
@@ -199,7 +236,7 @@ match program_result with
         close_out oc_dot;
         let filename_dot_sub =
           F.asprintf "%s/%s_p%d_v%d_sub.dot" dirname_debug
-            (Util.Filesys.base ~suffix:".wasm" filename_wasm)
+            (Util.Filesys.base ~suffix:".wast" filename_wasm)
             pid vid_related
         in
         let oc_dot_sub = open_out filename_dot_sub in

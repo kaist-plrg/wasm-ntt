@@ -21,7 +21,7 @@ let samples_related_vid = 10
 let samples_derivation_source = 10
 
 (* Max number of mutation trials per close-AST *)
-let trials_mutation = 5
+let trials_mutation = 10
 
 (* Trials per seed *)
 let trials_seed = 50
@@ -66,6 +66,8 @@ type seed = { mutable cover : DCov_multi.Cover.t }
 
 (* Configuration for the fuzz campaign *)
 
+type wasm_focus = { pid : pid; filename_wasm : string }
+
 type t = {
   rand : int;
   modes : Modes.t;
@@ -80,6 +82,7 @@ type tw = {
   specenv : wasm_specenv;
   storage : storage;
   seed : seed;
+  focus : wasm_focus option;
 }
 
 (* Load mixop groups into the environment *)
@@ -234,11 +237,12 @@ let init (randseed : int option) (modes : Modes.t) (specenv : specenv)
   { rand; modes; specenv; storage; seed }
 
 
-let initw (randseed : int option) (modes : Modes.t) (specenv : wasm_specenv)
-    (storage : storage) (seed : seed) : tw =
+let initw ?(focus : wasm_focus option = None) (randseed : int option)
+    (modes : Modes.t) (specenv : wasm_specenv) (storage : storage)
+    (seed : seed) : tw =
   let rand = Option.value ~default:2026 randseed in
   Random.init rand;
-  { rand; modes; specenv; storage; seed }
+  { rand; modes; specenv; storage; seed; focus }
 
 (* Seed updater *)
 

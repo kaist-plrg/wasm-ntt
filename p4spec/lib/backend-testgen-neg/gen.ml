@@ -549,6 +549,7 @@ let fuzz_derivationsw (fuel : int) (pid : pid) (idx_seed : int)
     (trials : int ref) (config : Config.tw) (log : Logger.t) (query : Query.t)
     (dirname_gen_tmp : string) (filename_wasm : string) (vdg : Dep.Graph.t)
     (derivations_source : (vid * int) list) : unit =
+    (* depth가 낮은 순서대로 mutate를 시도한다. *)
   List.iteri
     (fun idx_derivation (vid_source, depth) ->
       if
@@ -1016,9 +1017,15 @@ let fuzz_phantomw (fuel : int) (pid : pid) (config : Config.tw) (log : Logger.t)
     ^ string_of_int pid
   in
   Util.Filesys.mkdir dirname_gen_tmp;
-  (* Randomly sample N close-miss filenames *)
+  (* Randomly sample N close-miss filenames, unless focus mode pins one seed. *)
   let filenames_wasm =
-    Rand.random_sample Config.samples_close_miss filenames_wasm
+    match config.focus with
+    | Some focus when focus.pid = pid ->
+        F.asprintf "[F %d] [P %d] Focus mode using seed %s" fuel pid
+          focus.filename_wasm
+        |> Logger.log config.modes.logmode log;
+        [ focus.filename_wasm ]
+    | _ -> Rand.random_sample Config.samples_close_miss filenames_wasm
   in
   (* Generate tests from the files *)
   (try fuzz_seedsw fuel pid config log query dirname_gen_tmp filenames_wasm
@@ -1031,15 +1038,32 @@ let fuzz_phantomw (fuel : int) (pid : pid) (config : Config.tw) (log : Logger.t)
 
 let fuzz_phantomsw (fuel : int) (config : Config.tw) (log : Logger.t)
     (query : Query.t) : unit =
-  let pids = DCov_multi.Cover.dom config.seed.cover in
-  PIdSet.iter
-    (fun pid ->
-      let branch = DCov_multi.Cover.find pid config.seed.cover in
-      match branch.status with
-      | Hit _ -> ()
-      | Miss [] -> ()
-      | Miss filenames_wasm -> fuzz_phantomw fuel pid config log query filenames_wasm)
-    pids
+  match config.focus with
+  | Some focus -> (
+      match DCov_multi.Cover.find_opt focus.pid config.seed.cover with
+      | None ->
+          F.asprintf "[F %d] [P %d] Focus target is not in seed coverage"
+            fuel focus.pid
+          |> Logger.warn config.modes.logmode log
+      | Some branch -> (
+          match branch.status with
+          | Hit _ ->
+              F.asprintf "[F %d] [P %d] Focus target is already hit" fuel
+                focus.pid
+              |> Logger.log config.modes.logmode log
+          | Miss _ ->
+              fuzz_phantomw fuel focus.pid config log query [ focus.filename_wasm ]))
+  | None ->
+      let pids = DCov_multi.Cover.dom config.seed.cover in
+      PIdSet.iter
+        (fun pid ->
+          let branch = DCov_multi.Cover.find pid config.seed.cover in
+          match branch.status with
+          | Hit _ -> ()
+          | Miss [] -> ()
+          | Miss filenames_wasm ->
+              fuzz_phantomw fuel pid config log query filenames_wasm)
+        pids
 
 (* Fuzzing in a loop with fuel *)
 
@@ -1193,7 +1217,8 @@ let wasm_fuzzer_init (spec : spec) (relname : string)
     (dirname_gen : string) (name_campaign : string option)
     (randseed : int option) (logmode : Modes.logmode)
     (bootmode : Modes.bootmode) (mutationmode : Modes.mutationmode)
-    (covermode : Modes.covermode) : Config.tw =
+    (covermode : Modes.covermode) (focus : Config.wasm_focus option) :
+    Config.tw =
   (* Name the campaign *)
   let name_campaign =
     match name_campaign with
@@ -1216,7 +1241,7 @@ let wasm_fuzzer_init (spec : spec) (relname : string)
   let logname_init = storage.dirname_log ^ "/init.log" in
   let log_init = Logger.init logname_init in
   (* Log the command line arguments *)
-  F.asprintf "[COMMAND] testgen -gen %s%s%s%s" dirname_gen
+  F.asprintf "[COMMAND] testgen -gen %s%s%s%s%s" dirname_gen
     (match modes.bootmode with
     | Cold (excludes_p4, dirname_seed_p4) ->
         "-e" ^ String.concat " " excludes_p4 ^ "-cold " ^ dirname_seed_p4
@@ -1226,6 +1251,10 @@ let wasm_fuzzer_init (spec : spec) (relname : string)
     | Derive -> ""
     | Hybrid -> " -hybrid")
     (match modes.covermode with Strict -> " -strict" | Relaxed -> "")
+    (match focus with
+    | Some focus ->
+        F.asprintf " -focus -pid %d -w %s" focus.pid focus.filename_wasm
+    | None -> "")
   |> Logger.log modes.logmode log_init;
   (* Create a spec environment *)
   "Loading type definitions from the spec file"
@@ -1262,17 +1291,18 @@ let wasm_fuzzer_init (spec : spec) (relname : string)
   |> Logger.log modes.logmode log_init;
   Logger.close log_init;
   (* Create a configuration *)
-  let config = Config.initw randseed modes specenv storage seed in
+  let config = Config.initw ~focus randseed modes specenv storage seed in
   config
 
 let wasm_fuzzer (fuel : int) (spec : spec) (relname : string)
     (dirname_gen : string) (name_campaign : string option)
     (randseed : int option) (logmode : Modes.logmode) (bootmode : Modes.bootmode)
-    (mutationmode : Modes.mutationmode) (covermode : Modes.covermode) : unit =
+    (mutationmode : Modes.mutationmode) (covermode : Modes.covermode)
+    (focus : Config.wasm_focus option) : unit =
   (* Initialize the fuzzing configuration *)
   let config =
     wasm_fuzzer_init spec relname dirname_gen name_campaign randseed
-      logmode bootmode mutationmode covermode
+      logmode bootmode mutationmode covermode focus
   in
   (* Call the main fuzzing loop *)
   let config = fuzz_loopw fuel config in
