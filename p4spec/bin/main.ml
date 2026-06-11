@@ -1007,6 +1007,37 @@ let parse_command =
        | Interface.Lexer.Error msg -> Format.printf "Lexer error: %s\n" msg
        | e -> Format.printf "Unknown error: %s\n" (Printexc.to_string e))
 
+let unparse_wasm_value (parsed_wasm_file : Il.value) : string =
+  parsed_wasm_file
+  |> Wasm_interface.Deconstruct.sl_to_list
+       Wasm_interface.Deconstruct.sl_to_module
+  |> List.map (fun wasm_module ->
+         (wasm_module, [])
+         |> Wasm_interpreter.Arrange.module_with_custom
+         |> Wasm_interpreter.Sexpr.to_string 80)
+  |> String.concat "\n"
+
+let rec ensure_directory (dirname : string) : unit =
+  if dirname = "" || dirname = "." then ()
+  else if Sys.file_exists dirname then (
+    let stats = Unix.stat dirname in
+    if stats.st_kind <> Unix.S_DIR then
+      raise (CommandError (dirname ^ " exists but is not a directory")))
+  else (
+    let dirname_parent = Filename.dirname dirname in
+    if dirname_parent <> dirname then ensure_directory dirname_parent;
+    Unix.mkdir dirname 0o755)
+
+let write_preprocessed_wasm ~(filename_out : string) (contents : string) :
+    string =
+  ensure_directory (Filename.dirname filename_out);
+  let oc = open_out filename_out in
+  output_string oc contents;
+  if contents = "" || contents.[String.length contents - 1] <> '\n' then
+    output_char oc '\n';
+  close_out oc;
+  filename_out
+
 let wasm_parse_command =
   Core.Command.basic ~summary:"parse a Wasm program"
     (let open Core.Command.Let_syntax in
@@ -1014,17 +1045,27 @@ let wasm_parse_command =
      let%map filename_wasm = flag "-p" (required string) ~doc:"Wasm program"
      and roundtrip =
        flag "-r" no_arg ~doc:"perform a round-trip parse/unparse"
+     and preprocess =
+       flag "-preprocess" (optional string)
+         ~doc:
+           "FILE write parsed/unparsed Wasm with implicit function types made \
+            explicit"
      in
      fun () ->
        try
          let (parsed_wasm_file, _) =
            Wasm_interface.Parse.parse_file filename_wasm
          in
-         let unparsed_wasm_string =
-           (List.hd (Wasm_interface.Deconstruct.sl_to_list Wasm_interface.Deconstruct.sl_to_module parsed_wasm_file), [])
-           |> Wasm_interpreter.Arrange.module_with_custom
-           |> Wasm_interpreter.Sexpr.to_string 80
-         in
+         Format.printf "parsed_wasm_file:\n%s\n%!"
+           (Il.Print.string_of_value parsed_wasm_file);
+         let unparsed_wasm_string = unparse_wasm_value parsed_wasm_file in
+         (match preprocess with
+         | Some filename_out ->
+             let filename_out =
+               write_preprocessed_wasm ~filename_out unparsed_wasm_string
+             in
+             Format.printf "Wrote preprocessed Wasm to %s\n%!" filename_out
+         | None -> ());
          if roundtrip then
            let parsed_wasm_string =
              Wasm_interpreter.Parse.Module.parse_string unparsed_wasm_string
@@ -1039,7 +1080,7 @@ let wasm_parse_command =
            |> (fun b ->
                 if b then "Roundtrip successful" else "Roundtrip failed")
            |> print_endline
-         else unparsed_wasm_string |> print_endline
+         else ()
        with
        | Sys_error msg -> Format.printf "File error: %s\n" msg
        | ElabError (at, msg) ->
