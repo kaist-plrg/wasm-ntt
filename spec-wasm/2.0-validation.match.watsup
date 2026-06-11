@@ -96,6 +96,7 @@ def $match_functype(dt*, FuncT t_1* t_2*, FuncT t_1'* t_2'*) = $match_resulttype
 def $match_resulttype(dt*, t_1* , t_2*) = true
   -- if |t_1*| = |t_2*|
   -- (if $match_valtype(dt*, t_1, t_2))*
+def $match_resulttype(dt*, _, _) = false  -- otherwise
 
 def $match_fieldtype(dt*, FieldT mut_1 zt_1, FieldT mut_2 zt_2) = true
   -- if mut_1 = mut_2 /\ $match_storagetype(dt*, zt_1, zt_2) /\
