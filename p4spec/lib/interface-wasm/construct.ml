@@ -593,8 +593,7 @@ let il_of_int i =
 let il_of_int64 i64 =
   wrap_num_v_int (bigint_of_z_int (Z.of_int64_unsigned i64))
 
-let il_of_void () =
-  wrap_struct_v "void" []
+let il_of_void () = [ Term "VOID" ] #@ "void"
 
 let il_of_extension = function
   | Pack.SX -> [ Term "SX" ] #@ "extension"
