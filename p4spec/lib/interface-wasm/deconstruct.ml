@@ -230,7 +230,7 @@ and sl_to_int64 (value: Value.t) : int64 = sl_to_z_int value |> z_to_intN Z.to_i
 
 and sl_to_void (value: Value.t) : unit =
   match value.it with
-  | StructV [] -> ()
+  | CaseV ([[{ it = Atom "VOID"; _ }]], []) -> ()
   | _ -> failwith "Expected void"
 
 and sl_to_select_type_opt (value: Value.t) : Types.val_type list option = sl_to_opt (sl_to_list sl_to_val_type) value
