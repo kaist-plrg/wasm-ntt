@@ -1115,13 +1115,6 @@ let fuzz_loopw_once (fuel : int) (config : Config.tw) : unit =
   (* Close the query *)
   Query.close query
 
-let rec fuzz_loopw (fuel : int) (config : Config.tw) : Config.tw =
-  if fuel = 0 then config
-  else (
-    fuzz_loopw_once fuel config;
-    (* Proceed to the next fuel level *)
-    fuzz_loopw (fuel - 1) config)
-
 let focus_target_hit (config : Config.tw) : bool =
   match config.focus with
   | None -> false
@@ -1130,6 +1123,15 @@ let focus_target_hit (config : Config.tw) : bool =
       | None -> false
       | Some branch -> (
           match branch.status with Hit _ -> true | Miss _ -> false))
+
+let rec fuzz_loopw (fuel : int) (config : Config.tw) : Config.tw =
+  if fuel = 0 then config
+  else (
+    fuzz_loopw_once fuel config;
+    if focus_target_hit config then config
+    else
+      (* Proceed to the next fuel level *)
+      fuzz_loopw (fuel - 1) config)
 
 let fuzz_loopw_until (timeout : int) (config : Config.tw) : Config.tw =
   let start = Unix.gettimeofday () in
