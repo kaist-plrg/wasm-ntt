@@ -43,17 +43,17 @@ and gen_from_typ' (depth : int) (tdenv : TDEnv.t) (texts : value' list)
   | NumT `NatT ->
       [
         NumV (`Nat (Bigint.of_int 1));
-        NumV (`Nat (Bigint.of_int 4));
-        NumV (`Nat (Bigint.of_int 6));
-        NumV (`Nat (Bigint.of_int 8));
+        NumV (`Nat (Bigint.of_int 32));
+        NumV (`Nat (Bigint.of_int 65536));
+        NumV (`Nat (Bigint.of_int 4294967296));
       ]
       |> Rand.random_select |> wrap_value_opt typ.it
   | NumT `IntT ->
       [
-        NumV (`Int (Bigint.of_int (-2)));
+        NumV (`Int (Bigint.of_int (-16)));
         NumV (`Int (Bigint.of_int 0));
-        NumV (`Int (Bigint.of_int 2));
-        NumV (`Int (Bigint.of_int 3));
+        NumV (`Int (Bigint.of_int 65536));
+        NumV (`Int (Bigint.of_int 4294967296));
       ]
       |> Rand.random_select |> wrap_value_opt typ.it
   | TextT -> texts |> Rand.random_select |> wrap_value_opt typ.it
