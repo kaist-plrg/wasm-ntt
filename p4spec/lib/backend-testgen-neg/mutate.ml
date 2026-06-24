@@ -617,30 +617,26 @@ let tinit_with_ref_null (tinit : value) (heaptype : value) : value option =
   let instr = ref_null_instr typ_instr heaptype in
   ListV [ instr ] |> wrap_value tinit.note.typ |> Option.some
 
-let mutate_table_reftype (tdenv : TDEnv.t) (texts : value' list)
-    (nums : num_context) (table : value) : value option =
-  let* valuefields = table_valuefields table in
-  let* ttype = find_valuefield "TTYPE" valuefields in
-  let* tinit = find_valuefield "TINIT" valuefields in
-  let* mixop_tabletype, addrtype, limits, reftype =
-    tabletype_components ttype
-  in
-  let* null, _ = reftype_components reftype in
-  if not (is_null_value null) then None
-  else
-    let* reftype_new, heaptype_new =
-      gen_nullable_reftype tdenv texts nums reftype
-    in
-    let ttype_new =
-      CaseV (mixop_tabletype, [ addrtype; limits; reftype_new ])
-      |> wrap_value ttype.note.typ
-    in
-    let* tinit_new = tinit_with_ref_null tinit heaptype_new in
-    valuefields
-    |> update_valuefield "TTYPE" ttype_new
-    |> update_valuefield "TINIT" tinit_new
-    |> fun valuefields -> StructV valuefields |> wrap_value table.note.typ
-    |> Option.some
+let rec sequence_options (values : 'a option list) : 'a list option =
+  match values with
+  | [] -> Some []
+  | value_opt :: values_opt ->
+      let* value = value_opt in
+      let* values = sequence_options values_opt in
+      Some (value :: values)
+
+let list_items (value : value) : value list option =
+  match value.it with ListV values -> Some values | _ -> None
+
+let replace_list_item (idx_target : int) (f : value -> value option)
+    (values : value list) : value list option =
+  values
+  |> List.mapi (fun idx value ->
+         if idx = idx_target then f value else Some value)
+  |> sequence_options
+
+let list_with_items (list_value : value) (values : value list) : value =
+  ListV values |> wrap_value list_value.note.typ
 
 let table_reftype (table : value) : value option =
   let* valuefields = table_valuefields table in
@@ -648,11 +644,237 @@ let table_reftype (table : value) : value option =
   let* _, _, _, reftype = tabletype_components ttype in
   Some reftype
 
-let find_table_containing_reftype (vid_target : vid) (value : value) :
+let tabletype_with_reftype (ttype : value) (reftype_new : value) :
+    value option =
+  let* mixop_tabletype, addrtype, limits, _ = tabletype_components ttype in
+  CaseV (mixop_tabletype, [ addrtype; limits; reftype_new ])
+  |> wrap_value ttype.note.typ |> Option.some
+
+let table_with_reftype (table : value) (reftype_new : value)
+    (heaptype_new : value) : value option =
+  let* valuefields = table_valuefields table in
+  let* ttype = find_valuefield "TTYPE" valuefields in
+  let* tinit = find_valuefield "TINIT" valuefields in
+  let* ttype_new = tabletype_with_reftype ttype reftype_new in
+  let* tinit_new = tinit_with_ref_null tinit heaptype_new in
+  valuefields
+  |> update_valuefield "TTYPE" ttype_new
+  |> update_valuefield "TINIT" tinit_new
+  |> fun valuefields -> StructV valuefields |> wrap_value table.note.typ
+  |> Option.some
+
+let module_valuefields (value : value) : valuefield list option =
+  match (value.note.typ, value.it) with
+  | VarT ({ it = "module"; _ }, _), StructV valuefields -> Some valuefields
+  | _ -> None
+
+let import_valuefields (value : value) : valuefield list option =
+  match (value.note.typ, value.it) with
+  | VarT ({ it = "import"; _ }, _), StructV valuefields -> Some valuefields
+  | _ -> None
+
+let elem_valuefields (value : value) : valuefield list option =
+  match (value.note.typ, value.it) with
+  | VarT ({ it = "elem"; _ }, _), StructV valuefields -> Some valuefields
+  | _ -> None
+
+let importdesc_tabletype (idesc : value) : (mixop * value) option =
+  match idesc.it with
+  | CaseV
+      (( ({ it = Domain.Atom.Atom "TableImport"; _ } :: _) :: _ as mixop),
+       [ ttype ] )
+    ->
+      Some (mixop, ttype)
+  | _ -> None
+
+let import_table_reftype (import : value) : value option =
+  let* valuefields = import_valuefields import in
+  let* idesc = find_valuefield "IDESC" valuefields in
+  let* _, ttype = importdesc_tabletype idesc in
+  let* _, _, _, reftype = tabletype_components ttype in
+  Some reftype
+
+let import_with_table_reftype (import : value) (reftype_new : value) :
+    value option =
+  let* valuefields = import_valuefields import in
+  let* idesc = find_valuefield "IDESC" valuefields in
+  let* mixop_importdesc, ttype = importdesc_tabletype idesc in
+  let* ttype_new = tabletype_with_reftype ttype reftype_new in
+  let idesc_new =
+    CaseV (mixop_importdesc, [ ttype_new ]) |> wrap_value idesc.note.typ
+  in
+  valuefields
+  |> update_valuefield "IDESC" idesc_new
+  |> fun valuefields -> StructV valuefields |> wrap_value import.note.typ
+  |> Option.some
+
+let int_of_nat_value (value : value) : int option =
+  match value.it with
+  | NumV (`Nat value) -> (
+      try Some (Bigint.to_int_exn value) with _ -> None)
+  | _ -> None
+
+let active_elem_index (elem : value) : int option =
+  let* valuefields = elem_valuefields elem in
+  let* emode = find_valuefield "EMODE" valuefields in
+  match emode.it with
+  | CaseV (({ it = Domain.Atom.Atom "Active"; _ } :: _) :: _, [ active ])
+    -> (
+      match active.it with
+      | StructV valuefields_active ->
+          let* index = find_valuefield "INDEX" valuefields_active in
+          int_of_nat_value index
+      | _ -> None)
+  | _ -> None
+
+let einit_with_ref_nulls (einit : value) (heaptype_new : value) :
+    value option =
+  let* consts = list_items einit in
+  consts
+  |> List.map (fun const -> tinit_with_ref_null const heaptype_new)
+  |> sequence_options |> Option.map (list_with_items einit)
+
+let elem_with_reftype (elem : value) (reftype_new : value)
+    (heaptype_new : value) : value option =
+  let* valuefields = elem_valuefields elem in
+  let* _ = find_valuefield "ETYPE" valuefields in
+  let* einit = find_valuefield "EINIT" valuefields in
+  let* einit_new = einit_with_ref_nulls einit heaptype_new in
+  valuefields
+  |> update_valuefield "ETYPE" reftype_new
+  |> update_valuefield "EINIT" einit_new
+  |> fun valuefields -> StructV valuefields |> wrap_value elem.note.typ
+  |> Option.some
+
+type table_index_origin = ImportedTable of int | DefinedTable of int
+
+type table_index_entry = {
+  tableidx : int;
+  origin : table_index_origin;
+  reftype : value;
+}
+
+type module_table_context = {
+  valuefields_module : valuefield list;
+  imports_value : value;
+  imports : value list;
+  tables_value : value;
+  tables : value list;
+  elems_value : value;
+  elems : value list;
+  table_index_space : table_index_entry list;
+}
+
+let build_table_index_space (imports : value list) (tables : value list) :
+    table_index_entry list =
+  let next_tableidx = ref 0 in
+  let imports_table =
+    imports
+    |> List.mapi (fun import_pos import ->
+           match import_table_reftype import with
+           | None -> None
+           | Some reftype ->
+               let tableidx = !next_tableidx in
+               incr next_tableidx;
+               Some
+                 {
+                   tableidx;
+                   origin = ImportedTable import_pos;
+                   reftype;
+                 })
+    |> List.filter_map Fun.id
+  in
+  let tables_defined =
+    tables
+    |> List.mapi (fun table_pos table ->
+           let tableidx = !next_tableidx in
+           incr next_tableidx;
+           let* reftype = table_reftype table in
+           Some { tableidx; origin = DefinedTable table_pos; reftype })
+    |> List.filter_map Fun.id
+  in
+  imports_table @ tables_defined
+
+let module_table_context (module_ : value) : module_table_context option =
+  let* valuefields = module_valuefields module_ in
+  let* imports_value = find_valuefield "IMPORTS" valuefields in
+  let* tables_value = find_valuefield "TABLES" valuefields in
+  let* elems_value = find_valuefield "ELEMS" valuefields in
+  let* imports = list_items imports_value in
+  let* tables = list_items tables_value in
+  let* elems = list_items elems_value in
+  {
+    valuefields_module = valuefields;
+    imports_value;
+    imports;
+    tables_value;
+    tables;
+    elems_value;
+    elems;
+    table_index_space = build_table_index_space imports tables;
+  }
+  |> Option.some
+
+let find_table_index_entry (vid_target : vid)
+    (entries : table_index_entry list) : table_index_entry option =
+  entries
+  |> List.find_opt (fun entry -> value_contains_vid vid_target entry.reftype)
+
+let mutate_module_table_reftype (tdenv : TDEnv.t) (texts : value' list)
+    (nums : num_context) (vid_target : vid) (module_ : value) : value option =
+  let* ctx = module_table_context module_ in
+  let* entry = find_table_index_entry vid_target ctx.table_index_space in
+  let* reftype_new, heaptype_new =
+    gen_nullable_reftype tdenv texts nums entry.reftype
+  in
+  let* imports_new, tables_new =
+    match entry.origin with
+    | ImportedTable import_pos ->
+        let* imports_new =
+          replace_list_item import_pos
+            (fun import -> import_with_table_reftype import reftype_new)
+            ctx.imports
+        in
+        Some (imports_new, ctx.tables)
+    | DefinedTable table_pos ->
+        let* tables_new =
+          replace_list_item table_pos
+            (fun table -> table_with_reftype table reftype_new heaptype_new)
+            ctx.tables
+        in
+        Some (ctx.imports, tables_new)
+  in
+  let* elems_new =
+    ctx.elems
+    |> List.map (fun elem ->
+           match active_elem_index elem with
+           | Some tableidx when Int.equal tableidx entry.tableidx ->
+               elem_with_reftype elem reftype_new heaptype_new
+           | _ -> Some elem)
+    |> sequence_options
+  in
+  ctx.valuefields_module
+  |> update_valuefield "IMPORTS"
+       (list_with_items ctx.imports_value imports_new)
+  |> update_valuefield "TABLES" (list_with_items ctx.tables_value tables_new)
+  |> update_valuefield "ELEMS" (list_with_items ctx.elems_value elems_new)
+  |> fun valuefields -> StructV valuefields |> wrap_value module_.note.typ
+  |> Option.some
+
+let module_contains_table_reftype_vid (vid_target : vid) (module_ : value) :
+    bool =
+  match module_table_context module_ with
+  | None -> false
+  | Some ctx ->
+      Option.is_some
+        (find_table_index_entry vid_target ctx.table_index_space)
+
+let find_module_containing_table_reftype (vid_target : vid) (value : value) :
     value option =
   let rec walk (value : value) : value option =
-    match table_reftype value with
-    | Some reftype when value_contains_vid vid_target reftype -> Some value
+    match module_valuefields value with
+    | Some _ when module_contains_table_reftype_vid vid_target value ->
+        Some value
     | _ -> (
         match value.it with
         | BoolV _ | NumV _ | TextV _ | FuncV _ | ExternV _ -> None
@@ -840,12 +1062,15 @@ let mutatew (tdenv : TDEnv.t) (mixopenv : MixopEnv.t) (texts : value' list)
     in
     (kind, value_to_mutate_concrete, value_mutated) |> Option.some
   in
-  match find_table_containing_reftype vid_to_mutate value_program with
-  | Some table -> (
-      let table_concrete = patch_program tdenv table value_program in
-      match mutate_table_reftype tdenv texts nums table_concrete with
-      | Some table_mutated ->
-          (MutateTableRefType, table_concrete, table_mutated) |> Option.some
+  match find_module_containing_table_reftype vid_to_mutate value_program with
+  | Some module_ -> (
+      let module_concrete = patch_program tdenv module_ value_program in
+      match
+        mutate_module_table_reftype tdenv texts nums vid_to_mutate
+          module_concrete
+      with
+      | Some module_mutated ->
+          (MutateTableRefType, module_concrete, module_mutated) |> Option.some
       | None -> None)
   | None -> mutate_generic ()
 
