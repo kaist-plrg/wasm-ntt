@@ -85,7 +85,7 @@ syntax vibinop =
   | Add | Sub | Mul | MinS | MinU | MaxS | MaxU | AvgrU
   | AddSatS | AddSatU | SubSatS | SubSatU | DotS | Q15MulRSatS
   | ExtMulLowS | ExtMulHighS | ExtMulLowU | ExtMulHighU
-  | Swizzle | Shuffle int* | NarrowS | NarrowU
+  | Swizzle | Shuffle nat* | NarrowS | NarrowU
   | RelaxedSwizzle | RelaxedQ15MulRS | RelaxedDot
 syntax vfbinop =
   | Add | Sub | Mul | Div | Min | Max | Pmin | Pmax

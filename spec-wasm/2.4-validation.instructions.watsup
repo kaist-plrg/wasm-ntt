@@ -21,7 +21,7 @@ rule Unop_ok/i64:
 rule Unop_ok/else:
   |- uop : OK
 
-dec $check_lane_index(int*) : bool
+dec $check_lane_index(nat*) : bool
 def $check_lane_index(i_1 :: i*) = false
   -- if $(i_1 >= 32)
 def $check_lane_index(i_1 :: i*) = $check_lane_index(i*)
