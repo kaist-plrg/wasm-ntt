@@ -11,12 +11,13 @@ module Mixop = Domain.Mixop
 
 (* Kinds of mutations *)
 
-type kind = GenFromTyp | MutateList | MixopGroup
+type kind = GenFromTyp | MutateList | MixopGroup | MutateTableRefType
 
 let string_of_kind = function
   | GenFromTyp -> "GenFromTyp"
   | MutateList -> "MutateList"
   | MixopGroup -> "MixopGroup"
+  | MutateTableRefType -> "MutateTableRefType"
 
 (* Option monad *)
 
@@ -209,7 +210,7 @@ and gen_from_typ' (depth : int) (tdenv : TDEnv.t) (texts : value' list)
                 if String.equal tid.it "vibinop" then
                   List.filter
                     (fun (mixop, _) ->
-                      mixop_starts_with_atom (Atom "Shuffle") mixop)
+                      mixop_starts_with_atom (Domain.Atom.Atom "Shuffle") mixop)
                     nottyps'
                 else nottyps'
               in
