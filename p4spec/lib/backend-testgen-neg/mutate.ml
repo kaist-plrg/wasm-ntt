@@ -8,12 +8,13 @@ open Util.Source
 
 (* Kinds of mutations *)
 
-type kind = GenFromTyp | MutateList | MixopGroup
+type kind = GenFromTyp | MutateList | MixopGroup | MutateTableRefType
 
 let string_of_kind = function
   | GenFromTyp -> "GenFromTyp"
   | MutateList -> "MutateList"
   | MixopGroup -> "MixopGroup"
+  | MutateTableRefType -> "MutateTableRefType"
 
 (* Option monad *)
 
@@ -208,7 +209,7 @@ and gen_from_typ' (depth : int) (tdenv : TDEnv.t) (texts : value' list)
                 if String.equal tid.it "vibinop" then
                   List.filter
                     (fun (mixop, _) ->
-                      mixop_starts_with_atom (Atom "Shuffle") mixop)
+                      mixop_starts_with_atom (Domain.Atom.Atom "Shuffle") mixop)
                     nottyps'
                 else nottyps'
               in
@@ -517,6 +518,155 @@ let rec choose_one (l : 'a option list) : 'a option =
   | Some a :: _ -> Some a
   | None :: t -> choose_one t
 
+(* Table reftype mutation *)
+
+let atom_named (name : string) (atom : atom) : bool =
+  Atom.eq atom.it (Domain.Atom.Atom name)
+
+let wrap_atom_named (name : string) : atom =
+  (Domain.Atom.Atom name) $ no_region
+
+let wrap_case_named (typ : typ') (mixop_names : string list list)
+    (values : value list) : value =
+  let mixop = List.map (List.map wrap_atom_named) mixop_names in
+  CaseV (mixop, values) |> wrap_value typ
+
+let rec value_contains_vid (vid_target : vid) (value : value) : bool =
+  value.note.vid = vid_target
+  ||
+  match value.it with
+  | BoolV _ | NumV _ | TextV _ | FuncV _ | ExternV _ -> false
+  | StructV valuefields ->
+      List.exists
+        (fun (_, value_inner) -> value_contains_vid vid_target value_inner)
+        valuefields
+  | CaseV (_, values) | TupleV values | ListV values ->
+      List.exists (value_contains_vid vid_target) values
+  | OptV None -> false
+  | OptV (Some value_inner) -> value_contains_vid vid_target value_inner
+
+let find_valuefield (name : string) (valuefields : valuefield list) :
+    value option =
+  valuefields
+  |> List.find_map (fun (atom, value) ->
+         if atom_named name atom then Some value else None)
+
+let update_valuefield (name : string) (value_new : value)
+    (valuefields : valuefield list) : valuefield list =
+  valuefields
+  |> List.map (fun (atom, value) ->
+         if atom_named name atom then (atom, value_new) else (atom, value))
+
+let table_valuefields (value : value) : valuefield list option =
+  match (value.note.typ, value.it) with
+  | VarT ({ it = "table"; _ }, _), StructV valuefields -> Some valuefields
+  | _ -> None
+
+let tabletype_components (value : value) :
+    (mixop * value * value * value) option =
+  match value.it with
+  | CaseV
+      (( ({ it = Domain.Atom.Atom "TableT"; _ } :: _) :: _ as mixop),
+       [ at; limits; rt ] )
+    ->
+      Some (mixop, at, limits, rt)
+  | _ -> None
+
+let reftype_components (value : value) : (value * value) option =
+  match value.it with
+  | CaseV ([ []; []; [] ], [ null; heaptype ]) -> Some (null, heaptype)
+  | _ -> None
+
+let is_null_value (value : value) : bool =
+  match value.it with
+  | CaseV ([ [ { it = Domain.Atom.Atom "Null"; _ } ] ], []) -> true
+  | _ -> false
+
+let gen_nullable_reftype (tdenv : TDEnv.t) (texts : value' list)
+    (nums : num_context) (reftype : value) : (value * value) option =
+  let typ = reftype.note.typ $ no_region in
+  let rec attempt remaining =
+    if remaining <= 0 then None
+    else
+      let depth = Random.int 4 + 3 in
+      match gen_from_typ' depth tdenv texts nums typ with
+      | Some reftype_new -> (
+          match reftype_components reftype_new with
+          | Some (null_new, heaptype_new)
+            when is_null_value null_new
+                 && not (Value.eq reftype reftype_new) ->
+              Some (reftype_new, heaptype_new)
+          | _ -> attempt (remaining - 1))
+      | None -> attempt (remaining - 1)
+  in
+  attempt 8
+
+let instr_typ_of_tinit (tinit : value) : typ' option =
+  match tinit.note.typ with
+  | IterT (typ_instr, List) -> Some typ_instr.it
+  | _ -> (
+      match tinit.it with
+      | ListV (instr :: _) -> Some instr.note.typ
+      | _ -> None)
+
+let ref_null_instr (typ : typ') (heaptype : value) : value =
+  wrap_case_named typ [ [ "REF.NULL" ]; [] ] [ heaptype ]
+
+let tinit_with_ref_null (tinit : value) (heaptype : value) : value option =
+  let* typ_instr = instr_typ_of_tinit tinit in
+  let instr = ref_null_instr typ_instr heaptype in
+  ListV [ instr ] |> wrap_value tinit.note.typ |> Option.some
+
+let mutate_table_reftype (tdenv : TDEnv.t) (texts : value' list)
+    (nums : num_context) (table : value) : value option =
+  let* valuefields = table_valuefields table in
+  let* ttype = find_valuefield "TTYPE" valuefields in
+  let* tinit = find_valuefield "TINIT" valuefields in
+  let* mixop_tabletype, addrtype, limits, reftype =
+    tabletype_components ttype
+  in
+  let* null, _ = reftype_components reftype in
+  if not (is_null_value null) then None
+  else
+    let* reftype_new, heaptype_new =
+      gen_nullable_reftype tdenv texts nums reftype
+    in
+    let ttype_new =
+      CaseV (mixop_tabletype, [ addrtype; limits; reftype_new ])
+      |> wrap_value ttype.note.typ
+    in
+    let* tinit_new = tinit_with_ref_null tinit heaptype_new in
+    valuefields
+    |> update_valuefield "TTYPE" ttype_new
+    |> update_valuefield "TINIT" tinit_new
+    |> fun valuefields -> StructV valuefields |> wrap_value table.note.typ
+    |> Option.some
+
+let table_reftype (table : value) : value option =
+  let* valuefields = table_valuefields table in
+  let* ttype = find_valuefield "TTYPE" valuefields in
+  let* _, _, _, reftype = tabletype_components ttype in
+  Some reftype
+
+let find_table_containing_reftype (vid_target : vid) (value : value) :
+    value option =
+  let rec walk (value : value) : value option =
+    match table_reftype value with
+    | Some reftype when value_contains_vid vid_target reftype -> Some value
+    | _ -> (
+        match value.it with
+        | BoolV _ | NumV _ | TextV _ | FuncV _ | ExternV _ -> None
+        | StructV valuefields ->
+            valuefields
+            |> List.map (fun (_, value_inner) -> walk value_inner)
+            |> choose_one
+        | CaseV (_, values) | TupleV values | ListV values ->
+            values |> List.map walk |> choose_one
+        | OptV None -> None
+        | OptV (Some value_inner) -> walk value_inner)
+  in
+  walk value
+
 let patch_program (tdenv : TDEnv.t) (value_to_mutate : value) (value_program : value) : value =
   (* Patching the type annotation of a value *)
   let patch_value (typ : typ') (value : value) : value =
@@ -680,14 +830,24 @@ let mutatew (tdenv : TDEnv.t) (mixopenv : MixopEnv.t) (texts : value' list)
   let value_program =
     Dep.Graph.reassemble_graph_from_root vdg VIdMap.empty
   in
-  let value_to_mutate_concrete =
-    patch_program tdenv value_to_mutate value_program
+  let mutate_generic () =
+    let value_to_mutate_concrete =
+      patch_program tdenv value_to_mutate value_program
+    in
+    (* Mutate the node *)
+    let* kind, value_mutated =
+      mutate_walk tdenv mixopenv texts nums value_to_mutate_concrete
+    in
+    (kind, value_to_mutate_concrete, value_mutated) |> Option.some
   in
-  (* Mutate the node *)
-  let* kind, value_mutated =
-    mutate_walk tdenv mixopenv texts nums value_to_mutate_concrete
-  in
-  (kind, value_to_mutate_concrete, value_mutated) |> Option.some
+  match find_table_containing_reftype vid_to_mutate value_program with
+  | Some table -> (
+      let table_concrete = patch_program tdenv table value_program in
+      match mutate_table_reftype tdenv texts nums table_concrete with
+      | Some table_mutated ->
+          (MutateTableRefType, table_concrete, table_mutated) |> Option.some
+      | None -> None)
+  | None -> mutate_generic ()
 
 let mutates (fuel_mutate : int) (tdenv : TDEnv.t) (mixopenv : MixopEnv.t)
     (vdg : Dep.Graph.t) (vid_source : vid) : (kind * value * value) list =
