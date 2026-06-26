@@ -22,11 +22,11 @@ rule Unop_ok/else:
   |- uop : OK
 
 dec $check_lane_index(nat*) : bool
-def $check_lane_index(i_1 :: i*) = false
-  -- if $(i_1 >= 32)
+def $check_lane_index(eps) = true
 def $check_lane_index(i_1 :: i*) = $check_lane_index(i*)
   -- if $(i_1 < 32)
-def $check_lane_index(eps) = true
+def $check_lane_index(_) = false
+  -- otherwise
 
 dec $check_vbop_shuffle(vbinop_) : bool
 def $check_vbop_shuffle(V128 (I8x16 (Shuffle _))) = true
