@@ -1040,10 +1040,7 @@ let mutatew (tdenv : TDEnv.t) (mixopenv : MixopEnv.t) (texts : value' list)
     (nums : num_context) (vdg : Dep.Graph.t) (vid_source : vid) :
     (kind * value * value) option =
   (* Expand the node randomly *)
-  let expansion = (fun () -> vid_source |> Option.some) in
-  let vid_to_mutate =
-    match expansion () with Some vid_parent -> vid_parent | None -> vid_source
-  in
+  let vid_to_mutate = vid_source in
   (* reassemble value from vid *)
   (* 이 value_to_mutate의 type annotation을 typeConcrete annotation으로 바꿔주어야 함 *)
   let value_to_mutate =
