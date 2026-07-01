@@ -32,11 +32,6 @@ let wrap_value (typ : typ') (value : value') : value =
 let wrap_value_opt (typ : typ') (value_opt : value' option) : value option =
   Option.map (wrap_value typ) value_opt
 
-let mixop_starts_with_atom (atom_target : atom') (mixop : mixop) : bool =
-  match mixop with
-  | ({ it = atom; _ } :: _) :: _ -> Atom.eq atom atom_target
-  | _ -> false
-
 type int_bounds = { min_value : Bigint.t; max_value : Bigint.t }
 
 type num_context = {
@@ -102,6 +97,18 @@ let random_select_from_num_pools (values_default : Bigint.t list)
   in
   let* values = Rand.random_select pools in
   Rand.random_select values
+
+let random_select_from_variant_pools (nottyps_nullary : nottyp' list)
+    (nottyps_payload : nottyp' list) : nottyp' option =
+  let pools =
+    [ nottyps_nullary; nottyps_payload ]
+    |> List.filter (function [] -> false | _ :: _ -> true)
+  in
+  let* nottyps = Rand.random_select pools in
+  Rand.random_select nottyps
+
+let nottyp_has_payload (nottyp : nottyp') : bool =
+  match Mixfix.args nottyp with [] -> false | _ :: _ -> true
 
 let update_int_bounds (bounds : int_bounds option) (value : Bigint.t) :
     int_bounds option =
@@ -206,22 +213,21 @@ and gen_from_typ' (depth : int) (tdenv : TDEnv.t) (texts : value' list)
                 |> List.map (fun (nottyp, _, _) ->
                        Mixfix.map (Type.Subst.subst_typ theta) nottyp.it)
               in
-              let nottyps' =
-                if String.equal tid.it "vibinop" then
-                  List.filter
-                    (fun (mixop, _) ->
-                      mixop_starts_with_atom (Domain.Atom.Atom "Shuffle") mixop)
-                    nottyps'
-                else nottyps'
-              in
               let expand_nottyp' nottyp' =
                 let mixop, typs = Mixfix.split nottyp' in
                 let* values = gen_from_typs depth tdenv texts nums typs in
                 CaseV (Mixfix.fill mixop values) |> Option.some
               in
-              List.map expand_nottyp' nottyps'
-              |> List.filter Option.is_some |> List.map Option.get
-              |> Rand.random_select |> wrap_value_opt typ.it)
+              let nottyps_nullary, nottyps_payload =
+                List.partition
+                  (fun nottyp' -> not (nottyp_has_payload nottyp'))
+                  nottyps'
+              in
+              let* nottyp' =
+                random_select_from_variant_pools nottyps_nullary
+                  nottyps_payload
+              in
+              expand_nottyp' nottyp' |> wrap_value_opt typ.it)
       | _ -> None)
   | TupleT typs_inner ->
       let* values_inner = gen_from_typs depth tdenv texts nums typs_inner in
