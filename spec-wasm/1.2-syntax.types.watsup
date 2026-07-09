@@ -332,3 +332,4 @@ dec $defaultable(valtype) : bool
 def $defaultable(NumT nt) = true
 def $defaultable(VecT vt) = true
 def $defaultable(RefT (null ht)) = (null = Null)
+def $defaultable(BotT) = false
