@@ -1,0 +1,99 @@
+;;
+;; Runtime Values
+;;
+
+;; Default values
+
+dec $default_value(valtype) : value?
+def $default_value(NumT I32T) = NumV (I32 0)
+def $default_value(NumT I64T) = NumV (I64 0)
+def $default_value(NumT F32T) = NumV (F32 (POS (SUBNORM 0)))
+def $default_value(NumT F64T) = NumV (F64 (POS (SUBNORM 0)))
+def $default_value(VecT V128T) = VecV (V128 0)
+def $default_value(RefT (Null ht)) = RefV (NullRef ht)
+def $default_value(RefT (NoNull _)) = eps
+def $default_value(BotT) = eps
+
+;; Value typing
+
+relation Num_ok: store |- num_ : numtype
+  hint(input %0 %1)
+relation Vec_ok: store |- vec_ : vectype
+  hint(input %0 %1)
+relation Ref_ok: store |- refval : reftype
+  hint(input %0 %1)
+relation Val_ok: store |- value : valtype
+  hint(input %0 %1)
+
+rule Num_ok/i32:
+  s |- I32 _ : I32T
+
+rule Num_ok/i64:
+  s |- I64 _ : I64T
+
+rule Num_ok/f32:
+  s |- F32 _ : F32T
+
+rule Num_ok/f64:
+  s |- F64 _ : F64T
+
+rule Vec_ok/v128:
+  s |- V128 _ : V128T
+
+rule Ref_ok/null:
+  s |- NullRef ht : Null $bot_of_heap_type(ht)
+
+rule Ref_ok/func:
+  s |- FuncRef a : NoNull (DefHT s.FUNCS[a].TYPE)
+
+rule Ref_ok/i31:
+  s |- I31Ref _ : NoNull I31HT
+
+rule Ref_ok/struct:
+  s |- StructRef a : NoNull (DefHT s.STRUCTS[a].TYPE)
+
+rule Ref_ok/array:
+  s |- ArrayRef a : NoNull (DefHT s.ARRAYS[a].TYPE)
+
+rule Ref_ok/exn:
+  s |- ExnRef _ : NoNull ExnHT
+
+rule Ref_ok/host:
+  s |- HostRef _ : NoNull AnyHT
+
+rule Ref_ok/extern:
+  s |- ExternRef r : NoNull ExternHT
+
+rule Val_ok/num:
+  s |- NumV num : NumT nt
+  -- Num_ok: s |- num : nt
+
+rule Val_ok/vec:
+  s |- VecV vec : VecT vt
+  -- Vec_ok: s |- vec : vt
+
+rule Val_ok/ref:
+  s |- RefV r : RefT rt
+  -- Ref_ok: s |- r : rt
+
+;; External addresses
+
+dec $match_externtype(deftype*, externtype, externtype) : bool
+
+relation Externaddr_ok: store |- externaddr : externtype
+  hint(input %0 %1)
+
+rule Externaddr_ok/func:
+  s |- FuncAddr a : ExtFunct s.FUNCS[a].TYPE
+
+rule Externaddr_ok/global:
+  s |- GlobalAddr a : ExtGlobalT s.GLOBALS[a].TYPE
+
+rule Externaddr_ok/table:
+  s |- TableAddr a : ExtTableT s.TABLES[a].TYPE
+
+rule Externaddr_ok/mem:
+  s |- MemAddr a : ExtMemoryT s.MEMS[a].TYPE
+
+rule Externaddr_ok/tag:
+  s |- TagAddr a : ExtTagT s.TAGS[a].TYPE

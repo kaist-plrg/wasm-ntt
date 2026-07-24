@@ -21,49 +21,58 @@ let parse parser filename =
     num_parse_fail := !num_parse_fail + 1;
     Printexc.raise_with_backtrace e bt
 
-let parse_file (filename : string) : Lang.Il.value * expectation =
+let parse_commands (filename : string) : Script.command list =
+  filename |> parse Wasm_interpreter.Parse.Script.parse_file
+
+let is_validation_command (cmd : Script.command) : bool =
+  match cmd.it with
+  | Script.Module _ -> true
+  | Script.Assertion ass -> (
+      match ass.it with
+      | Script.AssertInvalid _ -> true
+      | _ -> false)
+  | _ -> false
+
+let expects_validation_failure (commands : Script.command list) : bool =
+  List.exists
+    (fun (cmd : Script.command) ->
+      match cmd.it with
+      | Script.Assertion ass -> (
+          match ass.it with
+          | Script.AssertInvalid _ -> true
+          | _ -> false)
+      | _ -> false)
+    commands
+
+let module_of_validation_command (cmd : Script.command) :
+    Wasm_interpreter.Ast.module_ =
+  match cmd.it with
+  | Script.Module (_, def) ->
+    let m, _cs = Run.run_definition def in
+    m
+  | Script.Assertion ass -> (
+      match ass.it with
+      | Script.AssertInvalid (def, _) ->
+        let m, _cs = Run.run_definition def in
+        m
+      | _ -> failwith "Unsupported assertion type")
+  | _ -> failwith "Unsupported command type"
+
+let parse_module_list_file (filename : string) : Lang.Il.value * expectation =
   match Filename.extension filename with
   | ".wast" ->
-    let commands : Script.command list =
-      filename
-      |> parse Wasm_interpreter.Parse.Script.parse_file
-      |> List.filter (fun (cmd : Script.command) ->
-        match cmd.it with
-        | Script.Module _ -> true
-        | Script.Assertion ass -> (
-            match ass.it with
-            | Script.AssertInvalid _  -> true
-            | _ -> false)
-        | _ -> false)
-    in
-    let expectation =
-      if
-        List.exists
-          (fun (cmd : Script.command) ->
-            match cmd.it with
-            | Script.Assertion ass -> (
-                match ass.it with
-                | Script.AssertInvalid _  -> true
-                | _ -> false)
-            | _ -> false)
-          commands
-      then Negative
-      else Positive
-    in
-    let wasts = List.map (fun (cmd : Script.command) ->
-      match cmd.it with
-      | Script.Module (_, def) ->
-        let m, cs = Run.run_definition def in
-        (m, cs)
-      | Script.Assertion ass ->
-        (match ass.it with
-        | Script.AssertInvalid (def, _) ->
-          let m, cs = Run.run_definition def in
-          (m, cs)
-        | _ -> failwith "Unsupported assertion type")
-      | _ -> failwith "Unsupported command type") commands
-      |> List.map fst
-    in
+    let commands = parse_commands filename |> List.filter is_validation_command in
+    let expectation = if expects_validation_failure commands then Negative else Positive in
+    let wasts = List.map module_of_validation_command commands in
     let il_modules = il_of_list "module" il_of_module wasts in
     (il_modules, expectation)
   | _ -> failwith "Unsupported file extension"
+
+let parse_file_for_rel (relname : string) (filename : string) :
+    Lang.Il.value * expectation =
+  if Script_harness.is_script_harness_rel relname then
+    failwith "script harness relations are handled by eval_wasm_program"
+  else parse_module_list_file filename
+
+let parse_file (filename : string) : Lang.Il.value * expectation =
+  parse_module_list_file filename

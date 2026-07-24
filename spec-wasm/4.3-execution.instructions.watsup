@@ -1,0 +1,1456 @@
+;;
+;; Minimal Execution of Constant Expressions
+;;
+
+relation Eval_const: store moduleinst |- const : (store, value)
+  hint(input %0 %1 %2)
+
+relation Eval_consts: store moduleinst |- const* : (store, value*)
+  hint(input %0 %1 %2)
+
+relation Exec_instr: store moduleinst value* |- instr : (store, value*)
+  hint(input %0 %1 %2 %3)
+
+relation Exec_instrs: store moduleinst value* |- instr* : (store, value*)
+  hint(input %0 %1 %2 %3)
+
+relation Exec_instr_frame: store frame value* |- instr : (store, frame, value*)
+  hint(input %0 %1 %2 %3)
+
+relation Exec_instrs_frame: store frame value* |- instr* : (store, frame, value*)
+  hint(input %0 %1 %2 %3)
+
+relation Exec_instr_ctrl: store frame value* |- instr : execresult
+  hint(input %0 %1 %2 %3)
+
+relation Exec_instrs_ctrl: store frame value* |- instr* : execresult
+  hint(input %0 %1 %2 %3)
+
+relation Invoke_funcaddr: store value* |- funcaddr : (store, value*)
+  hint(input %0 %1 %2)
+
+relation Invoke_funcaddr_throw: store value* |- funcaddr : execresult
+  hint(input %0 %1 %2)
+
+relation Invoke_ok: store funcaddr value* |- value* : store
+  hint(input %0 %1 %2)
+
+relation Handle_throw: store frame value* tagaddr value* |- catch* : execresult
+  hint(input %0 %1 %2 %3 %4 %5)
+
+rule Eval_const/exec:
+  s mm |- const : (s', v)
+  -- Exec_instrs: s mm eps |- const : (s', v :: eps)
+
+rule Eval_consts/cons:
+  s mm |- const_1 :: const* : (s_2, v_1 :: v*)
+  -- Eval_const: s mm |- const_1 : (s_1, v_1)
+  -- Eval_consts: s_1 mm |- const* : (s_2, v*)
+
+rule Eval_consts/nil:
+  s mm |- eps : (s, eps)
+
+dec $refs_of_values(value*) : refval*
+def $refs_of_values(eps) = eps
+def $refs_of_values((RefV r) :: v*) = r :: $refs_of_values(v*)
+
+dec $pack_field(storagetype, value) : fieldval
+dec $pack_fields(fieldtype*, value*) : fieldval*
+dec $unpack_field(fieldval) : value
+dec $unpack_field_ext(fieldval, extension) : value
+dec $some_values(value*) : (value?)*
+dec $default_locals(moduleinst, local*) : (value?)*
+dec $default_field_values(fieldtype*) : value*
+dec $storage_size_nat(storagetype) : nat
+dec $fieldval_of_storage_bytes(storagetype, byte*) : fieldval
+dec $fieldvals_of_data(storagetype, byte*, nat, nat) : fieldval*
+dec $fieldvals_of_refs(storagetype, refval*) : fieldval*
+dec $ref_eq(refval, refval) : nat
+
+def $pack_field(ValStorageT _, v) = FieldValue v
+def $pack_field(PackStorageT I8, NumV (I32 n)) = PackedField I8 $byte_of_i32(n)
+def $pack_field(PackStorageT I16, NumV (I32 n)) = PackedField I16 $i32_of_bytes($bytes_of_i32(n)[0:2])
+
+def $unpack_field(FieldValue v) = v
+def $unpack_field(PackedField pt n) = NumV (I32 n)
+
+def $unpack_field_ext(FieldValue v, extension) = v
+def $unpack_field_ext(PackedField I8 n, ZX) = NumV (I32 n)
+def $unpack_field_ext(PackedField I16 n, ZX) = NumV (I32 n)
+def $unpack_field_ext(PackedField I8 n, SX) = NumV (I32 $i32_extend_i8_s(n))
+def $unpack_field_ext(PackedField I16 n, SX) = NumV (I32 $i32_extend_i16_s(n))
+
+def $pack_fields(eps, eps) = eps
+def $pack_fields((FieldT mut zt) :: yt*, v_1 :: v*) =
+  $pack_field(zt, v_1) :: $pack_fields(yt*, v*)
+
+def $some_values(eps) = eps
+def $some_values(v_1 :: v*) = v_1 :: $some_values(v*)
+
+def $default_locals(mm, eps) = eps
+def $default_locals(mm, { LTYPE t } :: local*) =
+  $default_value($inst_valtype(mm, t)) :: $default_locals(mm, local*)
+
+def $default_field_values(eps) = eps
+def $default_field_values((FieldT mut zt) :: yt*) =
+  v_1 :: $default_field_values(yt*)
+  -- if v_1 = $default_value($unpacked_storage_type(zt))
+
+def $storage_size_nat(PackStorageT I8) = 1
+def $storage_size_nat(PackStorageT I16) = 2
+def $storage_size_nat(PackStorageT I32) = 4
+def $storage_size_nat(PackStorageT I64) = 8
+def $storage_size_nat(ValStorageT (NumT I32T)) = 4
+def $storage_size_nat(ValStorageT (NumT I64T)) = 8
+def $storage_size_nat(ValStorageT (NumT F32T)) = 4
+def $storage_size_nat(ValStorageT (NumT F64T)) = 8
+def $storage_size_nat(ValStorageT (VecT V128T)) = 16
+
+def $fieldval_of_storage_bytes(PackStorageT I8, b*) = PackedField I8 b*[0]
+def $fieldval_of_storage_bytes(PackStorageT I16, b*) = PackedField I16 $i32_of_bytes(b*)
+def $fieldval_of_storage_bytes(ValStorageT (NumT I32T), b*) =
+  FieldValue (NumV (I32 $i32_of_bytes(b*)))
+def $fieldval_of_storage_bytes(ValStorageT (NumT I64T), b*) =
+  FieldValue (NumV (I64 $i64_of_bytes(b*)))
+
+def $fieldvals_of_data(zt, b*, offset, n) = eps
+  -- if n = 0
+def $fieldvals_of_data(zt, b*, offset, n) =
+  fv :: $fieldvals_of_data(zt, b*, offset', n')
+  -- if $(n > 0)
+  -- if nsize = $storage_size_nat(zt)
+  -- if fv = $fieldval_of_storage_bytes(zt, b*[offset:nsize])
+  -- if offset' = $(offset + nsize)
+  -- if n' = $(n - 1)
+
+def $fieldvals_of_refs(zt, eps) = eps
+def $fieldvals_of_refs(zt, r_1 :: r_t*) =
+  $pack_field(zt, RefV r_1) :: $fieldvals_of_refs(zt, r_t*)
+
+def $ref_eq(NullRef _, NullRef _) = 1
+def $ref_eq(r, r) = 1
+def $ref_eq(r_1, r_2) = 0
+  -- otherwise
+
+dec $block_result_arity(moduleinst, blocktype) : nat
+dec $block_param_arity(moduleinst, blocktype) : nat
+dec $block_input_stack(value*, nat) : value*
+dec $block_outer_stack(value*, nat) : value*
+
+def $block_result_arity(mm, ValBlockType eps) = 0
+def $block_result_arity(mm, ValBlockType t) = 1
+def $block_result_arity(mm, VarBlockType x) = |t_2*|
+  -- if DefFuncT (FuncT t_1* t_2*) = $expanddt(mm.TYPES[x])
+
+def $block_param_arity(mm, ValBlockType eps) = 0
+def $block_param_arity(mm, ValBlockType t) = 0
+def $block_param_arity(mm, VarBlockType x) = |t_1*|
+  -- if DefFuncT (FuncT t_1* t_2*) = $expanddt(mm.TYPES[x])
+
+def $block_input_stack(v*, n) = $take_<value>(v*, n)
+def $block_outer_stack(v*, n) = v_rest*
+  -- if nrest = $(|v*| - n)
+  -- if v_rest* = v*[n:nrest]
+
+;; A first execution subset used by instantiation start functions.
+;; This follows eval.ml's stack convention: the head of value* is the top.
+
+rule Exec_instrs/cons:
+  s mm v* |- instr_1 :: instr* : (s_2, v_2*)
+  -- Exec_instr: s mm v* |- instr_1 : (s_1, v_1*)
+  -- Exec_instrs: s_1 mm v_1* |- instr* : (s_2, v_2*)
+
+rule Exec_instrs/nil:
+  s mm v* |- eps : (s, v*)
+
+rule Exec_instrs_frame/cons:
+  s fr v* |- instr_1 :: instr* : (s_2, fr_2, v_2*)
+  -- Exec_instr_frame: s fr v* |- instr_1 : (s_1, fr_1, v_1*)
+  -- Exec_instrs_frame: s_1 fr_1 v_1* |- instr* : (s_2, fr_2, v_2*)
+
+rule Exec_instrs_frame/nil:
+  s fr v* |- eps : (s, fr, v*)
+
+rule Exec_instrs_ctrl/cons-normal:
+  s fr v* |- instr_1 :: instr* : er
+  -- Exec_instr_ctrl: s fr v* |- instr_1 : NormalR s_1 fr_1 v_1*
+  -- Exec_instrs_ctrl: s_1 fr_1 v_1* |- instr* : er
+
+rule Exec_instrs_ctrl/cons-break:
+  s fr v* |- instr_1 :: instr* : BreakR s_1 fr_1 l v_1*
+  -- Exec_instr_ctrl: s fr v* |- instr_1 : BreakR s_1 fr_1 l v_1*
+
+rule Exec_instrs_ctrl/cons-return:
+  s fr v* |- instr_1 :: instr* : ReturnR s_1 fr_1 v_1*
+  -- Exec_instr_ctrl: s fr v* |- instr_1 : ReturnR s_1 fr_1 v_1*
+
+rule Exec_instrs_ctrl/cons-throw:
+  s fr v* |- instr_1 :: instr* : ThrowR s_1 fr_1 ja v_1*
+  -- Exec_instr_ctrl: s fr v* |- instr_1 : ThrowR s_1 fr_1 ja v_1*
+
+rule Exec_instrs_ctrl/nil:
+  s fr v* |- eps : NormalR s fr v*
+
+rule Exec_instr_ctrl/block-normal:
+  s fr v* |- BLOCK blocktype instr* : NormalR s' frp v'*
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- if v_rest* = $block_outer_stack(v*, nparam)
+  -- Exec_instrs_ctrl: s fr v_arg* |- instr* : NormalR s' frp v_label*
+  -- if v'* = v_label* ++ v_rest*
+
+rule Exec_instr_ctrl/block-break-zero:
+  s fr v* |- BLOCK blocktype instr* : NormalR s' frp v'*
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if nresult = $block_result_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- if v_rest* = $block_outer_stack(v*, nparam)
+  -- Exec_instrs_ctrl: s fr v_arg* |- instr* : BreakR s' frp 0 v_break*
+  -- if v_take* = $take_<value>(v_break*, nresult)
+  -- if v'* = v_take* ++ v_rest*
+
+rule Exec_instr_ctrl/block-break-succ:
+  s fr v* |- BLOCK blocktype instr* : BreakR s' frp l' v'*
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- Exec_instrs_ctrl: s fr v_arg* |- instr* : BreakR s' frp l v'*
+  -- if $(l > 0)
+  -- if l' = $(l - 1)
+
+rule Exec_instr_ctrl/block-return:
+  s fr v* |- BLOCK blocktype instr* : ReturnR s' frp v'*
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- Exec_instrs_ctrl: s fr v_arg* |- instr* : ReturnR s' frp v'*
+
+rule Exec_instr_ctrl/block-throw:
+  s fr v* |- BLOCK blocktype instr* : ThrowR s' frp ja v'*
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- Exec_instrs_ctrl: s fr v_arg* |- instr* : ThrowR s' frp ja v'*
+
+rule Exec_instr_ctrl/loop-normal:
+  s fr v* |- LOOP blocktype instr* : NormalR s' frp v'*
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- if v_rest* = $block_outer_stack(v*, nparam)
+  -- Exec_instrs_ctrl: s fr v_arg* |- instr* : NormalR s' frp v_label*
+  -- if v'* = v_label* ++ v_rest*
+
+rule Exec_instr_ctrl/loop-break-zero:
+  s fr v* |- LOOP blocktype instr* : er
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- if v_rest* = $block_outer_stack(v*, nparam)
+  -- Exec_instrs_ctrl: s fr v_arg* |- instr* : BreakR s_1 fr_1 0 v_1*
+  -- if v_loop* = $take_<value>(v_1*, nparam) ++ v_rest*
+  -- Exec_instr_ctrl: s_1 fr_1 v_loop* |- LOOP blocktype instr* : er
+
+rule Exec_instr_ctrl/loop-break-succ:
+  s fr v* |- LOOP blocktype instr* : BreakR s' frp l' v'*
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- Exec_instrs_ctrl: s fr v_arg* |- instr* : BreakR s' frp l v'*
+  -- if $(l > 0)
+  -- if l' = $(l - 1)
+
+rule Exec_instr_ctrl/loop-return:
+  s fr v* |- LOOP blocktype instr* : ReturnR s' frp v'*
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- Exec_instrs_ctrl: s fr v_arg* |- instr* : ReturnR s' frp v'*
+
+rule Exec_instr_ctrl/loop-throw:
+  s fr v* |- LOOP blocktype instr* : ThrowR s' frp ja v'*
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- Exec_instrs_ctrl: s fr v_arg* |- instr* : ThrowR s' frp ja v'*
+
+rule Exec_instr_ctrl/cond-true-normal:
+  s fr ((NumV (I32 i)) :: v*) |- IF blocktype instr_1* ELSE instr_2* : NormalR s' frp v'*
+  -- if $(i =/= 0)
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- if v_rest* = $block_outer_stack(v*, nparam)
+  -- Exec_instrs_ctrl: s fr v_arg* |- instr_1* : NormalR s' frp v_label*
+  -- if v'* = v_label* ++ v_rest*
+
+rule Exec_instr_ctrl/cond-true-break-zero:
+  s fr ((NumV (I32 i)) :: v*) |- IF blocktype instr_1* ELSE instr_2* : NormalR s' frp v'*
+  -- if $(i =/= 0)
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if nresult = $block_result_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- if v_rest* = $block_outer_stack(v*, nparam)
+  -- Exec_instrs_ctrl: s fr v_arg* |- instr_1* : BreakR s' frp 0 v_break*
+  -- if v_take* = $take_<value>(v_break*, nresult)
+  -- if v'* = v_take* ++ v_rest*
+
+rule Exec_instr_ctrl/cond-true-break-succ:
+  s fr ((NumV (I32 i)) :: v*) |- IF blocktype instr_1* ELSE instr_2* : BreakR s' frp l' v'*
+  -- if $(i =/= 0)
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- Exec_instrs_ctrl: s fr v_arg* |- instr_1* : BreakR s' frp l v'*
+  -- if $(l > 0)
+  -- if l' = $(l - 1)
+
+rule Exec_instr_ctrl/cond-true-return:
+  s fr ((NumV (I32 i)) :: v*) |- IF blocktype instr_1* ELSE instr_2* : ReturnR s' frp v'*
+  -- if $(i =/= 0)
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- Exec_instrs_ctrl: s fr v_arg* |- instr_1* : ReturnR s' frp v'*
+
+rule Exec_instr_ctrl/cond-true-throw:
+  s fr ((NumV (I32 i)) :: v*) |- IF blocktype instr_1* ELSE instr_2* : ThrowR s' frp ja v'*
+  -- if $(i =/= 0)
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- Exec_instrs_ctrl: s fr v_arg* |- instr_1* : ThrowR s' frp ja v'*
+
+rule Exec_instr_ctrl/cond-false-normal:
+  s fr ((NumV (I32 i)) :: v*) |- IF blocktype instr_1* ELSE instr_2* : NormalR s' frp v'*
+  -- if i = 0
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- if v_rest* = $block_outer_stack(v*, nparam)
+  -- Exec_instrs_ctrl: s fr v_arg* |- instr_2* : NormalR s' frp v_label*
+  -- if v'* = v_label* ++ v_rest*
+
+rule Exec_instr_ctrl/cond-false-break-zero:
+  s fr ((NumV (I32 i)) :: v*) |- IF blocktype instr_1* ELSE instr_2* : NormalR s' frp v'*
+  -- if i = 0
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if nresult = $block_result_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- if v_rest* = $block_outer_stack(v*, nparam)
+  -- Exec_instrs_ctrl: s fr v_arg* |- instr_2* : BreakR s' frp 0 v_break*
+  -- if v_take* = $take_<value>(v_break*, nresult)
+  -- if v'* = v_take* ++ v_rest*
+
+rule Exec_instr_ctrl/cond-false-break-succ:
+  s fr ((NumV (I32 i)) :: v*) |- IF blocktype instr_1* ELSE instr_2* : BreakR s' frp l' v'*
+  -- if i = 0
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- Exec_instrs_ctrl: s fr v_arg* |- instr_2* : BreakR s' frp l v'*
+  -- if $(l > 0)
+  -- if l' = $(l - 1)
+
+rule Exec_instr_ctrl/cond-false-return:
+  s fr ((NumV (I32 i)) :: v*) |- IF blocktype instr_1* ELSE instr_2* : ReturnR s' frp v'*
+  -- if i = 0
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- Exec_instrs_ctrl: s fr v_arg* |- instr_2* : ReturnR s' frp v'*
+
+rule Exec_instr_ctrl/cond-false-throw:
+  s fr ((NumV (I32 i)) :: v*) |- IF blocktype instr_1* ELSE instr_2* : ThrowR s' frp ja v'*
+  -- if i = 0
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- Exec_instrs_ctrl: s fr v_arg* |- instr_2* : ThrowR s' frp ja v'*
+
+rule Exec_instr_ctrl/br:
+  s fr v* |- BR l : BreakR s fr l v*
+
+rule Exec_instr_ctrl/brif-true:
+  s fr ((NumV (I32 i)) :: v*) |- BR_IF l : BreakR s fr l v*
+  -- if $(i =/= 0)
+
+rule Exec_instr_ctrl/brif-false:
+  s fr ((NumV (I32 i)) :: v*) |- BR_IF l : NormalR s fr v*
+  -- if i = 0
+
+rule Exec_instr_ctrl/br-table-in:
+  s fr ((NumV (I32 i)) :: v*) |- BR_TABLE l* x : BreakR s fr y v*
+  -- if $(i < |l*|)
+  -- if y = l*[i]
+
+rule Exec_instr_ctrl/br-table-out:
+  s fr ((NumV (I32 i)) :: v*) |- BR_TABLE l* x : BreakR s fr x v*
+  -- if $(i >= |l*|)
+
+rule Exec_instr_ctrl/br-on-null-null:
+  s fr ((RefV (NullRef ht)) :: v*) |- BR_ON_NULL l : BreakR s fr l v*
+
+rule Exec_instr_ctrl/br-on-null-non-null:
+  s fr ((RefV r) :: v*) |- BR_ON_NULL l : NormalR s fr ((RefV r) :: v*)
+  -- Ref_ok: s |- r : NoNull ht
+
+rule Exec_instr_ctrl/br-on-non-null-null:
+  s fr ((RefV (NullRef ht)) :: v*) |- BR_ON_NON_NULL l : NormalR s fr v*
+
+rule Exec_instr_ctrl/br-on-non-null-non-null:
+  s fr ((RefV r) :: v*) |- BR_ON_NON_NULL l : BreakR s fr l ((RefV r) :: v*)
+  -- Ref_ok: s |- r : NoNull ht
+
+rule Exec_instr_ctrl/br-on-cast-true:
+  s fr ((RefV r) :: v*) |- BR_ON_CAST l rt_1 rt_2 : BreakR s fr l ((RefV r) :: v*)
+  -- Ref_ok: s |- r : rtactual
+  -- if rt_expect = $inst_reftype(fr.MODULE, rt_2)
+  -- if $match_reftype(fr.MODULE.TYPES, rtactual, rt_expect)
+
+rule Exec_instr_ctrl/br-on-cast-false:
+  s fr ((RefV r) :: v*) |- BR_ON_CAST l rt_1 rt_2 : NormalR s fr ((RefV r) :: v*)
+  -- Ref_ok: s |- r : rtactual
+  -- if rt_expect = $inst_reftype(fr.MODULE, rt_2)
+  -- if ~$match_reftype(fr.MODULE.TYPES, rtactual, rt_expect)
+
+rule Exec_instr_ctrl/br-on-cast-fail-true:
+  s fr ((RefV r) :: v*) |- BR_ON_CAST_FAIL l rt_1 rt_2 : NormalR s fr ((RefV r) :: v*)
+  -- Ref_ok: s |- r : rtactual
+  -- if rt_expect = $inst_reftype(fr.MODULE, rt_2)
+  -- if $match_reftype(fr.MODULE.TYPES, rtactual, rt_expect)
+
+rule Exec_instr_ctrl/br-on-cast-fail-false:
+  s fr ((RefV r) :: v*) |- BR_ON_CAST_FAIL l rt_1 rt_2 : BreakR s fr l ((RefV r) :: v*)
+  -- Ref_ok: s |- r : rtactual
+  -- if rt_expect = $inst_reftype(fr.MODULE, rt_2)
+  -- if ~$match_reftype(fr.MODULE.TYPES, rtactual, rt_expect)
+
+rule Exec_instr_ctrl/return:
+  s fr v* |- RETURN : ReturnR s fr v*
+
+rule Exec_instr_ctrl/return-call:
+  s fr v* |- RETURN_CALL x : ReturnR s' fr v'*
+  -- if fa = fr.MODULE.FUNCS[x]
+  -- Invoke_funcaddr: s v* |- fa : (s', v'*)
+
+rule Exec_instr_ctrl/return-call-throw:
+  s fr v* |- RETURN_CALL x : ThrowR s' frp ja v_throw*
+  -- if fa = fr.MODULE.FUNCS[x]
+  -- Invoke_funcaddr_throw: s v* |- fa : ThrowR s' frp ja v_throw*
+
+rule Exec_instr_ctrl/return-call-ref:
+  s fr ((RefV (FuncRef fa)) :: v*) |- RETURN_CALL_REF x : ReturnR s' fr v'*
+  -- Invoke_funcaddr: s v* |- fa : (s', v'*)
+
+rule Exec_instr_ctrl/return-call-ref-throw:
+  s fr ((RefV (FuncRef fa)) :: v*) |- RETURN_CALL_REF x : ThrowR s' frp ja v_throw*
+  -- Invoke_funcaddr_throw: s v* |- fa : ThrowR s' frp ja v_throw*
+
+rule Exec_instr_ctrl/return-call-indirect:
+  s fr ((NumV num_i) :: v*) |- RETURN_CALL_INDIRECT x y : ReturnR s' fr v'*
+  -- if ta = fr.MODULE.TABLES[x]
+  -- if i = $nat_of_num(num_i)
+  -- if FuncRef fa = s.TABLES[ta].REFS[i]
+  -- if fi = s.FUNCS[fa]
+  -- if $match_deftype(eps, fi.TYPE, fr.MODULE.TYPES[y])
+  -- Invoke_funcaddr: s v* |- fa : (s', v'*)
+
+rule Exec_instr_ctrl/return-call-indirect-throw:
+  s fr ((NumV num_i) :: v*) |- RETURN_CALL_INDIRECT x y : ThrowR s' frp ja v_throw*
+  -- if ta = fr.MODULE.TABLES[x]
+  -- if i = $nat_of_num(num_i)
+  -- if FuncRef fa = s.TABLES[ta].REFS[i]
+  -- if fi = s.FUNCS[fa]
+  -- if $match_deftype(eps, fi.TYPE, fr.MODULE.TYPES[y])
+  -- Invoke_funcaddr_throw: s v* |- fa : ThrowR s' frp ja v_throw*
+
+rule Exec_instr_ctrl/call-throw:
+  s fr v* |- CALL x : ThrowR s' frp ja v_throw*
+  -- if fa = fr.MODULE.FUNCS[x]
+  -- Invoke_funcaddr_throw: s v* |- fa : ThrowR s' frp ja v_throw*
+
+rule Exec_instr_ctrl/call-ref-throw:
+  s fr ((RefV (FuncRef fa)) :: v*) |- CALL_REF x : ThrowR s' frp ja v_throw*
+  -- Invoke_funcaddr_throw: s v* |- fa : ThrowR s' frp ja v_throw*
+
+rule Exec_instr_ctrl/call-indirect-throw:
+  s fr ((NumV num_i) :: v*) |- CALL_INDIRECT x y : ThrowR s' frp ja v_throw*
+  -- if ta = fr.MODULE.TABLES[x]
+  -- if i = $nat_of_num(num_i)
+  -- if FuncRef fa = s.TABLES[ta].REFS[i]
+  -- if fi = s.FUNCS[fa]
+  -- if $match_deftype(eps, fi.TYPE, fr.MODULE.TYPES[y])
+  -- Invoke_funcaddr_throw: s v* |- fa : ThrowR s' frp ja v_throw*
+
+rule Exec_instr_ctrl/throw:
+  s fr v* |- THROW x : ThrowR s fr ja v_throw*
+  -- if ja = fr.MODULE.TAGS[x]
+  -- if TagT dtf = s.TAGS[ja].TYPE
+  -- if DefFuncT (FuncT t_arg* eps) = $expanddt(dtf)
+  -- if n = |t_arg*|
+  -- if v_throw* = $take_<value>(v*, n)
+
+rule Exec_instr_ctrl/throw-ref:
+  s fr ((RefV (ExnRef a)) :: v*) |- THROW_REF : ThrowR s fr s.EXNS[a].TAG s.EXNS[a].FIELDS
+
+rule Exec_instr_ctrl/try-table-normal:
+  s fr v* |- TRY_TABLE blocktype catch* instr* : NormalR s' frp v'*
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- if v_rest* = $block_outer_stack(v*, nparam)
+  -- Exec_instrs_ctrl: s fr v_arg* |- instr* : NormalR s' frp v_label*
+  -- if v'* = v_label* ++ v_rest*
+
+rule Exec_instr_ctrl/try-table-break-zero:
+  s fr v* |- TRY_TABLE blocktype catch* instr* : NormalR s' frp v'*
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if nresult = $block_result_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- if v_rest* = $block_outer_stack(v*, nparam)
+  -- Exec_instrs_ctrl: s fr v_arg* |- instr* : BreakR s' frp 0 v_break*
+  -- if v_take* = $take_<value>(v_break*, nresult)
+  -- if v'* = v_take* ++ v_rest*
+
+rule Exec_instr_ctrl/try-table-break-succ:
+  s fr v* |- TRY_TABLE blocktype catch* instr* : BreakR s' frp l' v'*
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- Exec_instrs_ctrl: s fr v_arg* |- instr* : BreakR s' frp l v'*
+  -- if $(l > 0)
+  -- if l' = $(l - 1)
+
+rule Exec_instr_ctrl/try-table-return:
+  s fr v* |- TRY_TABLE blocktype catch* instr* : ReturnR s' frp v'*
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- Exec_instrs_ctrl: s fr v_arg* |- instr* : ReturnR s' frp v'*
+
+rule Exec_instr_ctrl/try-table-throw:
+  s fr v* |- TRY_TABLE blocktype catch* instr* : er
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- if v_rest* = $block_outer_stack(v*, nparam)
+  -- Exec_instrs_ctrl: s fr v_arg* |- instr* : ThrowR s' frp ja v_throw*
+  -- Handle_throw: s' frp v_rest* ja v_throw* |- catch* : er
+
+rule Handle_throw/catch:
+  s fr v_rest* ja v_throw* |- (Catch x y) :: catch* : BreakR s fr y (v_throw* ++ v_rest*)
+  -- if ja = fr.MODULE.TAGS[x]
+
+rule Handle_throw/catch-skip:
+  s fr v_rest* ja v_throw* |- (Catch x y) :: catch* : er
+  -- if ~(ja = fr.MODULE.TAGS[x])
+  -- Handle_throw: s fr v_rest* ja v_throw* |- catch* : er
+
+rule Handle_throw/catch-ref:
+  s fr v_rest* ja v_throw* |- (CatchRef x y) :: catch* : BreakR s' fr y ((RefV (ExnRef a)) :: (v_throw* ++ v_rest*))
+  -- if ja = fr.MODULE.TAGS[x]
+  -- if a = |s.EXNS|
+  -- if s' = s[ .EXNS = s.EXNS ++ [{ TAG ja, FIELDS v_throw* }] ]
+
+rule Handle_throw/catch-ref-skip:
+  s fr v_rest* ja v_throw* |- (CatchRef x y) :: catch* : er
+  -- if ~(ja = fr.MODULE.TAGS[x])
+  -- Handle_throw: s fr v_rest* ja v_throw* |- catch* : er
+
+rule Handle_throw/catch-all:
+  s fr v_rest* ja v_throw* |- (CatchAll x) :: catch* : BreakR s fr x v_rest*
+
+rule Handle_throw/catch-all-ref:
+  s fr v_rest* ja v_throw* |- (CatchAllRef x) :: catch* : BreakR s' fr x ((RefV (ExnRef a)) :: v_rest*)
+  -- if a = |s.EXNS|
+  -- if s' = s[ .EXNS = s.EXNS ++ [{ TAG ja, FIELDS v_throw* }] ]
+
+rule Handle_throw/nil:
+  s fr v_rest* ja v_throw* |- eps : ThrowR s fr ja v_throw*
+
+rule Exec_instr_ctrl/plain:
+  s fr v* |- instr : NormalR s' frp v'*
+  -- Exec_instr_frame: s fr v* |- instr : (s', frp, v'*)
+
+rule Invoke_funcaddr/ast:
+  s v* |- fa : (s', v'*)
+  -- if fi = s.FUNCS[fa]
+  -- if AstFunc func = fi.CODE
+  -- if DefFuncT (FuncT t_arg* t_result*) = $expanddt(fi.TYPE)
+  -- if n = |t_arg*|
+  -- if v_arg_stack* = $take_<value>(v*, n)
+  -- if v_arg* = $rev_<value>(v_arg_stack*)
+  -- if nrest = $(|v*| - n)
+  -- if v_rest* = v*[n:nrest]
+  -- if fr = {
+      LOCALS ($some_values(v_arg*) ++ $default_locals(fi.MODULE, func.LOCALS)),
+      MODULE fi.MODULE
+    }
+  -- Exec_instrs_ctrl: s fr eps |- func.BODY : NormalR s' frp v_result_stack*
+  -- if m = |t_result*|
+  -- if v_results* = $take_<value>(v_result_stack*, m)
+  -- if v'* = v_results* ++ v_rest*
+
+rule Invoke_funcaddr/ast-return:
+  s v* |- fa : (s', v'*)
+  -- if fi = s.FUNCS[fa]
+  -- if AstFunc func = fi.CODE
+  -- if DefFuncT (FuncT t_arg* t_result*) = $expanddt(fi.TYPE)
+  -- if n = |t_arg*|
+  -- if v_arg_stack* = $take_<value>(v*, n)
+  -- if v_arg* = $rev_<value>(v_arg_stack*)
+  -- if nrest = $(|v*| - n)
+  -- if v_rest* = v*[n:nrest]
+  -- if fr = {
+      LOCALS ($some_values(v_arg*) ++ $default_locals(fi.MODULE, func.LOCALS)),
+      MODULE fi.MODULE
+    }
+  -- Exec_instrs_ctrl: s fr eps |- func.BODY : ReturnR s' frp v_result_stack*
+  -- if m = |t_result*|
+  -- if v_results* = $take_<value>(v_result_stack*, m)
+  -- if v'* = v_results* ++ v_rest*
+
+rule Invoke_funcaddr/ast-break-zero:
+  s v* |- fa : (s', v'*)
+  -- if fi = s.FUNCS[fa]
+  -- if AstFunc func = fi.CODE
+  -- if DefFuncT (FuncT t_arg* t_result*) = $expanddt(fi.TYPE)
+  -- if n = |t_arg*|
+  -- if v_arg_stack* = $take_<value>(v*, n)
+  -- if v_arg* = $rev_<value>(v_arg_stack*)
+  -- if nrest = $(|v*| - n)
+  -- if v_rest* = v*[n:nrest]
+  -- if fr = {
+      LOCALS ($some_values(v_arg*) ++ $default_locals(fi.MODULE, func.LOCALS)),
+      MODULE fi.MODULE
+    }
+  -- Exec_instrs_ctrl: s fr eps |- func.BODY : BreakR s' frp 0 v_result_stack*
+  -- if m = |t_result*|
+  -- if v_results* = $take_<value>(v_result_stack*, m)
+  -- if v'* = v_results* ++ v_rest*
+
+rule Invoke_funcaddr_throw/ast:
+  s v* |- fa : ThrowR s' frp ja v_throw*
+  -- if fi = s.FUNCS[fa]
+  -- if AstFunc func = fi.CODE
+  -- if DefFuncT (FuncT t_arg* t_result*) = $expanddt(fi.TYPE)
+  -- if n = |t_arg*|
+  -- if v_arg_stack* = $take_<value>(v*, n)
+  -- if v_arg* = $rev_<value>(v_arg_stack*)
+  -- if fr = {
+      LOCALS ($some_values(v_arg*) ++ $default_locals(fi.MODULE, func.LOCALS)),
+      MODULE fi.MODULE
+    }
+  -- Exec_instrs_ctrl: s fr eps |- func.BODY : ThrowR s' frp ja v_throw*
+
+rule Invoke_funcaddr/host-no-result:
+  s v* |- fa : (s, v_rest*)
+  -- if fi = s.FUNCS[fa]
+  -- if HostFunc _ = fi.CODE
+  -- if DefFuncT (FuncT t_arg* eps) = $expanddt(fi.TYPE)
+  -- if $(|t_arg*| <= |v*|)
+  -- if n = $(|v*| - |t_arg*|)
+  -- if v_rest* = v*[|t_arg*|:n]
+
+rule Invoke_ok:
+  s fa v_arg* |- v_result* : s'
+  -- if v_stack* = $rev_<value>(v_arg*)
+  -- Invoke_funcaddr: s v_stack* |- fa : (s', v_stack_result*)
+  -- if v_result* = $rev_<value>(v_stack_result*)
+
+rule Exec_instr_frame/base:
+  s fr v* |- instr : (s', fr, v'*)
+  -- Exec_instr: s fr.MODULE v* |- instr : (s', v'*)
+
+rule Exec_instr_frame/local-get:
+  s fr v* |- LOCAL.GET x : (s, fr, v_1 :: v*)
+  -- if v_1 = fr.LOCALS[x]
+
+rule Exec_instr_frame/local-set:
+  s fr (v_1 :: v*) |- LOCAL.SET x : (s, fr', v*)
+  -- if fr' = fr[ .LOCALS[x] = v_1 ]
+
+rule Exec_instr_frame/local-tee:
+  s fr (v_1 :: v*) |- LOCAL.TEE x : (s, fr', v_1 :: v*)
+  -- if fr' = fr[ .LOCALS[x] = v_1 ]
+
+rule Exec_instr_frame/global-set:
+  s fr (v_1 :: v*) |- GLOBAL.SET x : (s', fr, v*)
+  -- if ga = fr.MODULE.GLOBALS[x]
+  -- if s' = s[ .GLOBALS[ga].VALUE = v_1 ]
+
+rule Exec_instr_frame/memory-size-i32:
+  s fr v* |- MEMORY.SIZE x : (s, fr, (NumV (I32 pages)) :: v*)
+  -- if ma = fr.MODULE.MEMS[x]
+  -- if MemoryT I32AT lim = s.MEMS[ma].TYPE
+  -- if pages = $(|s.MEMS[ma].BYTES| / $page_size)
+
+rule Exec_instr_frame/memory-size-i64:
+  s fr v* |- MEMORY.SIZE x : (s, fr, (NumV (I64 pages)) :: v*)
+  -- if ma = fr.MODULE.MEMS[x]
+  -- if MemoryT I64AT lim = s.MEMS[ma].TYPE
+  -- if pages = $(|s.MEMS[ma].BYTES| / $page_size)
+
+rule Exec_instr_frame/memory-grow-i32:
+  s fr ((NumV (I32 n)) :: v*) |- MEMORY.GROW x : (s', fr, (NumV (I32 pages)) :: v*)
+  -- if ma = fr.MODULE.MEMS[x]
+  -- if MemoryT I32AT { MIN i64, MAX eps } = s.MEMS[ma].TYPE
+  -- if pages = $(|s.MEMS[ma].BYTES| / $page_size)
+  -- if newsize = $(pages + n)
+  -- if $(newsize <= 65536)
+  -- if nbytes = $(n * $page_size)
+  -- if s_1 = s[ .MEMS[ma].BYTES = s.MEMS[ma].BYTES ++ $zero_bytes(nbytes) ]
+  -- if s' = s_1[ .MEMS[ma].TYPE = MemoryT I32AT { MIN newsize, MAX eps } ]
+
+rule Exec_instr_frame/memory-grow-i32-unbounded-fail:
+  s fr ((NumV (I32 n)) :: v*) |- MEMORY.GROW x : (s, fr, (NumV (I32 4294967295)) :: v*)
+  -- if ma = fr.MODULE.MEMS[x]
+  -- if MemoryT I32AT { MIN i64, MAX eps } = s.MEMS[ma].TYPE
+  -- if pages = $(|s.MEMS[ma].BYTES| / $page_size)
+  -- if newsize = $(pages + n)
+  -- if $(newsize > 65536)
+
+rule Exec_instr_frame/memory-grow-i32-bounded:
+  s fr ((NumV (I32 n)) :: v*) |- MEMORY.GROW x : (s', fr, (NumV (I32 pages)) :: v*)
+  -- if ma = fr.MODULE.MEMS[x]
+  -- if MemoryT I32AT { MIN i64, MAX i64_1 } = s.MEMS[ma].TYPE
+  -- if max = $(i64_1)
+  -- if pages = $(|s.MEMS[ma].BYTES| / $page_size)
+  -- if newsize = $(pages + n)
+  -- if $(newsize <= 65536)
+  -- if $(newsize <= max)
+  -- if nbytes = $(n * $page_size)
+  -- if s_1 = s[ .MEMS[ma].BYTES = s.MEMS[ma].BYTES ++ $zero_bytes(nbytes) ]
+  -- if s' = s_1[ .MEMS[ma].TYPE = MemoryT I32AT { MIN newsize, MAX i64_1 } ]
+
+rule Exec_instr_frame/memory-grow-i32-bounded-max-fail:
+  s fr ((NumV (I32 n)) :: v*) |- MEMORY.GROW x : (s, fr, (NumV (I32 4294967295)) :: v*)
+  -- if ma = fr.MODULE.MEMS[x]
+  -- if MemoryT I32AT { MIN i64, MAX i64_1 } = s.MEMS[ma].TYPE
+  -- if max = $(i64_1)
+  -- if pages = $(|s.MEMS[ma].BYTES| / $page_size)
+  -- if newsize = $(pages + n)
+  -- if $(newsize > max)
+
+rule Exec_instr_frame/memory-grow-i32-bounded-size-fail:
+  s fr ((NumV (I32 n)) :: v*) |- MEMORY.GROW x : (s, fr, (NumV (I32 4294967295)) :: v*)
+  -- if ma = fr.MODULE.MEMS[x]
+  -- if MemoryT I32AT { MIN i64, MAX i64_1 } = s.MEMS[ma].TYPE
+  -- if pages = $(|s.MEMS[ma].BYTES| / $page_size)
+  -- if newsize = $(pages + n)
+  -- if $(newsize > 65536)
+
+rule Exec_instr_frame/memory-grow-i64:
+  s fr ((NumV (I64 n)) :: v*) |- MEMORY.GROW x : (s', fr, (NumV (I64 pages)) :: v*)
+  -- if ma = fr.MODULE.MEMS[x]
+  -- if MemoryT I64AT { MIN i64, MAX eps } = s.MEMS[ma].TYPE
+  -- if pages = $(|s.MEMS[ma].BYTES| / $page_size)
+  -- if nsize = $nat_of_num(I64 n)
+  -- if newsize = $(pages + nsize)
+  -- if nbytes = $(nsize * $page_size)
+  -- if s_1 = s[ .MEMS[ma].BYTES = s.MEMS[ma].BYTES ++ $zero_bytes(nbytes) ]
+  -- if s' = s_1[ .MEMS[ma].TYPE = MemoryT I64AT { MIN newsize, MAX eps } ]
+
+rule Exec_instr_frame/memory-grow-i64-bounded:
+  s fr ((NumV (I64 n)) :: v*) |- MEMORY.GROW x : (s', fr, (NumV (I64 pages)) :: v*)
+  -- if ma = fr.MODULE.MEMS[x]
+  -- if MemoryT I64AT { MIN i64, MAX i64_1 } = s.MEMS[ma].TYPE
+  -- if max = $(i64_1)
+  -- if pages = $(|s.MEMS[ma].BYTES| / $page_size)
+  -- if nsize = $nat_of_num(I64 n)
+  -- if newsize = $(pages + nsize)
+  -- if $(newsize <= max)
+  -- if nbytes = $(nsize * $page_size)
+  -- if s_1 = s[ .MEMS[ma].BYTES = s.MEMS[ma].BYTES ++ $zero_bytes(nbytes) ]
+  -- if s' = s_1[ .MEMS[ma].TYPE = MemoryT I64AT { MIN newsize, MAX i64_1 } ]
+
+rule Exec_instr_frame/memory-grow-i64-bounded-fail:
+  s fr ((NumV (I64 n)) :: v*) |- MEMORY.GROW x : (s, fr, (NumV (I64 fail64)) :: v*)
+  -- if ma = fr.MODULE.MEMS[x]
+  -- if MemoryT I64AT { MIN i64, MAX i64_1 } = s.MEMS[ma].TYPE
+  -- if max = $(i64_1)
+  -- if pages = $(|s.MEMS[ma].BYTES| / $page_size)
+  -- if nsize = $nat_of_num(I64 n)
+  -- if newsize = $(pages + nsize)
+  -- if $(newsize > max)
+  -- if fail64 = $(-1)
+
+rule Exec_instr/nop:
+  s mm v* |- NOP : (s, v*)
+
+rule Exec_instr/drop:
+  s mm (v_1 :: v*) |- DROP : (s, v*)
+
+rule Exec_instr/select-true:
+  s mm ((NumV (I32 i)) :: v_2 :: v_1 :: v*) |- SELECT t*? : (s, v_1 :: v*)
+  -- if $(i =/= 0)
+
+rule Exec_instr/select-false:
+  s mm ((NumV (I32 i)) :: v_2 :: v_1 :: v*) |- SELECT t*? : (s, v_2 :: v*)
+  -- if i = 0
+
+rule Exec_instr/const:
+  s mm v* |- CONST num : (s, (NumV num) :: v*)
+
+rule Exec_instr/vec:
+  s mm v* |- VEC.CONST vec : (s, (VecV vec) :: v*)
+
+rule Exec_instr/ref-null:
+  s mm v* |- REF.NULL ht : (s, (RefV (NullRef ht')) :: v*)
+  -- if ht' = $inst_heaptype(mm, ht)
+
+rule Exec_instr/ref-func:
+  s mm v* |- REF.FUNC x : (s, (RefV (FuncRef mm.FUNCS[x])) :: v*)
+
+rule Exec_instr/ref-i31:
+  s mm ((NumV (I32 n)) :: v*) |- REF.I31 : (s, (RefV (I31Ref ni)) :: v*)
+  -- if ni = $i31_of_i32(n)
+
+rule Exec_instr/i31-get-u:
+  s mm ((RefV (I31Ref ni)) :: v*) |- I31.GET ZX : (s, (NumV (I32 ni)) :: v*)
+
+rule Exec_instr/i31-get-s:
+  s mm ((RefV (I31Ref ni)) :: v*) |- I31.GET SX : (s, (NumV (I32 n)) :: v*)
+  -- if n = $i31_get_s(ni)
+
+rule Exec_instr/ref-is-null-true:
+  s mm ((RefV (NullRef ht)) :: v*) |- REF.IS_NULL : (s, (NumV (I32 1)) :: v*)
+
+rule Exec_instr/ref-is-null-false:
+  s mm ((RefV r) :: v*) |- REF.IS_NULL : (s, (NumV (I32 0)) :: v*)
+  -- Ref_ok: s |- r : NoNull ht
+
+rule Exec_instr/ref-as-non-null:
+  s mm ((RefV r) :: v*) |- REF.AS_NON_NULL : (s, (RefV r) :: v*)
+  -- Ref_ok: s |- r : NoNull ht
+
+rule Exec_instr/ref-eq:
+  s mm ((RefV r_2) :: (RefV r_1) :: v*) |- REF.EQ : (s, (NumV (I32 n)) :: v*)
+  -- if n = $ref_eq(r_1, r_2)
+
+rule Exec_instr/ref-test-true:
+  s mm ((RefV r) :: v*) |- REF.TEST rt : (s, (NumV (I32 1)) :: v*)
+  -- Ref_ok: s |- r : rtactual
+  -- if rt_expect = $inst_reftype(mm, rt)
+  -- if $match_reftype(mm.TYPES, rtactual, rt_expect)
+
+rule Exec_instr/ref-test-false:
+  s mm ((RefV r) :: v*) |- REF.TEST rt : (s, (NumV (I32 0)) :: v*)
+  -- Ref_ok: s |- r : rtactual
+  -- if rt_expect = $inst_reftype(mm, rt)
+  -- if ~$match_reftype(mm.TYPES, rtactual, rt_expect)
+
+rule Exec_instr/ref-cast:
+  s mm ((RefV r) :: v*) |- REF.CAST rt : (s, (RefV r) :: v*)
+  -- Ref_ok: s |- r : rtactual
+  -- if rt_expect = $inst_reftype(mm, rt)
+  -- if $match_reftype(mm.TYPES, rtactual, rt_expect)
+
+rule Exec_instr/extern-internalize-null:
+  s mm ((RefV (NullRef ht)) :: v*) |- EXTERN.CONVERT Internalize : (s, (RefV (NullRef NoneHT)) :: v*)
+
+rule Exec_instr/extern-internalize:
+  s mm ((RefV (ExternRef r)) :: v*) |- EXTERN.CONVERT Internalize : (s, (RefV r) :: v*)
+
+rule Exec_instr/extern-externalize-null:
+  s mm ((RefV (NullRef ht)) :: v*) |- EXTERN.CONVERT Externalize : (s, (RefV (NullRef NoExternHT)) :: v*)
+
+rule Exec_instr/extern-externalize:
+  s mm ((RefV r) :: v*) |- EXTERN.CONVERT Externalize : (s, (RefV (ExternRef r)) :: v*)
+  -- Ref_ok: s |- r : NoNull ht
+
+rule Exec_instr/global-get:
+  s mm v* |- GLOBAL.GET x : (s, s.GLOBALS[mm.GLOBALS[x]].VALUE :: v*)
+
+rule Exec_instr/table-get:
+  s mm ((NumV (I32 i)) :: v*) |- TABLE.GET x : (s, (RefV r) :: v*)
+  -- if ta = mm.TABLES[x]
+  -- if TableT I32AT lim rt = s.TABLES[ta].TYPE
+  -- if r = s.TABLES[ta].REFS[i]
+
+rule Exec_instr/table-get-i64:
+  s mm ((NumV (I64 i)) :: v*) |- TABLE.GET x : (s, (RefV r) :: v*)
+  -- if ta = mm.TABLES[x]
+  -- if TableT I64AT lim rt = s.TABLES[ta].TYPE
+  -- if offset = $nat_of_num(I64 i)
+  -- if r = s.TABLES[ta].REFS[offset]
+
+rule Exec_instr/table-set:
+  s mm ((RefV r) :: (NumV num) :: v*) |- TABLE.SET x : (s', v*)
+  -- if ta = mm.TABLES[x]
+  -- if offset = $nat_of_num(num)
+  -- if $(offset < |s.TABLES[ta].REFS|)
+  -- if s' = s[ .TABLES[ta].REFS[offset] = r ]
+
+rule Exec_instr/table-size-i32:
+  s mm v* |- TABLE.SIZE x : (s, (NumV (I32 n)) :: v*)
+  -- if ta = mm.TABLES[x]
+  -- if TableT I32AT lim rt = s.TABLES[ta].TYPE
+  -- if n = |s.TABLES[ta].REFS|
+
+rule Exec_instr/table-size-i64:
+  s mm v* |- TABLE.SIZE x : (s, (NumV (I64 n)) :: v*)
+  -- if ta = mm.TABLES[x]
+  -- if TableT I64AT lim rt = s.TABLES[ta].TYPE
+  -- if n = |s.TABLES[ta].REFS|
+
+rule Exec_instr/table-grow-i32-unbounded:
+  s mm ((NumV (I32 n)) :: (RefV r) :: v*) |- TABLE.GROW x : (s', (NumV (I32 old)) :: v*)
+  -- if ta = mm.TABLES[x]
+  -- if TableT I32AT { MIN i64, MAX eps } rt = s.TABLES[ta].TYPE
+  -- if old = |s.TABLES[ta].REFS|
+  -- if newsize = $(old + n)
+  -- if $(newsize <= 4294967295)
+  -- if s_1 = s[ .TABLES[ta].REFS = s.TABLES[ta].REFS ++ $make_<refval>(r, n) ]
+  -- if s' = s_1[ .TABLES[ta].TYPE = TableT I32AT { MIN newsize, MAX eps } rt ]
+
+rule Exec_instr/table-grow-i32-unbounded-fail:
+  s mm ((NumV (I32 n)) :: (RefV r) :: v*) |- TABLE.GROW x : (s, (NumV (I32 4294967295)) :: v*)
+  -- if ta = mm.TABLES[x]
+  -- if TableT I32AT { MIN i64, MAX eps } rt = s.TABLES[ta].TYPE
+  -- if old = |s.TABLES[ta].REFS|
+  -- if newsize = $(old + n)
+  -- if $(newsize > 4294967295)
+
+rule Exec_instr/table-grow-i32-bounded:
+  s mm ((NumV (I32 n)) :: (RefV r) :: v*) |- TABLE.GROW x : (s', (NumV (I32 old)) :: v*)
+  -- if ta = mm.TABLES[x]
+  -- if TableT I32AT { MIN i64, MAX i64_1 } rt = s.TABLES[ta].TYPE
+  -- if old = |s.TABLES[ta].REFS|
+  -- if max = $(i64_1)
+  -- if newsize = $(old + n)
+  -- if $(newsize <= max)
+  -- if s_1 = s[ .TABLES[ta].REFS = s.TABLES[ta].REFS ++ $make_<refval>(r, n) ]
+  -- if s' = s_1[ .TABLES[ta].TYPE = TableT I32AT { MIN newsize, MAX i64_1 } rt ]
+
+rule Exec_instr/table-grow-i32-fail:
+  s mm ((NumV (I32 n)) :: (RefV r) :: v*) |- TABLE.GROW x : (s, (NumV (I32 4294967295)) :: v*)
+  -- if ta = mm.TABLES[x]
+  -- if TableT I32AT { MIN i64, MAX i64_1 } rt = s.TABLES[ta].TYPE
+  -- if old = |s.TABLES[ta].REFS|
+  -- if max = $(i64_1)
+  -- if newsize = $(old + n)
+  -- if $(newsize > max)
+
+rule Exec_instr/table-grow-i64-unbounded:
+  s mm ((NumV (I64 n)) :: (RefV r) :: v*) |- TABLE.GROW x : (s', (NumV (I64 old)) :: v*)
+  -- if ta = mm.TABLES[x]
+  -- if TableT I64AT { MIN i64, MAX eps } rt = s.TABLES[ta].TYPE
+  -- if old = |s.TABLES[ta].REFS|
+  -- if nsize = $nat_of_num(I64 n)
+  -- if newsize = $(old + nsize)
+  -- if s_1 = s[ .TABLES[ta].REFS = s.TABLES[ta].REFS ++ $make_<refval>(r, nsize) ]
+  -- if s' = s_1[ .TABLES[ta].TYPE = TableT I64AT { MIN newsize, MAX eps } rt ]
+
+rule Exec_instr/table-grow-i64-bounded:
+  s mm ((NumV (I64 n)) :: (RefV r) :: v*) |- TABLE.GROW x : (s', (NumV (I64 old)) :: v*)
+  -- if ta = mm.TABLES[x]
+  -- if TableT I64AT { MIN i64, MAX i64_1 } rt = s.TABLES[ta].TYPE
+  -- if old = |s.TABLES[ta].REFS|
+  -- if max = $(i64_1)
+  -- if nsize = $nat_of_num(I64 n)
+  -- if newsize = $(old + nsize)
+  -- if $(newsize <= max)
+  -- if s_1 = s[ .TABLES[ta].REFS = s.TABLES[ta].REFS ++ $make_<refval>(r, nsize) ]
+  -- if s' = s_1[ .TABLES[ta].TYPE = TableT I64AT { MIN newsize, MAX i64_1 } rt ]
+
+rule Exec_instr/table-grow-i64-fail:
+  s mm ((NumV (I64 n)) :: (RefV r) :: v*) |- TABLE.GROW x : (s, (NumV (I64 fail64)) :: v*)
+  -- if ta = mm.TABLES[x]
+  -- if TableT I64AT { MIN i64, MAX i64_1 } rt = s.TABLES[ta].TYPE
+  -- if old = |s.TABLES[ta].REFS|
+  -- if max = $(i64_1)
+  -- if nsize = $nat_of_num(I64 n)
+  -- if newsize = $(old + nsize)
+  -- if $(newsize > max)
+  -- if fail64 = $(-1)
+
+rule Exec_instr/table-fill:
+  s mm ((NumV num_n) :: (RefV r) :: (NumV num_i) :: v*) |- TABLE.FILL x : (s', v*)
+  -- if ta = mm.TABLES[x]
+  -- if offset = $nat_of_num(num_i)
+  -- if n = $nat_of_num(num_n)
+  -- if $(offset + n <= |s.TABLES[ta].REFS|)
+  -- if s' = s[ .TABLES[ta].REFS = $replace_slice_<refval>(s.TABLES[ta].REFS, offset, $make_<refval>(r, n)) ]
+
+rule Exec_instr/table-copy:
+  s mm ((NumV num_n) :: (NumV num_s) :: (NumV num_d) :: v*) |- TABLE.COPY x y : (s', v*)
+  -- if ta = mm.TABLES[x]
+  -- if ta' = mm.TABLES[y]
+  -- if n = $nat_of_num(num_n)
+  -- if offset = $nat_of_num(num_d)
+  -- if src = $nat_of_num(num_s)
+  -- if $(offset + n <= |s.TABLES[ta].REFS|)
+  -- if $(src + n <= |s.TABLES[ta'].REFS|)
+  -- if r* = s.TABLES[ta'].REFS[src:n]
+  -- if s' = s[ .TABLES[ta].REFS = $replace_slice_<refval>(s.TABLES[ta].REFS, offset, r*) ]
+
+rule Exec_instr/table-init:
+  s mm ((NumV num_n) :: (NumV num_s) :: (NumV num_d) :: v*) |- TABLE.INIT x y : (s', v*)
+  -- if ta = mm.TABLES[x]
+  -- if ea = mm.ELEMS[y]
+  -- if n = $nat_of_num(num_n)
+  -- if offset = $nat_of_num(num_d)
+  -- if src = $nat_of_num(num_s)
+  -- if $(offset + n <= |s.TABLES[ta].REFS|)
+  -- if $(src + n <= |s.ELEMS[ea].REFS|)
+  -- if r* = s.ELEMS[ea].REFS[src:n]
+  -- if s' = s[ .TABLES[ta].REFS = $replace_slice_<refval>(s.TABLES[ta].REFS, offset, r*) ]
+
+rule Exec_instr/elem-drop:
+  s mm v* |- ELEM.DROP x : (s', v*)
+  -- if ea = mm.ELEMS[x]
+  -- if s' = s[ .ELEMS[ea].REFS = eps ]
+
+rule Exec_instr/data-drop:
+  s mm v* |- DATA.DROP x : (s', v*)
+  -- if da = mm.DATAS[x]
+  -- if s' = s[ .DATAS[da].BYTES = eps ]
+
+rule Exec_instr/memory-fill:
+  s mm ((NumV num_n) :: (NumV (I32 k)) :: (NumV num_i) :: v*) |- MEMORY.FILL x : (s', v*)
+  -- if ma = mm.MEMS[x]
+  -- if n = $nat_of_num(num_n)
+  -- if offset = $nat_of_num(num_i)
+  -- if byteval = $byte_of_i32(k)
+  -- if $(offset + n <= |s.MEMS[ma].BYTES|)
+  -- if b* = $repeat_byte(byteval, n)
+  -- if s' = s[ .MEMS[ma].BYTES = $replace_bytes(s.MEMS[ma].BYTES, offset, b*) ]
+
+rule Exec_instr/memory-copy:
+  s mm ((NumV num_n) :: (NumV num_s) :: (NumV num_d) :: v*) |- MEMORY.COPY x y : (s', v*)
+  -- if ma = mm.MEMS[x]
+  -- if ma' = mm.MEMS[y]
+  -- if n = $nat_of_num(num_n)
+  -- if offset = $nat_of_num(num_d)
+  -- if src = $nat_of_num(num_s)
+  -- if $(offset + n <= |s.MEMS[ma].BYTES|)
+  -- if $(src + n <= |s.MEMS[ma'].BYTES|)
+  -- if b* = $slice_bytes(s.MEMS[ma'].BYTES, src, n)
+  -- if s' = s[ .MEMS[ma].BYTES = $replace_bytes(s.MEMS[ma].BYTES, offset, b*) ]
+
+rule Exec_instr/memory-init:
+  s mm ((NumV num_n) :: (NumV num_s) :: (NumV num_d) :: v*) |- MEMORY.INIT x y : (s', v*)
+  -- if ma = mm.MEMS[x]
+  -- if da = mm.DATAS[y]
+  -- if n = $nat_of_num(num_n)
+  -- if offset = $nat_of_num(num_d)
+  -- if src = $nat_of_num(num_s)
+  -- if $(offset + n <= |s.MEMS[ma].BYTES|)
+  -- if $(src + n <= |s.DATAS[da].BYTES|)
+  -- if b* = $slice_bytes(s.DATAS[da].BYTES, src, n)
+  -- if s' = s[ .MEMS[ma].BYTES = $replace_bytes(s.MEMS[ma].BYTES, offset, b*) ]
+
+rule Exec_instr/call:
+  s mm v* |- CALL x : (s', v'*)
+  -- if fa = mm.FUNCS[x]
+  -- Invoke_funcaddr: s v* |- fa : (s', v'*)
+
+rule Exec_instr/call-ref:
+  s mm ((RefV (FuncRef fa)) :: v*) |- CALL_REF x : (s', v'*)
+  -- Invoke_funcaddr: s v* |- fa : (s', v'*)
+
+rule Exec_instr/call-indirect:
+  s mm ((NumV num_i) :: v*) |- CALL_INDIRECT x y : (s', v'*)
+  -- if ta = mm.TABLES[x]
+  -- if i = $nat_of_num(num_i)
+  -- if FuncRef fa = s.TABLES[ta].REFS[i]
+  -- if fi = s.FUNCS[fa]
+  -- if $match_deftype(eps, fi.TYPE, mm.TYPES[y])
+  -- Invoke_funcaddr: s v* |- fa : (s', v'*)
+
+rule Exec_instr/binop-i32-add:
+  s mm ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- BINOP (I32 IAdd) : (s, (NumV (I32 n)) :: v*)
+  -- if n = $i32_add(i, j)
+
+rule Exec_instr/binop-i32-sub:
+  s mm ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- BINOP (I32 ISub) : (s, (NumV (I32 n)) :: v*)
+  -- if n = $i32_sub(i, j)
+
+rule Exec_instr/binop-i32-mul:
+  s mm ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- BINOP (I32 IMul) : (s, (NumV (I32 n)) :: v*)
+  -- if n = $i32_mul(i, j)
+
+rule Exec_instr/binop-i64-add:
+  s mm ((NumV (I64 j)) :: (NumV (I64 i)) :: v*) |- BINOP (I64 IAdd) : (s, (NumV (I64 n)) :: v*)
+  -- if n = $i64_add(i, j)
+
+rule Exec_instr/binop-i64-sub:
+  s mm ((NumV (I64 j)) :: (NumV (I64 i)) :: v*) |- BINOP (I64 ISub) : (s, (NumV (I64 n)) :: v*)
+  -- if n = $i64_sub(i, j)
+
+rule Exec_instr/binop-i64-mul:
+  s mm ((NumV (I64 j)) :: (NumV (I64 i)) :: v*) |- BINOP (I64 IMul) : (s, (NumV (I64 n)) :: v*)
+  -- if n = $i64_mul(i, j)
+
+rule Exec_instr/binop-f32-add:
+  s mm ((NumV (F32 fpb)) :: (NumV (F32 fpa)) :: v*) |- BINOP (F32 FAdd) : (s, (NumV (F32 fpc)) :: v*)
+  -- if fpc = $f32_add(fpa, fpb)
+
+rule Exec_instr/binop-f32-sub:
+  s mm ((NumV (F32 fpb)) :: (NumV (F32 fpa)) :: v*) |- BINOP (F32 FSub) : (s, (NumV (F32 fpc)) :: v*)
+  -- if fpc = $f32_sub(fpa, fpb)
+
+rule Exec_instr/binop-f32-mul:
+  s mm ((NumV (F32 fpb)) :: (NumV (F32 fpa)) :: v*) |- BINOP (F32 FMul) : (s, (NumV (F32 fpc)) :: v*)
+  -- if fpc = $f32_mul(fpa, fpb)
+
+rule Exec_instr/binop-f64-add:
+  s mm ((NumV (F64 fdb)) :: (NumV (F64 fda)) :: v*) |- BINOP (F64 FAdd) : (s, (NumV (F64 fdc)) :: v*)
+  -- if fdc = $f64_add(fda, fdb)
+
+rule Exec_instr/binop-f64-sub:
+  s mm ((NumV (F64 fdb)) :: (NumV (F64 fda)) :: v*) |- BINOP (F64 FSub) : (s, (NumV (F64 fdc)) :: v*)
+  -- if fdc = $f64_sub(fda, fdb)
+
+rule Exec_instr/binop-f64-mul:
+  s mm ((NumV (F64 fdb)) :: (NumV (F64 fda)) :: v*) |- BINOP (F64 FMul) : (s, (NumV (F64 fdc)) :: v*)
+  -- if fdc = $f64_mul(fda, fdb)
+
+rule Exec_instr/test-i32-eqz:
+  s mm ((NumV (I32 n_1)) :: v*) |- TEST (I32 Eqz) : (s, (NumV (I32 n)) :: v*)
+  -- if n = $i32_eqz(n_1)
+
+rule Exec_instr/test-i64-eqz:
+  s mm ((NumV (I64 n_1)) :: v*) |- TEST (I64 Eqz) : (s, (NumV (I32 n)) :: v*)
+  -- if n = $i64_eqz(n_1)
+
+rule Exec_instr/compare-i32-gt-u:
+  s mm ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- COMPARE (I32 GtU) : (s, (NumV (I32 n)) :: v*)
+  -- if n = $i32_gt_u(i, j)
+
+rule Exec_instr/compare-i32-le-s:
+  s mm ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- COMPARE (I32 LeS) : (s, (NumV (I32 n)) :: v*)
+  -- if n = $i32_le_s(i, j)
+
+rule Exec_instr/compare-i32-le-u:
+  s mm ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- COMPARE (I32 LeU) : (s, (NumV (I32 n)) :: v*)
+  -- if n = $i32_le_u(i, j)
+
+rule Exec_instr/compare-i64-le-u:
+  s mm ((NumV (I64 j)) :: (NumV (I64 i)) :: v*) |- COMPARE (I64 LeU) : (s, (NumV (I32 n)) :: v*)
+  -- if n = $i64_le_u(i, j)
+
+rule Exec_instr/compare-f32-eq:
+  s mm ((NumV (F32 fpb)) :: (NumV (F32 fpa)) :: v*) |- COMPARE (F32 Eq) : (s, (NumV (I32 n)) :: v*)
+  -- if n = $f32_eq(fpa, fpb)
+
+rule Exec_instr/compare-f32-ne:
+  s mm ((NumV (F32 fpb)) :: (NumV (F32 fpa)) :: v*) |- COMPARE (F32 Ne) : (s, (NumV (I32 n)) :: v*)
+  -- if n = $f32_ne(fpa, fpb)
+
+rule Exec_instr/compare-f32-le:
+  s mm ((NumV (F32 fpb)) :: (NumV (F32 fpa)) :: v*) |- COMPARE (F32 Le) : (s, (NumV (I32 n)) :: v*)
+  -- if n = $f32_le(fpa, fpb)
+
+rule Exec_instr/compare-f64-eq:
+  s mm ((NumV (F64 fdb)) :: (NumV (F64 fda)) :: v*) |- COMPARE (F64 Eq) : (s, (NumV (I32 n)) :: v*)
+  -- if n = $f64_eq(fda, fdb)
+
+rule Exec_instr/compare-f64-ne:
+  s mm ((NumV (F64 fdb)) :: (NumV (F64 fda)) :: v*) |- COMPARE (F64 Ne) : (s, (NumV (I32 n)) :: v*)
+  -- if n = $f64_ne(fda, fdb)
+
+rule Exec_instr/compare-f64-le:
+  s mm ((NumV (F64 fdb)) :: (NumV (F64 fda)) :: v*) |- COMPARE (F64 Le) : (s, (NumV (I32 n)) :: v*)
+  -- if n = $f64_le(fda, fdb)
+
+rule Exec_instr/compare-i32-eq-true:
+  s mm ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- COMPARE (I32 Eq) : (s, (NumV (I32 1)) :: v*)
+  -- if i = j
+
+rule Exec_instr/compare-i32-eq-false:
+  s mm ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- COMPARE (I32 Eq) : (s, (NumV (I32 0)) :: v*)
+  -- if $(i =/= j)
+
+rule Exec_instr/compare-i32-ne:
+  s mm ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- COMPARE (I32 Ne) : (s, (NumV (I32 n)) :: v*)
+  -- if n = $i32_ne(i, j)
+
+rule Exec_instr/compare-i64-eq-true:
+  s mm ((NumV (I64 j)) :: (NumV (I64 i)) :: v*) |- COMPARE (I64 Eq) : (s, (NumV (I32 1)) :: v*)
+  -- if i = j
+
+rule Exec_instr/compare-i64-eq-false:
+  s mm ((NumV (I64 j)) :: (NumV (I64 i)) :: v*) |- COMPARE (I64 Eq) : (s, (NumV (I32 0)) :: v*)
+  -- if i =/= j
+
+rule Exec_instr/convert-i32-wrap-i64:
+  s mm ((NumV (I64 j)) :: v*) |- CONVERT (I32 WrapI64) : (s, (NumV (I32 n)) :: v*)
+  -- if n = $i32_wrap_i64(j)
+
+rule Exec_instr/test-generic:
+  s mm ((NumV num) :: v*) |- TEST top : (s, (NumV (I32 n)) :: v*)
+  -- if n = $eval_testop(top, num)
+
+rule Exec_instr/compare-generic:
+  s mm ((NumV num_2) :: (NumV num_1) :: v*) |- COMPARE rop : (s, (NumV (I32 n)) :: v*)
+  -- if n = $eval_relop(rop, num_1, num_2)
+
+rule Exec_instr/unop-generic:
+  s mm ((NumV num_1) :: v*) |- UNARY uop : (s, (NumV num_2) :: v*)
+  -- if num_2 = $eval_unop(uop, num_1)
+
+rule Exec_instr/binop-generic:
+  s mm ((NumV num_2) :: (NumV num_1) :: v*) |- BINOP bop : (s, (NumV num_3) :: v*)
+  -- if num_3 = $eval_binop(bop, num_1, num_2)
+
+rule Exec_instr/convert-generic:
+  s mm ((NumV num_1) :: v*) |- CONVERT cop : (s, (NumV num_2) :: v*)
+  -- if num_2 = $eval_cvtop(cop, num_1)
+
+rule Exec_instr/vec-test-generic:
+  s mm ((VecV vec) :: v*) |- VEC.TEST vtop : (s, (NumV (I32 n)) :: v*)
+  -- if n = $eval_vtestop(vtop, vec)
+
+rule Exec_instr/vec-compare-generic:
+  s mm ((VecV vec_2) :: (VecV vec_1) :: v*) |- VEC.COMPARE vrop : (s, (VecV vec_3) :: v*)
+  -- if vec_3 = $eval_vrelop(vrop, vec_1, vec_2)
+
+rule Exec_instr/vec-unop-generic:
+  s mm ((VecV vec_1) :: v*) |- VEC.UNARY vuop : (s, (VecV vec_2) :: v*)
+  -- if vec_2 = $eval_vunop(vuop, vec_1)
+
+rule Exec_instr/vec-binop-generic:
+  s mm ((VecV vec_2) :: (VecV vec_1) :: v*) |- VEC.BINARY vbop : (s, (VecV vec_3) :: v*)
+  -- if vec_3 = $eval_vbinop(vbop, vec_1, vec_2)
+
+rule Exec_instr/vec-ternop-generic:
+  s mm ((VecV vec_3) :: (VecV vec_2) :: (VecV vec_1) :: v*) |- VEC.TERNARY vterop : (s, (VecV vec_4) :: v*)
+  -- if vec_4 = $eval_vternop(vterop, vec_1, vec_2, vec_3)
+
+rule Exec_instr/vec-convert-generic:
+  s mm ((VecV vec_1) :: v*) |- VEC.CONVERT vcvop : (s, (VecV vec_2) :: v*)
+  -- if vec_2 = $eval_vcvtop(vcvop, vec_1)
+
+rule Exec_instr/vec-shift-generic:
+  s mm ((NumV num) :: (VecV vec_1) :: v*) |- VEC.SHIFT vshop : (s, (VecV vec_2) :: v*)
+  -- if vec_2 = $eval_vshiftop(vshop, vec_1, num)
+
+rule Exec_instr/vec-bitmask-generic:
+  s mm ((VecV vec) :: v*) |- VEC.BITMASK vbitop : (s, (NumV num) :: v*)
+  -- if num = $eval_vbitmaskop(vbitop, vec)
+
+rule Exec_instr/vec-testbits-generic:
+  s mm ((VecV vec) :: v*) |- VEC.TESTBITS vvtop : (s, (NumV (I32 n)) :: v*)
+  -- if n = $eval_vvtestop(vvtop, vec)
+
+rule Exec_instr/vec-unarybits-generic:
+  s mm ((VecV vec_1) :: v*) |- VEC.UNARYBITS vvuop : (s, (VecV vec_2) :: v*)
+  -- if vec_2 = $eval_vvunop(vvuop, vec_1)
+
+rule Exec_instr/vec-binarybits-generic:
+  s mm ((VecV vec_2) :: (VecV vec_1) :: v*) |- VEC.BINARYBITS vvbop : (s, (VecV vec_3) :: v*)
+  -- if vec_3 = $eval_vvbinop(vvbop, vec_1, vec_2)
+
+rule Exec_instr/vec-ternarybits-generic:
+  s mm ((VecV vec_3) :: (VecV vec_2) :: (VecV vec_1) :: v*) |- VEC.TERNARYBITS vvterop : (s, (VecV vec_4) :: v*)
+  -- if vec_4 = $eval_vvternop(vvterop, vec_1, vec_2, vec_3)
+
+rule Exec_instr/vec-splat-generic:
+  s mm ((NumV num) :: v*) |- VEC.SPLAT vspop : (s, (VecV vec) :: v*)
+  -- if vec = $eval_vsplatop(vspop, num)
+
+rule Exec_instr/vec-extract-generic:
+  s mm ((VecV vec) :: v*) |- VEC.EXTRACT vexop : (s, (NumV num) :: v*)
+  -- if num = $eval_vextractop(vexop, vec)
+
+rule Exec_instr/vec-replace-generic:
+  s mm ((NumV num) :: (VecV vec_1) :: v*) |- VEC.REPLACE vrepop : (s, (VecV vec_2) :: v*)
+  -- if vec_2 = $eval_vreplaceop(vrepop, vec_1, num)
+
+rule Exec_instr/struct-new-explicit:
+  s mm v* |- STRUCT.NEW x Explicit : (s', (RefV (StructRef a)) :: v_rest*)
+  -- if DefStructT (StructT yt*) = $expanddt(mm.TYPES[x])
+  -- if n = |yt*|
+  -- if v_taken* = $take_<value>(v*, n)
+  -- if v_arg* = $rev_<value>(v_taken*)
+  -- if nrest = $(|v*| - n)
+  -- if v_rest* = v*[n:nrest]
+  -- if fv* = $pack_fields(yt*, v_arg*)
+  -- if si = { TYPE mm.TYPES[x], FIELDS fv* }
+  -- if a = |s.STRUCTS|
+  -- if s' = s[ .STRUCTS = s.STRUCTS ++ [si] ]
+
+rule Exec_instr/struct-new-implicit:
+  s mm v* |- STRUCT.NEW x Implicit : (s', (RefV (StructRef a)) :: v*)
+  -- if DefStructT (StructT yt*) = $expanddt(mm.TYPES[x])
+  -- if v_arg* = $default_field_values(yt*)
+  -- if fv* = $pack_fields(yt*, v_arg*)
+  -- if si = { TYPE mm.TYPES[x], FIELDS fv* }
+  -- if a = |s.STRUCTS|
+  -- if s' = s[ .STRUCTS = s.STRUCTS ++ [si] ]
+
+rule Exec_instr/struct-get-some:
+  s mm ((RefV (StructRef a)) :: v*) |- STRUCT.GET x y extension : (s, v_1 :: v*)
+  -- if fv = s.STRUCTS[a].FIELDS[y]
+  -- if v_1 = $unpack_field_ext(fv, extension)
+
+rule Exec_instr/struct-get-none:
+  s mm ((RefV (StructRef a)) :: v*) |- STRUCT.GET x y eps : (s, v_1 :: v*)
+  -- if fv = s.STRUCTS[a].FIELDS[y]
+  -- if v_1 = $unpack_field(fv)
+
+rule Exec_instr/struct-set:
+  s mm (v_1 :: (RefV (StructRef a)) :: v*) |- STRUCT.SET x y : (s', v*)
+  -- if DefStructT (StructT yt*) = $expanddt(s.STRUCTS[a].TYPE)
+  -- if FieldT mut zt = yt*[y]
+  -- if fv = $pack_field(zt, v_1)
+  -- if s' = s[ .STRUCTS[a].FIELDS[y] = fv ]
+
+rule Exec_instr/array-new-explicit:
+  s mm ((NumV (I32 n)) :: v_1 :: v*) |- ARRAY.NEW x Explicit : (s', (RefV (ArrayRef a)) :: v*)
+  -- if DefArrayT (ArrayT (FieldT mut zt)) = $expanddt(mm.TYPES[x])
+  -- if fv = $pack_field(zt, v_1)
+  -- if ai = { TYPE mm.TYPES[x], FIELDS $make_<fieldval>(fv, n) }
+  -- if a = |s.ARRAYS|
+  -- if s' = s[ .ARRAYS = s.ARRAYS ++ [ai] ]
+
+rule Exec_instr/array-new-implicit:
+  s mm ((NumV (I32 n)) :: v*) |- ARRAY.NEW x Implicit : (s', (RefV (ArrayRef a)) :: v*)
+  -- if DefArrayT (ArrayT (FieldT mut zt)) = $expanddt(mm.TYPES[x])
+  -- if v_default = $default_value($unpacked_storage_type(zt))
+  -- if fv = $pack_field(zt, v_default)
+  -- if ai = { TYPE mm.TYPES[x], FIELDS $make_<fieldval>(fv, n) }
+  -- if a = |s.ARRAYS|
+  -- if s' = s[ .ARRAYS = s.ARRAYS ++ [ai] ]
+
+rule Exec_instr/array-new-fixed:
+  s mm v* |- ARRAY.NEW_FIXED x n : (s', (RefV (ArrayRef a)) :: v_rest*)
+  -- if DefArrayT (ArrayT (FieldT mut zt)) = $expanddt(mm.TYPES[x])
+  -- if v_taken* = $take_<value>(v*, n)
+  -- if v_arg* = $rev_<value>(v_taken*)
+  -- if nrest = $(|v*| - n)
+  -- if v_rest* = v*[n:nrest]
+  -- if fv* = ($pack_field(zt, v_arg))*
+  -- if ai = { TYPE mm.TYPES[x], FIELDS fv* }
+  -- if a = |s.ARRAYS|
+  -- if s' = s[ .ARRAYS = s.ARRAYS ++ [ai] ]
+
+rule Exec_instr/array-new-data:
+  s mm ((NumV num_n) :: (NumV num_s) :: v*) |- ARRAY.NEW_DATA x y : (s', (RefV (ArrayRef a)) :: v*)
+  -- if da = mm.DATAS[y]
+  -- if offset = $nat_of_num(num_s)
+  -- if n = $nat_of_num(num_n)
+  -- if DefArrayT (ArrayT (FieldT mut zt)) = $expanddt(mm.TYPES[x])
+  -- if nsize = $storage_size_nat(zt)
+  -- if nbytes = $(n * nsize)
+  -- if $(offset + nbytes <= |s.DATAS[da].BYTES|)
+  -- if fv* = $fieldvals_of_data(zt, s.DATAS[da].BYTES, offset, n)
+  -- if ai = { TYPE mm.TYPES[x], FIELDS fv* }
+  -- if a = |s.ARRAYS|
+  -- if s' = s[ .ARRAYS = s.ARRAYS ++ [ai] ]
+
+rule Exec_instr/array-new-elem:
+  s mm ((NumV num_n) :: (NumV num_s) :: v*) |- ARRAY.NEW_ELEM x y : (s', (RefV (ArrayRef a)) :: v*)
+  -- if ea = mm.ELEMS[y]
+  -- if offset = $nat_of_num(num_s)
+  -- if n = $nat_of_num(num_n)
+  -- if DefArrayT (ArrayT (FieldT mut zt)) = $expanddt(mm.TYPES[x])
+  -- if $(offset + n <= |s.ELEMS[ea].REFS|)
+  -- if r* = s.ELEMS[ea].REFS[offset:n]
+  -- if fv* = $fieldvals_of_refs(zt, r*)
+  -- if ai = { TYPE mm.TYPES[x], FIELDS fv* }
+  -- if a = |s.ARRAYS|
+  -- if s' = s[ .ARRAYS = s.ARRAYS ++ [ai] ]
+
+rule Exec_instr/array-get-some:
+  s mm ((NumV (I32 i)) :: (RefV (ArrayRef a)) :: v*) |- ARRAY.GET x extension : (s, v_1 :: v*)
+  -- if fv = s.ARRAYS[a].FIELDS[i]
+  -- if v_1 = $unpack_field_ext(fv, extension)
+
+rule Exec_instr/array-get-none:
+  s mm ((NumV (I32 i)) :: (RefV (ArrayRef a)) :: v*) |- ARRAY.GET x eps : (s, v_1 :: v*)
+  -- if fv = s.ARRAYS[a].FIELDS[i]
+  -- if v_1 = $unpack_field(fv)
+
+rule Exec_instr/array-set:
+  s mm (v_1 :: (NumV (I32 i)) :: (RefV (ArrayRef a)) :: v*) |- ARRAY.SET x : (s', v*)
+  -- if DefArrayT (ArrayT (FieldT mut zt)) = $expanddt(s.ARRAYS[a].TYPE)
+  -- if fv = $pack_field(zt, v_1)
+  -- if s' = s[ .ARRAYS[a].FIELDS[i] = fv ]
+
+rule Exec_instr/array-len:
+  s mm ((RefV (ArrayRef a)) :: v*) |- ARRAY.LEN : (s, (NumV (I32 n)) :: v*)
+  -- if n = |s.ARRAYS[a].FIELDS|
+
+rule Exec_instr/array-copy:
+  s mm ((NumV num_n) :: (NumV num_s) :: (RefV (ArrayRef a_src)) :: (NumV num_d) :: (RefV (ArrayRef a_dst)) :: v*) |- ARRAY.COPY x y : (s', v*)
+  -- if n = $nat_of_num(num_n)
+  -- if src = $nat_of_num(num_s)
+  -- if offset = $nat_of_num(num_d)
+  -- if $(src + n <= |s.ARRAYS[a_src].FIELDS|)
+  -- if $(offset + n <= |s.ARRAYS[a_dst].FIELDS|)
+  -- if fv* = s.ARRAYS[a_src].FIELDS[src:n]
+  -- if s' = s[ .ARRAYS[a_dst].FIELDS = $replace_slice_<fieldval>(s.ARRAYS[a_dst].FIELDS, offset, fv*) ]
+
+rule Exec_instr/array-fill:
+  s mm ((NumV num_n) :: v_1 :: (NumV num_i) :: (RefV (ArrayRef a)) :: v*) |- ARRAY.FILL x : (s', v*)
+  -- if DefArrayT (ArrayT (FieldT mut zt)) = $expanddt(s.ARRAYS[a].TYPE)
+  -- if n = $nat_of_num(num_n)
+  -- if offset = $nat_of_num(num_i)
+  -- if fv = $pack_field(zt, v_1)
+  -- if $(offset + n <= |s.ARRAYS[a].FIELDS|)
+  -- if s' = s[ .ARRAYS[a].FIELDS = $replace_slice_<fieldval>(s.ARRAYS[a].FIELDS, offset, $make_<fieldval>(fv, n)) ]
+
+rule Exec_instr/array-init-data:
+  s mm ((NumV num_n) :: (NumV num_s) :: (NumV num_i) :: (RefV (ArrayRef a)) :: v*) |- ARRAY.INIT_DATA x y : (s', v*)
+  -- if da = mm.DATAS[y]
+  -- if n = $nat_of_num(num_n)
+  -- if src = $nat_of_num(num_s)
+  -- if offset = $nat_of_num(num_i)
+  -- if DefArrayT (ArrayT (FieldT mut zt)) = $expanddt(s.ARRAYS[a].TYPE)
+  -- if nsize = $storage_size_nat(zt)
+  -- if nbytes = $(n * nsize)
+  -- if $(src + nbytes <= |s.DATAS[da].BYTES|)
+  -- if $(offset + n <= |s.ARRAYS[a].FIELDS|)
+  -- if fv* = $fieldvals_of_data(zt, s.DATAS[da].BYTES, src, n)
+  -- if s' = s[ .ARRAYS[a].FIELDS = $replace_slice_<fieldval>(s.ARRAYS[a].FIELDS, offset, fv*) ]
+
+rule Exec_instr/array-init-elem:
+  s mm ((NumV num_n) :: (NumV num_s) :: (NumV num_i) :: (RefV (ArrayRef a)) :: v*) |- ARRAY.INIT_ELEM x y : (s', v*)
+  -- if ea = mm.ELEMS[y]
+  -- if n = $nat_of_num(num_n)
+  -- if src = $nat_of_num(num_s)
+  -- if offset = $nat_of_num(num_i)
+  -- if DefArrayT (ArrayT (FieldT mut zt)) = $expanddt(s.ARRAYS[a].TYPE)
+  -- if $(src + n <= |s.ELEMS[ea].REFS|)
+  -- if $(offset + n <= |s.ARRAYS[a].FIELDS|)
+  -- if r* = s.ELEMS[ea].REFS[src:n]
+  -- if fv* = $fieldvals_of_refs(zt, r*)
+  -- if s' = s[ .ARRAYS[a].FIELDS = $replace_slice_<fieldval>(s.ARRAYS[a].FIELDS, offset, fv*) ]
+
+rule Exec_instr/load-num-generic:
+  s mm ((NumV num_1) :: v*) |- LOAD x lop : (s, (NumV num_2) :: v*)
+  -- if ma = mm.MEMS[x]
+  -- if addrval = $addr_plus_offset(num_1, lop.OFFSET)
+  -- if nsize = $loadop_size(lop)
+  -- if $(addrval + nsize <= |s.MEMS[ma].BYTES|)
+  -- if b* = s.MEMS[ma].BYTES[addrval:nsize]
+  -- if num_2 = $eval_load_num(lop, b*)
+
+rule Exec_instr/store-num-generic:
+  s mm ((NumV num_2) :: (NumV num_1) :: v*) |- STORE x sop : (s', v*)
+  -- if ma = mm.MEMS[x]
+  -- if addrval = $addr_plus_offset(num_1, sop.OFFSET)
+  -- if nsize = $storeop_size(sop)
+  -- if $(addrval + nsize <= |s.MEMS[ma].BYTES|)
+  -- if b* = $eval_store_num(sop, num_2)
+  -- if s' = s[ .MEMS[ma].BYTES = $replace_bytes(s.MEMS[ma].BYTES, addrval, b*) ]
+
+rule Exec_instr/load-vec-generic:
+  s mm ((NumV num) :: v*) |- VEC.LOAD x vlop : (s, (VecV vec) :: v*)
+  -- if ma = mm.MEMS[x]
+  -- if addrval = $addr_plus_offset(num, vlop.OFFSET)
+  -- if nsize = $vloadop_size(vlop)
+  -- if $(addrval + nsize <= |s.MEMS[ma].BYTES|)
+  -- if b* = s.MEMS[ma].BYTES[addrval:nsize]
+  -- if vec = $eval_load_vec(vlop, b*)
+
+rule Exec_instr/store-vec-generic:
+  s mm ((VecV vec) :: (NumV num) :: v*) |- VEC.STORE x vsop : (s', v*)
+  -- if ma = mm.MEMS[x]
+  -- if addrval = $addr_plus_offset(num, vsop.OFFSET)
+  -- if nsize = $vstoreop_size(vsop)
+  -- if $(addrval + nsize <= |s.MEMS[ma].BYTES|)
+  -- if b* = $eval_store_vec(vsop, vec)
+  -- if s' = s[ .MEMS[ma].BYTES = $replace_bytes(s.MEMS[ma].BYTES, addrval, b*) ]
+
+rule Exec_instr/load-vec-lane-generic:
+  s mm ((VecV vec_1) :: (NumV num) :: v*) |- VEC.LOAD_LANE x vlaneop int_1 : (s, (VecV vec_2) :: v*)
+  -- if ma = mm.MEMS[x]
+  -- if addrval = $addr_plus_offset(num, vlaneop.OFFSET)
+  -- if nsize = $vlaneop_size(vlaneop)
+  -- if $(addrval + nsize <= |s.MEMS[ma].BYTES|)
+  -- if b* = s.MEMS[ma].BYTES[addrval:nsize]
+  -- if vec_2 = $eval_load_vec_lane(vlaneop, int_1, b*, vec_1)
+
+rule Exec_instr/store-vec-lane-generic:
+  s mm ((VecV vec) :: (NumV num) :: v*) |- VEC.STORE_LANE x vlaneop int_1 : (s', v*)
+  -- if ma = mm.MEMS[x]
+  -- if addrval = $addr_plus_offset(num, vlaneop.OFFSET)
+  -- if nsize = $vlaneop_size(vlaneop)
+  -- if $(addrval + nsize <= |s.MEMS[ma].BYTES|)
+  -- if b* = $eval_store_vec_lane(vlaneop, int_1, vec)
+  -- if s' = s[ .MEMS[ma].BYTES = $replace_bytes(s.MEMS[ma].BYTES, addrval, b*) ]

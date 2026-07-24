@@ -273,7 +273,7 @@ and gen_from_typs (depth : int) (tdenv : TDEnv.t) (texts : value' list)
 let mutate_type_driven (tdenv : TDEnv.t) (texts : value' list)
     (nums : num_context) (value : value) : (kind * value) option =
   let typ = value.note.typ $ no_region in
-  let depth = Random.int 4 + 1 in
+  let depth = Random.int 5 + 6 in
   let value_opt = gen_from_typ depth tdenv texts nums typ in
   Option.map (fun value -> (GenFromTyp, value)) value_opt
 

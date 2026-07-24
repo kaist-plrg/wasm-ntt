@@ -3,4 +3,14 @@
 (library
  (name wasm_interface)
  (public_name p4spectec.wasm_interface)
- (libraries core_unix menhirLib domain util lang runtime interface wasm_interpreter str))
+ (libraries
+  core_unix
+  menhirLib
+  domain
+  util
+  lang
+  runtime
+  interface
+  builtin
+  wasm_interpreter
+  str))

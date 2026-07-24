@@ -29,18 +29,201 @@ module Wasm_run = struct
         [ `Syntax of region * string | `Runtime of region * string ]
     | WasmUnexpectedPass of Lang.Il.value list
 
+  let run_script_harness (module Simulator : SIM) (path_wasm : string) :
+      result =
+    let module H = Wasm_interface.Script_harness in
+    let module S = Wasm_interpreter.Script in
+    let commands = Wasm_interface.Parse.parse_commands path_wasm in
+    let total_commands = List.length commands in
+    let eval_rel relname values_input =
+      match Simulator.Interp.eval_rel relname values_input with
+      | Pass values -> values
+      | Fail (at, msg) -> H.error at msg
+    in
+    let instantiate state var_opt module_entry =
+      let externaddr_value =
+        H.resolve_imports no_region state module_entry.H.module_
+        |> H.externaddr_list
+      in
+      let outputs =
+        eval_rel "Init_with_store_ok"
+          [ state.H.store; module_entry.H.value; externaddr_value ]
+      in
+      let instance = H.instance_of_outputs no_region outputs in
+      H.bind_instance no_region var_opt instance state
+    in
+    let expect_rel_failure msg relname values_input =
+      try
+        match Simulator.Interp.eval_rel relname values_input with
+        | Pass _ -> H.error no_region msg
+        | Fail _ -> ()
+      with InterpError _ -> ()
+    in
+    let expect_unlinkable state module_entry =
+      ignore (eval_rel "Module_ok" [ module_entry.H.value ]);
+      try
+        let externaddr_value =
+          H.resolve_imports no_region state module_entry.H.module_
+          |> H.externaddr_list
+        in
+        expect_rel_failure "expected linking failure" "Init_with_store_ok"
+          [ state.H.store; module_entry.H.value; externaddr_value ]
+      with InterpError _ -> ()
+    in
+    let expect_uninstantiable state module_entry =
+      ignore (eval_rel "Module_ok" [ module_entry.H.value ]);
+      let externaddr_value =
+        H.resolve_imports no_region state module_entry.H.module_
+        |> H.externaddr_list
+      in
+      let init_inputs = [ state.H.store; module_entry.H.value; externaddr_value ] in
+      let trap_store_or_keep () =
+        match Simulator.Interp.eval_rel "Init_trap_with_store_ok" init_inputs with
+        | Pass outputs ->
+            let store = H.store_of_outputs no_region outputs in
+            { state with H.store }
+        | Fail _ -> state
+      in
+      match Simulator.Interp.eval_rel "Init_with_store_ok" init_inputs with
+      | Pass _ -> H.error no_region "expected instantiation failure"
+      | Fail _ -> trap_store_or_keep ()
+    in
+    let run_action state (act : S.action) =
+      match act.it with
+      | S.Invoke (var_opt, name, literals) ->
+          let instance = H.lookup_instance no_region var_opt state in
+          let funcaddr =
+            H.funcaddr_of_export no_region instance.H.module_inst name
+          in
+          let arguments = H.value_list (List.map H.value_of_literal literals) in
+          let outputs =
+            eval_rel "Invoke_ok" [ state.H.store; funcaddr; arguments ]
+          in
+          let values, store = H.invoke_outputs no_region outputs in
+          ({ state with H.store }, values)
+      | S.Get (var_opt, name) ->
+          let instance = H.lookup_instance no_region var_opt state in
+          let globaladdr =
+            H.globaladdr_of_export no_region instance.H.module_inst name
+          in
+          let value = H.global_value no_region state.H.store globaladdr in
+          (state, [ value ])
+    in
+    let expect_action_failure state act =
+      try
+        ignore (run_action state act);
+        H.error no_region "expected runtime error"
+      with InterpError _ -> ()
+    in
+    let unsupported_state_msg =
+      "unsupported wasm script command prevents reliable instantiation state"
+    in
+    let protect_after_unsupported unsupported_seen thunk =
+      if not unsupported_seen then thunk ()
+      else
+        try thunk ()
+        with InterpError _ -> H.error no_region unsupported_state_msg
+    in
+    let context_error ~index cmd at msg =
+      H.error at (H.debug_error_message ~index ~total:total_commands cmd msg)
+    in
+    let run_command ~index state unsupported_seen (cmd : S.command) =
+      H.trace_command ~index ~total:total_commands cmd;
+      try
+        match cmd.it with
+        | S.Module (var_opt, def) ->
+            let entry = H.module_entry_of_definition def in
+            ignore (eval_rel "Module_ok" [ entry.value ]);
+            let state = H.bind_module no_region var_opt entry state in
+            (state, unsupported_seen)
+        | S.Instance (var_opt, source_var_opt) ->
+            let module_entry = H.lookup_module no_region source_var_opt state in
+            let state =
+              protect_after_unsupported unsupported_seen (fun () ->
+                  instantiate state var_opt module_entry)
+            in
+            (state, unsupported_seen)
+        | S.Register (name, var_opt) ->
+            let instance = H.lookup_instance no_region var_opt state in
+            let state = H.bind_registry name instance state in
+            (state, unsupported_seen)
+        | S.Assertion ass -> (
+            match ass.it with
+            | S.AssertInvalid (def, _) ->
+                let entry = H.module_entry_of_definition def in
+                expect_rel_failure "expected validation failure" "Module_ok"
+                  [ entry.value ];
+                (state, unsupported_seen)
+            | S.AssertUnlinkable (var_opt, _) ->
+                let module_entry = H.lookup_module no_region var_opt state in
+                protect_after_unsupported unsupported_seen (fun () ->
+                    expect_unlinkable state module_entry);
+                (state, unsupported_seen)
+            | S.AssertUninstantiable (var_opt, _) ->
+                let module_entry = H.lookup_module no_region var_opt state in
+                let state =
+                  protect_after_unsupported unsupported_seen (fun () ->
+                      expect_uninstantiable state module_entry)
+                in
+                (state, unsupported_seen)
+            | S.AssertReturn (act, results) ->
+                let state, values =
+                  protect_after_unsupported unsupported_seen (fun () ->
+                      run_action state act)
+                in
+                H.assert_action_results no_region act values results;
+                (state, unsupported_seen)
+            | S.AssertTrap (act, _) | S.AssertExhaustion (act, _) ->
+                protect_after_unsupported unsupported_seen (fun () ->
+                    expect_action_failure state act);
+                (state, unsupported_seen)
+            | S.AssertMalformed _ | S.AssertMalformedCustom _
+            | S.AssertInvalidCustom _ ->
+                (state, unsupported_seen)
+            | S.AssertException act ->
+                protect_after_unsupported unsupported_seen (fun () ->
+                    expect_action_failure state act);
+                (state, unsupported_seen))
+        | S.Action act ->
+            let state, _values =
+              protect_after_unsupported unsupported_seen (fun () ->
+                  run_action state act)
+            in
+            (state, unsupported_seen)
+        | S.Meta _ -> (state, true)
+      with InterpError (at, msg) -> context_error ~index cmd at msg
+    in
+    let rec run index state unsupported_seen = function
+      | [] -> ()
+      | cmd :: commands_t ->
+          let state, unsupported_seen =
+            run_command ~index state unsupported_seen cmd
+          in
+          run (index + 1) state unsupported_seen commands_t
+    in
+    run 1 (H.initial_state ()) false commands;
+    WasmPass []
+
   let run (module Simulator : SIM) (relname : string) (path_wasm : string) :
       result =
     try
-      let value_program, expectation = Wasm_interface.Parse.parse_file path_wasm in
-      Inst.Hook.on_program value_program;
-      match (expectation, Simulator.Interp.eval_rel relname [ value_program ]) with
-      | Wasm_interface.Parse.Positive, Pass values -> WasmPass values
-      | Wasm_interface.Parse.Positive, Fail (at, msg) ->
-          WasmFail (`Runtime (at, msg))
-      | Wasm_interface.Parse.Negative, Pass values -> WasmUnexpectedPass values
-      | Wasm_interface.Parse.Negative, Fail (at, msg) ->
-          WasmExpectedFail (`Runtime (at, msg))
+      Wasm_interface.Builtin_hooks.init ();
+      if Wasm_interface.Script_harness.is_script_harness_rel relname then
+        run_script_harness (module Simulator) path_wasm
+      else
+        let value_program, expectation =
+          Wasm_interface.Parse.parse_file_for_rel relname path_wasm
+        in
+        Inst.Hook.on_program value_program;
+        match
+          (expectation, Simulator.Interp.eval_rel relname [ value_program ])
+        with
+        | Wasm_interface.Parse.Positive, Pass values -> WasmPass values
+        | Wasm_interface.Parse.Positive, Fail (at, msg) ->
+            WasmFail (`Runtime (at, msg))
+        | Wasm_interface.Parse.Negative, Pass values -> WasmUnexpectedPass values
+        | Wasm_interface.Parse.Negative, Fail (at, msg) ->
+            WasmExpectedFail (`Runtime (at, msg))
     with
     | ParseError (at, msg) -> WasmFail (`Syntax (at, msg))
     | InterpError (at, msg) -> WasmFail (`Runtime (at, msg))
@@ -422,6 +605,9 @@ let run_wasm_command =
      and no_cache = flag "-no-cache" no_arg ~doc:"disable caching"
      and det = flag "-det" no_arg ~doc:"deterministic mode"
      and profile = flag "-profile" no_arg ~doc:"profiling"
+     and wasm_script_debug =
+       flag "-wasm-script-debug" no_arg
+         ~doc:"print source locations for Wasm script harness commands"
      and mode =
        Command.Param.choose_one
          [
@@ -438,6 +624,7 @@ let run_wasm_command =
      in
      fun () ->
        try
+         Wasm_interface.Script_harness.set_script_debug wasm_script_debug;
          let cache = not no_cache in
          let spec_sim, (module Simulator) =
            Backend_sim.Build.build ~cache ~det ~final:true mode paths_spec
@@ -478,6 +665,9 @@ let run_wasm_suite =
       and no_cache = flag "-no-cache" no_arg ~doc:"disable caching"
       and det = flag "-det" no_arg ~doc:"deterministic mode"
       and profile = flag "-profile" no_arg ~doc:"profiling"
+      and wasm_script_debug =
+        flag "-wasm-script-debug" no_arg
+          ~doc:"print source locations for Wasm script harness commands"
       and mode =
        Command.Param.choose_one
          [
@@ -493,6 +683,7 @@ let run_wasm_suite =
          ~if_nothing_chosen:(Default_to SL_mode)
       in
       fun () ->
+        Wasm_interface.Script_harness.set_script_debug wasm_script_debug;
         let paths_wasm =
             testdirs_wasm
             |> List.concat_map (Util.Filesys.collect_files ~suffix:".wast")

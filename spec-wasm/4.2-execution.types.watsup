@@ -1,0 +1,119 @@
+;;
+;; Runtime Type Instantiation
+;;
+
+dec $subst_all_valtype(valtype, deftype*) : valtype
+dec $subst_all_resulttype(resulttype, deftype*) : resulttype
+dec $subst_all_heaptype(heaptype, deftype*) : heaptype
+dec $subst_all_reftype(reftype, deftype*) : reftype
+dec $subst_all_globaltype(globaltype, deftype*) : globaltype
+dec $subst_all_tabletype(tabletype, deftype*) : tabletype
+dec $subst_all_memtype(memtype, deftype*) : memtype
+dec $subst_all_tagtype(tagtype, deftype*) : tagtype
+dec $subst_all_externtype(externtype, deftype*) : externtype
+dec $subst_all_deftype(deftype, deftype*) : deftype
+
+def $subst_all_valtype(t, dt*) =
+  $subst_valtype<deftype*>(dt*, def $subst_of, t)
+
+def $subst_all_resulttype(t*, dt*) =
+  $subst_resulttype<deftype*>(dt*, def $subst_of, t*)
+
+def $subst_all_heaptype(ht, dt*) =
+  $subst_heaptype<deftype*>(dt*, def $subst_of, ht)
+
+def $subst_all_reftype(rt, dt*) =
+  $subst_reftype<deftype*>(dt*, def $subst_of, rt)
+
+def $subst_all_globaltype(GlobalT mut t, dt*) =
+  GlobalT mut ($subst_all_valtype(t, dt*))
+
+def $subst_all_tabletype(TableT at lim rt, dt*) =
+  TableT at lim ($subst_all_reftype(rt, dt*))
+
+def $subst_all_memtype(mt, dt*) = mt
+
+def $subst_all_tagtype(TagT dt_0, dt*) =
+  TagT ($subst_all_deftype(dt_0, dt*))
+
+def $subst_all_externtype(ExtFunct dt_0, dt*) =
+  ExtFunct ($subst_all_deftype(dt_0, dt*))
+def $subst_all_externtype(ExtTableT tt, dt*) =
+  ExtTableT ($subst_all_tabletype(tt, dt*))
+def $subst_all_externtype(ExtMemoryT mt, dt*) =
+  ExtMemoryT ($subst_all_memtype(mt, dt*))
+def $subst_all_externtype(ExtGlobalT gt, dt*) =
+  ExtGlobalT ($subst_all_globaltype(gt, dt*))
+def $subst_all_externtype(ExtTagT jt, dt*) =
+  ExtTagT ($subst_all_tagtype(jt, dt*))
+
+def $subst_all_deftype(dt_0, dt*) =
+  $subst_deftype<deftype*>(dt*, def $subst_of, dt_0)
+
+dec $inst_valtype(moduleinst, valtype) : valtype
+dec $inst_heaptype(moduleinst, heaptype) : heaptype
+dec $inst_reftype(moduleinst, reftype) : reftype
+dec $inst_globaltype(moduleinst, globaltype) : globaltype
+dec $inst_tabletype(moduleinst, tabletype) : tabletype
+dec $inst_memtype(moduleinst, memtype) : memtype
+dec $inst_tagtype(moduleinst, tagtype) : tagtype
+dec $inst_externtype(moduleinst, externtype) : externtype
+
+def $inst_valtype(mm, t) = $subst_all_valtype(t, mm.TYPES)
+def $inst_heaptype(mm, ht) = $subst_all_heaptype(ht, mm.TYPES)
+def $inst_reftype(mm, rt) = $subst_all_reftype(rt, mm.TYPES)
+def $inst_globaltype(mm, gt) = $subst_all_globaltype(gt, mm.TYPES)
+def $inst_tabletype(mm, tt) = $subst_all_tabletype(tt, mm.TYPES)
+def $inst_memtype(mm, mt) = $subst_all_memtype(mt, mm.TYPES)
+def $inst_tagtype(mm, jt) = $subst_all_tagtype(jt, mm.TYPES)
+def $inst_externtype(mm, xt) = $subst_all_externtype(xt, mm.TYPES)
+
+dec $deftype_at(deftype*, typeidx) : deftype
+def $deftype_at(dt_h :: dt_t*, x) = dt_h
+  -- if x = 0
+def $deftype_at(dt_h :: dt_t*, x) = $deftype_at(dt_t*, x')
+  -- if $(x > 0)
+  -- if x' = $(x - 1)
+
+dec $match_limits(limits, limits) : bool
+dec $match_globaltype(deftype*, globaltype, globaltype) : bool
+dec $match_tabletype(deftype*, tabletype, tabletype) : bool
+dec $match_memtype(deftype*, memtype, memtype) : bool
+dec $match_tagtype(deftype*, tagtype, tagtype) : bool
+
+def $match_limits({ MIN i64_1, MAX _ }, { MIN i64_2, MAX eps }) = true
+  -- if $le_u(i64_2, i64_1)
+def $match_limits({ MIN i64_1, MAX i64_1' }, { MIN i64_2, MAX i64_2' }) = true
+  -- if $le_u(i64_2, i64_1) /\ $le_u(i64_1', i64_2')
+def $match_limits(_, _) = false
+  -- otherwise
+
+def $match_globaltype(dt*, GlobalT Cons t_1, GlobalT Cons t_2) =
+  $match_valtype(dt*, t_1, t_2)
+def $match_globaltype(dt*, GlobalT Var t_1, GlobalT Var t_2) =
+  $match_valtype(dt*, t_1, t_2) /\ $match_valtype(dt*, t_2, t_1)
+def $match_globaltype(dt*, _, _) = false
+  -- otherwise
+
+def $match_tabletype(dt*, TableT at_1 lim_1 rt_1, TableT at_2 lim_2 rt_2) =
+  (at_1 = at_2) /\ $match_limits(lim_1, lim_2) /\
+  $match_reftype(dt*, rt_1, rt_2) /\ $match_reftype(dt*, rt_2, rt_1)
+
+def $match_memtype(dt*, MemoryT at_1 lim_1, MemoryT at_2 lim_2) =
+  (at_1 = at_2) /\ $match_limits(lim_1, lim_2)
+
+def $match_tagtype(dt*, TagT dt_1, TagT dt_2) =
+  $match_deftype(dt*, dt_1, dt_2) /\ $match_deftype(dt*, dt_2, dt_1)
+
+def $match_externtype(dt*, ExtFunct dt_1, ExtFunct dt_2) =
+  $match_deftype(dt*, dt_1, dt_2)
+def $match_externtype(dt*, ExtGlobalT gt_1, ExtGlobalT gt_2) =
+  $match_globaltype(dt*, gt_1, gt_2)
+def $match_externtype(dt*, ExtTableT tt_1, ExtTableT tt_2) =
+  $match_tabletype(dt*, tt_1, tt_2)
+def $match_externtype(dt*, ExtMemoryT mt_1, ExtMemoryT mt_2) =
+  $match_memtype(dt*, mt_1, mt_2)
+def $match_externtype(dt*, ExtTagT jt_1, ExtTagT jt_2) =
+  $match_tagtype(dt*, jt_1, jt_2)
+def $match_externtype(dt*, _, _) = false
+  -- otherwise

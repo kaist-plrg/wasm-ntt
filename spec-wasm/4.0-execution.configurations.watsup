@@ -1,0 +1,385 @@
+;;
+;; Execution Configurations
+;;
+
+;; Addresses
+
+syntax byte = nat
+
+syntax addr = nat
+syntax funcaddr = addr
+syntax globaladdr = addr
+syntax tableaddr = addr
+syntax memaddr = addr
+syntax tagaddr = addr
+syntax elemaddr = addr
+syntax dataaddr = addr
+syntax hostaddr = addr
+syntax structaddr = addr
+syntax arrayaddr = addr
+syntax exnaddr = addr
+
+syntax externaddr =
+  | FuncAddr funcaddr
+  | GlobalAddr globaladdr
+  | TableAddr tableaddr
+  | MemAddr memaddr
+  | TagAddr tagaddr
+
+;; Runtime values
+
+syntax refval =
+  | NullRef heaptype
+  | FuncRef funcaddr
+  | ExternRef refval
+  | I31Ref nat
+  | StructRef structaddr
+  | ArrayRef arrayaddr
+  | ExnRef exnaddr
+  | HostRef hostaddr
+
+syntax value =
+  | NumV num_
+  | VecV vec_
+  | RefV refval
+
+syntax result =
+  | Values value*
+  | Trap
+
+;; Runtime instances
+
+syntax hostfunc = HostFuncId hostaddr
+
+syntax funccode =
+  | AstFunc func
+  | HostFunc hostfunc
+
+syntax exportinst = {
+  NAME name,
+  ADDR externaddr
+}
+
+syntax moduleinst = {
+  TYPES deftype*,
+  FUNCS funcaddr*,
+  GLOBALS globaladdr*,
+  TABLES tableaddr*,
+  MEMS memaddr*,
+  TAGS tagaddr*,
+  ELEMS elemaddr*,
+  DATAS dataaddr*,
+  EXPORTS exportinst*
+}
+
+syntax funcinst = {
+  TYPE deftype,
+  MODULE moduleinst,
+  CODE funccode
+}
+
+syntax globalinst = {
+  TYPE globaltype,
+  VALUE value
+}
+
+syntax tableinst = {
+  TYPE tabletype,
+  REFS refval*
+}
+
+syntax meminst = {
+  TYPE memtype,
+  BYTES byte*
+}
+
+syntax taginst = {
+  TYPE tagtype
+}
+
+syntax eleminst = {
+  TYPE elemtype,
+  REFS refval*
+}
+
+syntax datainst = {
+  BYTES byte*
+}
+
+syntax fieldval =
+  | FieldValue value
+  | PackedField packtype nat
+
+syntax structinst = {
+  TYPE deftype,
+  FIELDS fieldval*
+}
+
+syntax arrayinst = {
+  TYPE deftype,
+  FIELDS fieldval*
+}
+
+syntax exninst = {
+  TAG tagaddr,
+  FIELDS value*
+}
+
+;; Store and configurations
+
+syntax store = {
+  FUNCS funcinst*,
+  GLOBALS globalinst*,
+  TABLES tableinst*,
+  MEMS meminst*,
+  TAGS taginst*,
+  ELEMS eleminst*,
+  DATAS datainst*,
+  STRUCTS structinst*,
+  ARRAYS arrayinst*,
+  EXNS exninst*
+}
+
+syntax frame = {
+  LOCALS (value?)*,
+  MODULE moduleinst
+}
+
+syntax state = (store, frame)
+syntax config = (state, instr*)
+
+syntax execresult =
+  | NormalR store frame value*
+  | BreakR store frame nat value*
+  | ReturnR store frame value*
+  | ThrowR store frame tagaddr value*
+
+;; Meta variables
+
+var a : addr
+var fa : funcaddr
+var ga : globaladdr
+var ta : tableaddr
+var ma : memaddr
+var ja : tagaddr
+var ea : elemaddr
+var da : dataaddr
+var xa : externaddr
+var r : refval
+var v : value
+var er : execresult
+var b : byte
+var fpa : f32
+var fpb : f32
+var fpc : f32
+var fda : f64
+var fdb : f64
+var fdc : f64
+var s : store
+var z : state
+var fr : frame
+var frp : frame
+var mm : moduleinst
+var mmbase : moduleinst
+var base : nat
+var ni : nat
+var nparam : nat
+var nresult : nat
+var nrest : nat
+var nbytes : nat
+var nsize : nat
+var newsize : nat
+var pages : nat
+var offset : nat
+var addrval : nat
+var byteval : byte
+var old : nat
+var max : nat
+var fail64 : i64
+var src : nat
+var k : nat
+var dtf : deftype
+var et : elemtype
+var tactual : valtype
+var rtactual : reftype
+var fi : funcinst
+var gi : globalinst
+var tir : tableinst
+var mir : meminst
+var hir : taginst
+var eir : eleminst
+var dir : datainst
+var fv : fieldval
+var fvp : fieldval
+var si : structinst
+var ai : arrayinst
+var xi : exportinst
+var xir : exportinst
+
+;; Constants and small list helpers
+
+dec $page_size : nat
+def $page_size = 65536
+
+dec $empty_store : store
+def $empty_store = {
+  FUNCS eps,
+  GLOBALS eps,
+  TABLES eps,
+  MEMS eps,
+  TAGS eps,
+  ELEMS eps,
+  DATAS eps,
+  STRUCTS eps,
+  ARRAYS eps,
+  EXNS eps
+}
+
+dec $empty_moduleinst : moduleinst
+def $empty_moduleinst = {
+  TYPES eps,
+  FUNCS eps,
+  GLOBALS eps,
+  TABLES eps,
+  MEMS eps,
+  TAGS eps,
+  ELEMS eps,
+  DATAS eps,
+  EXPORTS eps
+}
+
+dec $range_from(nat, nat) : nat*
+def $range_from(_, n) = eps
+  -- if n = 0
+def $range_from(base, n) = base :: $range_from(base', n')
+  -- if $(n > 0)
+  -- if base' = $(base + 1)
+  -- if n' = $(n - 1)
+
+dec $limits_min_nat(limits) : nat
+def $limits_min_nat({ MIN i64, MAX _ }) = n
+  -- if $(i64 >= 0)
+  -- if n = $(i64)
+
+dec $nat_of_num(num_) : nat
+def $nat_of_num(I32 n) = n
+def $nat_of_num(I64 i) = n
+  -- if n = $(i)
+
+dec $addr_plus_offset(num_, int) : nat
+def $addr_plus_offset(num, int_1) = addrval
+  -- if base = $nat_of_num(num)
+  -- if $(int_1 >= 0)
+  -- if offset = $(int_1)
+  -- if addrval = $(base + offset)
+
+builtin dec $byte_of_i32(nat) : byte
+builtin dec $i31_of_i32(nat) : nat
+builtin dec $i32_add(nat, nat) : nat
+builtin dec $i32_sub(nat, nat) : nat
+builtin dec $i32_mul(nat, nat) : nat
+builtin dec $i64_add(nat, nat) : nat
+builtin dec $i64_sub(nat, nat) : nat
+builtin dec $i64_mul(nat, nat) : nat
+builtin dec $f32_add(f32, f32) : f32
+builtin dec $f32_sub(f32, f32) : f32
+builtin dec $f32_mul(f32, f32) : f32
+builtin dec $f64_add(f64, f64) : f64
+builtin dec $f64_sub(f64, f64) : f64
+builtin dec $f64_mul(f64, f64) : f64
+builtin dec $i32_eqz(nat) : nat
+builtin dec $i64_eqz(nat) : nat
+builtin dec $i32_gt_u(nat, nat) : nat
+builtin dec $i32_le_s(nat, nat) : nat
+builtin dec $i32_le_u(nat, nat) : nat
+builtin dec $i64_le_u(nat, nat) : nat
+builtin dec $i32_ne(nat, nat) : nat
+builtin dec $i32_wrap_i64(nat) : nat
+builtin dec $f32_eq(f32, f32) : nat
+builtin dec $f32_ne(f32, f32) : nat
+builtin dec $f32_le(f32, f32) : nat
+builtin dec $f64_eq(f64, f64) : nat
+builtin dec $f64_ne(f64, f64) : nat
+builtin dec $f64_le(f64, f64) : nat
+builtin dec $i32_extend_i8_s(nat) : nat
+builtin dec $i32_extend_i16_s(nat) : nat
+builtin dec $i31_get_s(nat) : nat
+builtin dec $bytes_of_i32(nat) : byte*
+builtin dec $i32_of_bytes(byte*) : nat
+builtin dec $i64_of_bytes(byte*) : nat
+builtin dec $zero_bytes(nat) : byte*
+builtin dec $repeat_byte(byte, nat) : byte*
+builtin dec $slice_bytes(byte*, nat, nat) : byte*
+builtin dec $replace_bytes(byte*, nat, byte*) : byte*
+builtin dec $eval_testop(testop_, num_) : nat
+builtin dec $eval_relop(relop_, num_, num_) : nat
+builtin dec $eval_unop(unop_, num_) : num_
+builtin dec $eval_binop(binop_, num_, num_) : num_
+builtin dec $eval_cvtop(cvtop_, num_) : num_
+builtin dec $eval_vtestop(vtestop_, vec_) : nat
+builtin dec $eval_vrelop(vrelop_, vec_, vec_) : vec_
+builtin dec $eval_vunop(vunop_, vec_) : vec_
+builtin dec $eval_vbinop(vbinop_, vec_, vec_) : vec_
+builtin dec $eval_vternop(vternop_, vec_, vec_, vec_) : vec_
+builtin dec $eval_vcvtop(vcvtop_, vec_) : vec_
+builtin dec $eval_vshiftop(vshiftop_, vec_, num_) : vec_
+builtin dec $eval_vbitmaskop(vbitmaskop_, vec_) : num_
+builtin dec $eval_vvtestop(vvtestop_, vec_) : nat
+builtin dec $eval_vvunop(vvunop_, vec_) : vec_
+builtin dec $eval_vvbinop(vvbinop_, vec_, vec_) : vec_
+builtin dec $eval_vvternop(vvternop_, vec_, vec_, vec_) : vec_
+builtin dec $eval_vsplatop(vsplatop_, num_) : vec_
+builtin dec $eval_vextractop(vextractop_, vec_) : num_
+builtin dec $eval_vreplaceop(vreplaceop_, vec_, num_) : vec_
+builtin dec $loadop_size(loadop_) : nat
+builtin dec $storeop_size(storeop_) : nat
+builtin dec $eval_load_num(loadop_, byte*) : num_
+builtin dec $eval_store_num(storeop_, num_) : byte*
+builtin dec $vloadop_size(vloadop_) : nat
+builtin dec $vstoreop_size(vstoreop_) : nat
+builtin dec $vlaneop_size(vlaneop_) : nat
+builtin dec $eval_load_vec(vloadop_, byte*) : vec_
+builtin dec $eval_store_vec(vstoreop_, vec_) : byte*
+builtin dec $eval_load_vec_lane(vlaneop_, int, byte*, vec_) : vec_
+builtin dec $eval_store_vec_lane(vlaneop_, int, vec_) : byte*
+
+dec $externaddr_funcaddr(externaddr*) : funcaddr*
+dec $externaddr_globaladdr(externaddr*) : globaladdr*
+dec $externaddr_tableaddr(externaddr*) : tableaddr*
+dec $externaddr_memaddr(externaddr*) : memaddr*
+dec $externaddr_tagaddr(externaddr*) : tagaddr*
+
+def $externaddr_funcaddr(eps) = eps
+def $externaddr_funcaddr((FuncAddr a) :: xa*) = a :: $externaddr_funcaddr(xa*)
+def $externaddr_funcaddr((GlobalAddr _) :: xa*) = $externaddr_funcaddr(xa*)
+def $externaddr_funcaddr((TableAddr _) :: xa*) = $externaddr_funcaddr(xa*)
+def $externaddr_funcaddr((MemAddr _) :: xa*) = $externaddr_funcaddr(xa*)
+def $externaddr_funcaddr((TagAddr _) :: xa*) = $externaddr_funcaddr(xa*)
+
+def $externaddr_globaladdr(eps) = eps
+def $externaddr_globaladdr((GlobalAddr a) :: xa*) = a :: $externaddr_globaladdr(xa*)
+def $externaddr_globaladdr((FuncAddr _) :: xa*) = $externaddr_globaladdr(xa*)
+def $externaddr_globaladdr((TableAddr _) :: xa*) = $externaddr_globaladdr(xa*)
+def $externaddr_globaladdr((MemAddr _) :: xa*) = $externaddr_globaladdr(xa*)
+def $externaddr_globaladdr((TagAddr _) :: xa*) = $externaddr_globaladdr(xa*)
+
+def $externaddr_tableaddr(eps) = eps
+def $externaddr_tableaddr((TableAddr a) :: xa*) = a :: $externaddr_tableaddr(xa*)
+def $externaddr_tableaddr((FuncAddr _) :: xa*) = $externaddr_tableaddr(xa*)
+def $externaddr_tableaddr((GlobalAddr _) :: xa*) = $externaddr_tableaddr(xa*)
+def $externaddr_tableaddr((MemAddr _) :: xa*) = $externaddr_tableaddr(xa*)
+def $externaddr_tableaddr((TagAddr _) :: xa*) = $externaddr_tableaddr(xa*)
+
+def $externaddr_memaddr(eps) = eps
+def $externaddr_memaddr((MemAddr a) :: xa*) = a :: $externaddr_memaddr(xa*)
+def $externaddr_memaddr((FuncAddr _) :: xa*) = $externaddr_memaddr(xa*)
+def $externaddr_memaddr((GlobalAddr _) :: xa*) = $externaddr_memaddr(xa*)
+def $externaddr_memaddr((TableAddr _) :: xa*) = $externaddr_memaddr(xa*)
+def $externaddr_memaddr((TagAddr _) :: xa*) = $externaddr_memaddr(xa*)
+
+def $externaddr_tagaddr(eps) = eps
+def $externaddr_tagaddr((TagAddr a) :: xa*) = a :: $externaddr_tagaddr(xa*)
+def $externaddr_tagaddr((FuncAddr _) :: xa*) = $externaddr_tagaddr(xa*)
+def $externaddr_tagaddr((GlobalAddr _) :: xa*) = $externaddr_tagaddr(xa*)
+def $externaddr_tagaddr((TableAddr _) :: xa*) = $externaddr_tagaddr(xa*)
+def $externaddr_tagaddr((MemAddr _) :: xa*) = $externaddr_tagaddr(xa*)

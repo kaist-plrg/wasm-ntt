@@ -45,6 +45,75 @@ module Make (Ext : EXT) () = struct
     |> Funcs.add "sum_nat" Nats.sum_nat
     |> Funcs.add "max_nat" Nats.max_nat
     |> Funcs.add "min_nat" Nats.min_nat
+    |> Funcs.add "byte_of_i32" Nats.byte_of_i32
+    |> Funcs.add "i31_of_i32" Nats.i31_of_i32
+    |> Funcs.add "i32_add" Nats.i32_add
+    |> Funcs.add "i32_sub" Nats.i32_sub
+    |> Funcs.add "i32_mul" Nats.i32_mul
+    |> Funcs.add "i64_add" Nats.i64_add
+    |> Funcs.add "i64_sub" Nats.i64_sub
+    |> Funcs.add "i64_mul" Nats.i64_mul
+    |> Funcs.add "f32_add" Nats.f32_add
+    |> Funcs.add "f32_sub" Nats.f32_sub
+    |> Funcs.add "f32_mul" Nats.f32_mul
+    |> Funcs.add "f64_add" Nats.f64_add
+    |> Funcs.add "f64_sub" Nats.f64_sub
+    |> Funcs.add "f64_mul" Nats.f64_mul
+    |> Funcs.add "i32_eqz" Nats.i32_eqz
+    |> Funcs.add "i64_eqz" Nats.i64_eqz
+    |> Funcs.add "i32_gt_u" Nats.i32_gt_u
+    |> Funcs.add "i32_le_s" Nats.i32_le_s
+    |> Funcs.add "i32_le_u" Nats.i32_le_u
+    |> Funcs.add "i64_le_u" Nats.i64_le_u
+    |> Funcs.add "i32_ne" Nats.i32_ne
+    |> Funcs.add "i32_wrap_i64" Nats.i32_wrap_i64
+    |> Funcs.add "f32_eq" Nats.f32_eq
+    |> Funcs.add "f32_ne" Nats.f32_ne
+    |> Funcs.add "f32_le" Nats.f32_le
+    |> Funcs.add "f64_eq" Nats.f64_eq
+    |> Funcs.add "f64_ne" Nats.f64_ne
+    |> Funcs.add "f64_le" Nats.f64_le
+    |> Funcs.add "i32_extend_i8_s" Nats.i32_extend_i8_s
+    |> Funcs.add "i32_extend_i16_s" Nats.i32_extend_i16_s
+    |> Funcs.add "i31_get_s" Nats.i31_get_s
+    |> Funcs.add "bytes_of_i32" Nats.bytes_of_i32
+    |> Funcs.add "i32_of_bytes" Nats.i32_of_bytes
+    |> Funcs.add "i64_of_bytes" Nats.i64_of_bytes
+    |> Funcs.add "zero_bytes" Nats.zero_bytes
+    |> Funcs.add "repeat_byte" Nats.repeat_byte
+    |> Funcs.add "slice_bytes" Nats.slice_bytes
+    |> Funcs.add "replace_bytes" Nats.replace_bytes
+    |> Funcs.add "eval_testop" Nats.eval_testop
+    |> Funcs.add "eval_relop" Nats.eval_relop
+    |> Funcs.add "eval_unop" Nats.eval_unop
+    |> Funcs.add "eval_binop" Nats.eval_binop
+    |> Funcs.add "eval_cvtop" Nats.eval_cvtop
+    |> Funcs.add "eval_vtestop" Nats.eval_vtestop
+    |> Funcs.add "eval_vrelop" Nats.eval_vrelop
+    |> Funcs.add "eval_vunop" Nats.eval_vunop
+    |> Funcs.add "eval_vbinop" Nats.eval_vbinop
+    |> Funcs.add "eval_vternop" Nats.eval_vternop
+    |> Funcs.add "eval_vcvtop" Nats.eval_vcvtop
+    |> Funcs.add "eval_vshiftop" Nats.eval_vshiftop
+    |> Funcs.add "eval_vbitmaskop" Nats.eval_vbitmaskop
+    |> Funcs.add "eval_vvtestop" Nats.eval_vvtestop
+    |> Funcs.add "eval_vvunop" Nats.eval_vvunop
+    |> Funcs.add "eval_vvbinop" Nats.eval_vvbinop
+    |> Funcs.add "eval_vvternop" Nats.eval_vvternop
+    |> Funcs.add "eval_vsplatop" Nats.eval_vsplatop
+    |> Funcs.add "eval_vextractop" Nats.eval_vextractop
+    |> Funcs.add "eval_vreplaceop" Nats.eval_vreplaceop
+    |> Funcs.add "loadop_size" Nats.loadop_size
+    |> Funcs.add "storeop_size" Nats.storeop_size
+    |> Funcs.add "eval_load_num" Nats.eval_load_num
+    |> Funcs.add "eval_store_num" Nats.eval_store_num
+    |> Funcs.add "vloadop_size" Nats.vloadop_size
+    |> Funcs.add "vstoreop_size" Nats.vstoreop_size
+    |> Funcs.add "vlaneop_size" Nats.vlaneop_size
+    |> Funcs.add "eval_load_vec" Nats.eval_load_vec
+    |> Funcs.add "eval_store_vec" Nats.eval_store_vec
+    |> Funcs.add "eval_load_vec_lane" Nats.eval_load_vec_lane
+    |> Funcs.add "eval_store_vec_lane" Nats.eval_store_vec_lane
     (* Ints *)
     |> Funcs.add "sum_int" Ints.sum_int
     |> Funcs.add "max_int" Ints.max_int
@@ -56,6 +125,7 @@ module Make (Ext : EXT) () = struct
     |> Funcs.add "strip_prefix" Texts.strip_prefix
     |> Funcs.add "strip_suffix" Texts.strip_suffix
     |> Funcs.add "strip_all_whitespace" Texts.strip_all_whitespace
+    |> Funcs.add "bytes_of_text" Texts.bytes_of_text
     (* Lists *)
     |> Funcs.add "rev_" Lists.rev_
     |> Funcs.add "concat_" Lists.concat_

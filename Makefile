@@ -11,7 +11,7 @@ EXEBOOT = _build/default/p4spec/bin/boot.exe
 build:
 	rm -f ./$(SPEC)
 	rm -f ./p4spec/lib/parsing/parser.ml ./p4spec/lib/parsing/parser.mli
-	opam switch 5.1.0
+	opam switch wasm-ntt
 	cd p4spec && opam exec -- dune build bin/main.exe && echo
 	ln -f $(EXESPEC) ./$(SPEC)
 	cd p4spec && opam exec -- dune build test/lang/test.exe test/run/test.exe test/sim/test.exe test/parse/test.exe test/boot/test.exe && echo
