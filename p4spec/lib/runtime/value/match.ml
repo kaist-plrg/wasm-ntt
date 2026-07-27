@@ -70,7 +70,9 @@ let rec sub_ (find_typdef_opt : TId.t -> Type.Typdef.t option)
   | IterT (typ_inner, List) -> (
       match value.it with
       | ListV values ->
-          List.for_all (sub_ find_typdef_opt find_func typ_inner) values
+          Value_array.for_all
+            (sub_ find_typdef_opt find_func typ_inner)
+            values
       | _ -> false)
   | FuncT (tparams_t, typs_params_t, typ_ret_t) -> (
       match value.it with

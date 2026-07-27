@@ -65,6 +65,7 @@ let add_node ~(taint : bool) (graph : t) (value : value) : unit =
         let vid_from = value.note.vid in
         (Node.OptN (Some vid_from), [ value ])
     | ListV values ->
+        let values = Value_array.to_list values in
         let vids_from = List.map (fun value -> value.note.vid) values in
         (Node.ListN vids_from, values)
     | FuncV id -> (Node.FuncN id, [])
@@ -110,7 +111,7 @@ and assemble_graph' (graph : t) (value : value) : unit =
   | TupleV values -> values |> List.iter (assemble_graph' graph)
   | OptV None -> ()
   | OptV (Some value) -> assemble_graph' graph value
-  | ListV values -> values |> List.iter (assemble_graph' graph)
+  | ListV values -> Value_array.iter (assemble_graph' graph) values
   | FuncV _ | ExternV _ -> ());
   add_node ~taint:true graph value
 
@@ -147,7 +148,7 @@ and reassemble_graph' (graph : t) (renamer : value VIdMap.t) (vid : vid) : value
         OptV value_opt
     | ListN vids ->
         let values = List.map (reassemble_graph graph renamer) vids in
-        ListV values
+        ListV (Value_array.of_list values)
     | FuncN id -> FuncV id
     | ExternN json -> ExternV json
   in

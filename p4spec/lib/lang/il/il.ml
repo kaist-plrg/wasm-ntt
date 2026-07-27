@@ -1,3 +1,4 @@
+module Value_array = Value_array
 include Ast
 module Eq = Eq
 module Free = Free

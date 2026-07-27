@@ -102,7 +102,7 @@ let bytes_of_text (add : value -> unit) (at : region) (targs : targ list)
   in
   let value =
     Value.Make.mk no_region (Il.IterT (byte_typ $ no_region, Il.List))
-      (ListV bytes)
+      (ListV (Value_array.of_list bytes))
   in
   add value;
   value

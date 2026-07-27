@@ -145,10 +145,10 @@ let wrap_opt_v (s : string) (v : value option) : value =
   OptV v |> with_typ (wrap_iter_t Opt (wrap_var_t s))
 
 let wrap_list_v (s : string) (vs : value list) : value =
-  ListV vs |> with_typ (wrap_iter_t List (wrap_var_t s))
+  ListV (Value_array.of_list vs) |> with_typ (wrap_iter_t List (wrap_var_t s))
 
 let wrap_list_v_typed (t : typ') (vs : value list) : value =
-  ListV vs |> with_typ (wrap_iter_t List t)
+  ListV (Value_array.of_list vs) |> with_typ (wrap_iter_t List t)
 
 let wrap_extern_v (s : string) (json : Yojson.Safe.t) : value =
   ExternV json |> with_typ (wrap_var_t s)

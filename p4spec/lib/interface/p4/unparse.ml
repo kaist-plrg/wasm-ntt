@@ -178,7 +178,7 @@ and pp_opt_v (henv : HEnv.t) fmt (value : Value.t) : unit =
 and pp_list_v (henv : HEnv.t) fmt (value : Value.t) : unit =
   let values =
     match value.it with
-    | ListV values -> values
+    | ListV values -> Il.Value_array.to_list values
     | _ ->
         failwith
           (F.asprintf "@pp_list_v: expected ListV, got %a" (pp_value henv) value)

@@ -7,6 +7,7 @@ module Value = struct
 
   let make typ value = Make.mk Util.Source.no_region typ value
   let get_list = Get.list
+  let get_list_array = Get.list_array
   let get_text = Get.text
 end
 module F32 = Wasm_interpreter.F32
@@ -632,7 +633,9 @@ let bytes_of_i32 (add : value -> unit) (at : region) (targs : targ list)
   in
   let bytes = [ byte 0; byte 8; byte 16; byte 24 ] in
   let value =
-    Value.make (Il.IterT (byte_typ $ no_region, Il.List)) (ListV bytes)
+    Value.make
+      (Il.IterT (byte_typ $ no_region, Il.List))
+      (ListV (Value_array.of_list bytes))
   in
   add value;
   value
@@ -677,7 +680,7 @@ let zero_bytes (add : value -> unit) (at : region) (targs : targ list)
   let zero = Value.make byte_typ (NumV (`Nat Bigint.zero)) in
   let value =
     Value.make (Il.IterT (byte_typ $ no_region, Il.List))
-      (ListV (List.init n (fun _ -> zero)))
+      (ListV (Value_array.init n (fun _ -> zero)))
   in
   add value;
   value
@@ -693,22 +696,10 @@ let repeat_byte (add : value -> unit) (at : region) (targs : targ list)
   let byte_typ = Il.VarT ("byte" $ no_region, []) in
   let value =
     Value.make (Il.IterT (byte_typ $ no_region, Il.List))
-      (ListV (List.init count (fun _ -> byte_value)))
+      (ListV (Value_array.init count (fun _ -> byte_value)))
   in
   add value;
   value
-
-let rec take_values n xs =
-  match (n, xs) with
-  | 0, _ -> []
-  | _, [] -> []
-  | n, x :: xs -> x :: take_values (n - 1) xs
-
-let rec drop_values n xs =
-  match (n, xs) with
-  | 0, xs -> xs
-  | _, [] -> []
-  | n, _ :: xs -> drop_values (n - 1) xs
 
 (* dec $slice_bytes(list of byte, nat, nat) : list of byte *)
 
@@ -716,13 +707,13 @@ let slice_bytes (add : value -> unit) (at : region) (targs : targ list)
     (values_input : value list) : value =
   Extract.zero at targs;
   let bytes_value, offset_value, count_value = Extract.three at values_input in
-  let bytes = Value.get_list bytes_value in
+  let bytes = Value.get_list_array bytes_value in
   let offset = bigint_of_value offset_value |> Bigint.to_int_exn in
   let count = bigint_of_value count_value |> Bigint.to_int_exn in
-  if offset < 0 || count < 0 || offset + count > List.length bytes then
+  if offset < 0 || count < 0 || offset + count > Value_array.length bytes then
     error at "slice_bytes out of bounds";
   let byte_typ = Il.VarT ("byte" $ no_region, []) in
-  let bytes' = bytes |> drop_values offset |> take_values count in
+  let bytes' = Value_array.sub bytes offset count in
   let value =
     Value.make (Il.IterT (byte_typ $ no_region, Il.List)) (ListV bytes')
   in
@@ -737,16 +728,14 @@ let replace_bytes (add : value -> unit) (at : region) (targs : targ list)
   let bytes_value, offset_value, replacement_value =
     Extract.three at values_input
   in
-  let bytes = Value.get_list bytes_value in
+  let bytes = Value.get_list_array bytes_value in
   let offset = bigint_of_value offset_value |> Bigint.to_int_exn in
-  let replacement = Value.get_list replacement_value in
-  let replacement_len = List.length replacement in
-  if offset < 0 || offset + replacement_len > List.length bytes then
+  let replacement = Value.get_list_array replacement_value in
+  let replacement_len = Value_array.length replacement in
+  if offset < 0 || offset + replacement_len > Value_array.length bytes then
     error at "replace_bytes out of bounds";
   let byte_typ = Il.VarT ("byte" $ no_region, []) in
-  let bytes' =
-    take_values offset bytes @ replacement @ drop_values (offset + replacement_len) bytes
-  in
+  let bytes' = Value_array.replace_slice bytes ~pos:offset replacement in
   let value =
     Value.make (Il.IterT (byte_typ $ no_region, Il.List)) (ListV bytes')
   in
@@ -778,7 +767,9 @@ let bytes_value add bytes =
   let values =
     String.to_seq bytes |> Seq.map Char.code |> Seq.map byte_value |> List.of_seq
   in
-  let value = Value.make byte_list_typ (ListV values) in
+  let value =
+    Value.make byte_list_typ (ListV (Value_array.of_list values))
+  in
   add_value add value
 
 let nat_of_int add n = value_of_bigint add (Bigint.of_int n)

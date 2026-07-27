@@ -189,7 +189,7 @@ and boot_value (value : Il.value) : Value.t =
         | CaseV valuecase -> boot_case_value at valuecase
         | TupleV values -> boot_tuple_value at values
         | OptV value_opt -> boot_opt_value at value_opt
-        | ListV values -> boot_list_value at values
+        | ListV values -> boot_list_value at (Il.Value_array.to_list values)
         | FuncV id -> boot_func_value at id
         | ExternV json -> boot_extern_value at json
       in

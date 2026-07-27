@@ -87,7 +87,7 @@ and value' =
   | CaseV of valuecase
   | TupleV of value list
   | OptV of value option
-  | ListV of value list
+  | ListV of value Value_array.t
   | FuncV of id
   | ExternV of Yojson.Safe.t
 [@@deriving yojson]

@@ -52,7 +52,8 @@ let rec compare (value_l : t) (value_r : t) =
         | Some _, None -> 1
         | None, Some _ -> -1
         | None, None -> 0)
-    | ListV values_l, ListV values_r -> compares values_l values_r
+    | ListV values_l, ListV values_r ->
+        Value_array.compare compare values_l values_r
     | ExternV json_l, ExternV json_r -> Stdlib.compare json_l json_r
     | _ -> Int.compare (tag value_l) (tag value_r)
 
@@ -121,7 +122,9 @@ let hash_of (v : value') : int =
         List.iter (fun value -> h := (!h * 31) + value.note.vhash) values
     | ListV values ->
         h := (!h * 31) + 1003;
-        List.iter (fun value -> h := (!h * 31) + value.note.vhash) values
+        Value_array.iter
+          (fun value -> h := (!h * 31) + value.note.vhash)
+          values
     | OptV None -> h := (!h * 31) + 997
     | OptV (Some value) ->
         h := (!h * 31) + 1009;
@@ -195,8 +198,12 @@ module Make = struct
   let opt ?(at = no_region) (typ : typ) (value_opt : value option) : value =
     OptV value_opt |> with_region at |> with_typ typ
 
-  let list ?(at = no_region) (typ : typ) (values : value list) : value =
+  let list_array ?(at = no_region) (typ : typ)
+      (values : value Value_array.t) : value =
     ListV values |> with_region at |> with_typ typ
+
+  let list ?(at = no_region) (typ : typ) (values : value list) : value =
+    values |> Value_array.of_list |> list_array ~at typ
 
   let func ?(at = no_region) (id : id) (tparams : tparam list)
       (typs_params : typ list) (typ : typ) : value =
@@ -266,10 +273,13 @@ module Get = struct
     | OptV value -> value
     | _ -> error no_region "not an option"
 
-  let list (value : t) : value list =
+  let list_array (value : t) : value Value_array.t =
     match value.it with
     | ListV values -> values
     | _ -> error no_region "not a list"
+
+  let list (value : t) : value list =
+    value |> list_array |> Value_array.to_list
 
   let func (value : t) : id =
     match value.it with FuncV id -> id | _ -> error no_region "not a function"

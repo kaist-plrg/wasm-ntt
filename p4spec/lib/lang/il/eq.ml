@@ -98,7 +98,8 @@ and eq_value ?(dbg = false) (value_a : value) (value_b : value) : bool =
     | TupleV values_a, TupleV values_b -> eq_values ~dbg values_a values_b
     | OptV (Some v_a), OptV (Some v_b) -> eq_value ~dbg v_a v_b
     | OptV None, OptV None -> true
-    | ListV values_a, ListV values_b -> eq_values ~dbg values_a values_b
+    | ListV values_a, ListV values_b ->
+        Value_array.for_all2 (eq_value ~dbg) values_a values_b
     | FuncV id_a, FuncV id_b -> id_a = id_b
     | ExternV json_a, ExternV json_b -> Yojson.Safe.equal json_a json_b
     | _ -> false

@@ -34,7 +34,9 @@ let rec value_as_exp (value : Value.t) : Il.exp =
         let exp_opt = Option.map value_as_exp value_opt in
         Il.OptE exp_opt
     | ListV values ->
-        let exps = List.map value_as_exp values in
+        let exps =
+          values |> Il.Value_array.to_list |> List.map value_as_exp
+        in
         Il.ListE exps
     | _ ->
         error at_value

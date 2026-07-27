@@ -21,7 +21,7 @@ let mask_mant layout = Z.(pred (shift_left one layout.mantissa))
 let mask_exp layout = Z.(mask_mag layout - mask_mant layout)
 let bias layout = let em1 = layout.exponent - 1 in Z.((one + one)**em1 - one)
 
-let listV l = Lang.Il.ListV (l)
+let listV l = Lang.Il.ListV (Lang.Il.Value_array.of_list l)
 let optV opt = Lang.Il.OptV (opt)
 
 let il_of_list s f l = (List.map f l) |> wrap_list_v s

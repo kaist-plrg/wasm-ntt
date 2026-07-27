@@ -220,7 +220,7 @@ let as_text at value =
 
 let as_list at value =
   match value.it with
-  | ListV values -> values
+  | ListV values -> Value_array.to_list values
   | _ -> error at "expected list value"
 
 let as_nat at value =

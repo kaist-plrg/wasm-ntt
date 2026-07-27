@@ -119,16 +119,18 @@ and string_of_value ?(short = false) ?(level = 0) value =
       Format.asprintf "Some(%s)"
         (string_of_value ~short ~level:(level + 1) value)
   | OptV None -> "None"
-  | ListV [] -> "[]"
-  | ListV values when short -> Format.asprintf "[ .../%d ]" (List.length values)
+  | ListV values when Value_array.length values = 0 -> "[]"
+  | ListV values when short ->
+      Format.asprintf "[ .../%d ]" (Value_array.length values)
   | ListV values ->
       Format.asprintf "[\n%s\n%s]"
         (String.concat ",\n"
-           (List.map
+           (Value_array.to_list values
+           |> List.map
               (fun value ->
                 let indent = indent (level + 1) in
                 indent ^ string_of_value ~short ~level:(level + 1) value)
-              values))
+           ))
         (indent level)
   | FuncV id -> string_of_defid id
   | ExternV _ -> "extern"

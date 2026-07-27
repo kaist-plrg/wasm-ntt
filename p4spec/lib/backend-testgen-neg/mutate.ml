@@ -249,14 +249,15 @@ and gen_from_typ' (depth : int) (tdenv : TDEnv.t) (texts : value' list)
       in
       choice |> wrap_value_opt typ.it
   | IterT (_, List) when depth = 0 ->
-      ListV [] |> Option.some |> wrap_value_opt typ.it
+      ListV Value_array.empty |> Option.some |> wrap_value_opt typ.it
   | IterT (typ_inner, List) ->
       let* len = Rand.random_select [ 2; 4; 8; 16 ] in
       let* values_inner =
         List.init len (fun _ -> typ_inner)
         |> gen_from_typs depth tdenv texts nums
       in
-      ListV values_inner |> Option.some |> wrap_value_opt typ.it
+      ListV (Value_array.of_list values_inner)
+      |> Option.some |> wrap_value_opt typ.it
   | FuncT _ -> None
 
 and gen_from_typs (depth : int) (tdenv : TDEnv.t) (texts : value' list)
@@ -329,7 +330,9 @@ let rec shuffle_list' (value : value) : value =
       let value_shuffled = shuffle_list' value in
       OptV (Some value_shuffled) |> wrap_value typ
   | ListV values ->
-      let values_shuffled = Rand.shuffle values in
+      let values_shuffled =
+        values |> Value_array.to_list |> Rand.shuffle |> Value_array.of_list
+      in
       ListV values_shuffled |> wrap_value typ
   | FuncV _ | ExternV _ -> value.it |> wrap_value typ
 
@@ -357,9 +360,10 @@ let rec duplicate_list' (value : value) : value =
       let value_duplicated = duplicate_list' value in
       OptV (Some value_duplicated) |> wrap_value typ
   | ListV values -> (
+      let values = Value_array.to_list values in
       match Rand.random_select values with
       | Some value ->
-          let values = value :: values in
+          let values = value :: values |> Value_array.of_list in
           ListV values |> wrap_value typ
       | None -> value.it |> wrap_value typ)
   | FuncV _ | ExternV _ -> value.it |> wrap_value typ
@@ -387,10 +391,12 @@ let rec shrink_list' (value : value) : value =
   | OptV (Some value) ->
       let value_shrinked = shrink_list' value in
       OptV (Some value_shrinked) |> wrap_value typ
-  | ListV [] -> value.it |> wrap_value typ
+  | ListV values when Value_array.length values = 0 ->
+      value.it |> wrap_value typ
   | ListV values ->
+      let values = Value_array.to_list values in
       let size = Random.int (List.length values) in
-      let values = Rand.random_sample size values in
+      let values = Rand.random_sample size values |> Value_array.of_list in
       ListV values |> wrap_value typ
   | FuncV _ | ExternV _ -> value.it |> wrap_value typ
 
@@ -458,8 +464,12 @@ let mutate_walk (tdenv : TDEnv.t) (mixopenv : MixopEnv.t) (texts : value' list)
         List.iteri
           (fun idx value -> traverse (idx :: path) value (depth + 1))
           values
-    | TupleV values | ListV values ->
+    | TupleV values ->
         List.iteri
+          (fun idx value -> traverse (idx :: path) value (depth + 1))
+          values
+    | ListV values ->
+        Value_array.iteri
           (fun idx value -> traverse (idx :: path) value (depth + 1))
           values
   in
@@ -491,8 +501,9 @@ let mutate_walk (tdenv : TDEnv.t) (mixopenv : MixopEnv.t) (texts : value' list)
             let* values = rebuilds path idx values in
             TupleV values |> wrap_value typ |> Option.some
         | ListV values ->
+            let values = Value_array.to_list values in
             let* values = rebuilds path idx values in
-            ListV values |> wrap_value typ |> Option.some)
+            ListV (Value_array.of_list values) |> wrap_value typ |> Option.some)
   and rebuilds rest i (values_inner : value list) : value list option =
     values_inner
     |> List.mapi (fun j value ->

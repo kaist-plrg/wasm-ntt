@@ -4,6 +4,7 @@ open Lib
 open Lang
 open Xl
 open Pl
+module Value_array = Il.Value_array
 module Type = Runtime.Type
 module Typ = Type.Typ
 module CCache = Runtime.Dynamic.Caches.CallCache
@@ -18,6 +19,12 @@ open Interp_common.Nondet
 module Flow = Interp_common.Flow
 module F = Format
 open Util.Source
+
+let slice_fits ~length ~pos ~size =
+  pos >= 0 && size >= 0 && pos <= length && size <= length - pos
+
+let string_of_slice_end pos size =
+  Bigint.(of_int pos + of_int size |> to_string)
 
 module Make (Interface : Run.INTERFACE) (Extern : Run.EXTERN) () :
   Run.INTERP_PL = struct
@@ -152,14 +159,21 @@ module Make (Interface : Run.INTERFACE) (Extern : Run.EXTERN) () :
         ctx
     | OptE None, OptV None -> ctx
     | ListE exps_inner, ListV values_inner ->
-        let ctx = assign_exps ctx exps_inner values_inner in
-        List.iter
+        let ctx =
+          assign_exps ctx exps_inner (Value_array.to_list values_inner)
+        in
+        Value_array.iter
           (fun value_inner ->
             Hook.on_value_dependency value_inner value Dep.Edges.Assign)
           values_inner;
         ctx
-    | ConsE (exp_h, exp_t), ListV (value_h :: values_inner) ->
-        let value_t = Value.Make.list typ_value values_inner in
+    | ConsE (exp_h, exp_t), ListV values_inner
+      when Value_array.length values_inner > 0 ->
+        let value_h = Value_array.get values_inner 0 in
+        let values_t =
+          Value_array.sub values_inner 1 (Value_array.length values_inner - 1)
+        in
+        let value_t = Value.Make.list_array typ_value values_t in
         Hook.on_value value_t;
         let ctx = assign_exp ctx exp_h value_h in
         Hook.on_value_dependency value_h value Dep.Edges.Assign;
@@ -193,11 +207,11 @@ module Make (Interface : Run.INTERFACE) (Extern : Run.EXTERN) () :
         (* Map over the value list elements,
            and assign each value to the iterated expression *)
         let ctxs =
-          List.map
+          Value_array.to_list values
+          |> List.map
             (fun value ->
               let ctx_sub = Ctx.localize_clear ctx in
               assign_exp ctx_sub exp value)
-            values
         in
         (* Per iterated variable, collect its elementwise value,
            then make a sequence out of them *)
@@ -553,7 +567,7 @@ module Make (Interface : Run.INTERFACE) (Extern : Run.EXTERN) () :
       match (pattern, value.it) with
       | CaseP mixop_p, CaseV valuecase -> Mixfix.eq_mixop mixop_p valuecase
       | ListP listpattern, ListV values -> (
-          let len_v = List.length values in
+          let len_v = Value_array.length values in
           match listpattern with
           | `Cons -> len_v > 0
           | `Fixed len_p -> len_v = len_p
@@ -643,8 +657,10 @@ module Make (Interface : Run.INTERFACE) (Extern : Run.EXTERN) () :
       value =
     let value_h = eval_exp ctx exp_h in
     let value_t = eval_exp ctx exp_t in
-    let values_t = Value.Get.list value_t in
-    let value_res = Value.Make.list typ_note (value_h :: values_t) in
+    let values_t = Value.Get.list_array value_t in
+    let value_res =
+      values_t |> Value_array.cons value_h |> Value.Make.list_array typ_note
+    in
     Hook.on_value value_res;
     value_res
 
@@ -658,7 +674,7 @@ module Make (Interface : Run.INTERFACE) (Extern : Run.EXTERN) () :
       match (value_l.it, value_r.it) with
       | TextV s_l, TextV s_r -> Value.Make.text (s_l ^ s_r)
       | ListV values_l, ListV values_r ->
-          Value.Make.list typ_note (values_l @ values_r)
+          Value.Make.list_array typ_note (Value_array.append values_l values_r)
       | _ ->
           back_err
             (over_region [ exp_l.node.at; exp_r.node.at ])
@@ -679,8 +695,10 @@ module Make (Interface : Run.INTERFACE) (Extern : Run.EXTERN) () :
       value =
     let value_e = eval_exp ctx exp_e in
     let value_s = eval_exp ctx exp_s in
-    let values_s = Value.Get.list value_s in
-    let value_res = Value.Make.bool (List.exists (Value.eq value_e) values_s) in
+    let values_s = Value.Get.list_array value_s in
+    let value_res =
+      Value.Make.bool (Value_array.exists (Value.eq value_e) values_s)
+    in
     Hook.on_value value_res;
     Hook.on_value_dependency value_res value_e (Dep.Edges.Op MemOp);
     Hook.on_value_dependency value_res value_s (Dep.Edges.Op MemOp);
@@ -693,7 +711,7 @@ module Make (Interface : Run.INTERFACE) (Extern : Run.EXTERN) () :
     let len =
       match value.it with
       | TextV s -> s |> String.length |> Bigint.of_int
-      | ListV values -> values |> List.length |> Bigint.of_int
+      | ListV values -> values |> Value_array.length |> Bigint.of_int
       | _ ->
           back_err exp.node.at
             (F.asprintf
@@ -734,10 +752,11 @@ module Make (Interface : Run.INTERFACE) (Extern : Run.EXTERN) () :
         let value_res = Value.Make.text s in
         Hook.on_value value_res;
         value_res
-    | ListV values when idx < 0 || idx >= List.length values ->
+    | ListV values when idx < 0 || idx >= Value_array.length values ->
         back_err exp_i.node.at
-          (F.asprintf "index %d out of bounds [0, %d)" idx (List.length values))
-    | ListV values -> List.nth values idx
+          (F.asprintf "index %d out of bounds [0, %d)" idx
+             (Value_array.length values))
+    | ListV values -> Value_array.get values idx
     | _ ->
         back_err exp_b.node.at
           (F.asprintf "indexing expects either a text or a list, but got %s"
@@ -752,30 +771,29 @@ module Make (Interface : Run.INTERFACE) (Extern : Run.EXTERN) () :
     let idx_l = value_i |> Value.Get.num |> Num.to_int |> Bigint.to_int_exn in
     let value_n = eval_exp ctx exp_n in
     let idx_n = value_n |> Value.Get.num |> Num.to_int |> Bigint.to_int_exn in
-    let idx_h = idx_l + idx_n in
     match value_b.it with
-    | TextV s when idx_l < 0 || idx_h > String.length s ->
+    | TextV s
+      when not (slice_fits ~length:(String.length s) ~pos:idx_l ~size:idx_n) ->
         back_err exp_n.node.at
-          (F.asprintf "slice [%d, %d) out of bounds [0, %d)" idx_l idx_h
+          (F.asprintf "slice [%d, %s) out of bounds [0, %d)" idx_l
+             (string_of_slice_end idx_l idx_n)
              (String.length s))
     | TextV s ->
-        let s_slice = String.sub s idx_l (idx_h - idx_l) in
+        let s_slice = String.sub s idx_l idx_n in
         let value_res = Value.Make.text s_slice in
         Hook.on_value value_res;
         value_res
-    | ListV values when idx_l < 0 || idx_h > List.length values ->
+    | ListV values
+      when not
+             (slice_fits ~length:(Value_array.length values) ~pos:idx_l
+                ~size:idx_n) ->
         back_err exp_n.node.at
-          (F.asprintf "slice [%d, %d) out of bounds [0, %d)" idx_l idx_h
-             (List.length values))
+          (F.asprintf "slice [%d, %s) out of bounds [0, %d)" idx_l
+             (string_of_slice_end idx_l idx_n)
+             (Value_array.length values))
     | ListV values ->
-        let values_slice =
-          List.mapi
-            (fun idx value ->
-              if idx_l <= idx && idx < idx_h then Some value else None)
-            values
-          |> List.filter_map Fun.id
-        in
-        let value_res = Value.Make.list typ_note values_slice in
+        let values_slice = Value_array.sub values idx_l idx_n in
+        let value_res = Value.Make.list_array typ_note values_slice in
         Hook.on_value value_res;
         value_res
     | _ ->
@@ -801,11 +819,11 @@ module Make (Interface : Run.INTERFACE) (Extern : Run.EXTERN) () :
             let value_res = Value.Make.text s in
             Hook.on_value value_res;
             value_res
-        | ListV values when idx < 0 || idx >= List.length values ->
+        | ListV values when idx < 0 || idx >= Value_array.length values ->
             back_err exp_i.node.at
               (F.asprintf "index %d out of bounds [0, %d)" idx
-                 (List.length values))
-        | ListV values -> List.nth values idx
+                 (Value_array.length values))
+        | ListV values -> Value_array.get values idx
         | _ ->
             back_err path.at
               (F.asprintf "indexing expects either a text or a list, but got %s"
@@ -821,30 +839,31 @@ module Make (Interface : Run.INTERFACE) (Extern : Run.EXTERN) () :
         let idx_n =
           value_n |> Value.Get.num |> Num.to_int |> Bigint.to_int_exn
         in
-        let idx_h = idx_l + idx_n in
         match value.it with
-        | TextV s when idx_l < 0 || idx_h > String.length s ->
+        | TextV s
+          when not
+                 (slice_fits ~length:(String.length s) ~pos:idx_l ~size:idx_n)
+          ->
             back_err exp_n.node.at
-              (F.asprintf "slice [%d, %d) out of bounds [0, %d)" idx_l idx_h
+              (F.asprintf "slice [%d, %s) out of bounds [0, %d)" idx_l
+                 (string_of_slice_end idx_l idx_n)
                  (String.length s))
         | TextV s ->
-            let s_slice = String.sub s idx_l (idx_h - idx_l) in
+            let s_slice = String.sub s idx_l idx_n in
             let value_res = Value.Make.text s_slice in
             Hook.on_value value_res;
             value_res
-        | ListV values when idx_l < 0 || idx_h > List.length values ->
+        | ListV values
+          when not
+                 (slice_fits ~length:(Value_array.length values) ~pos:idx_l
+                    ~size:idx_n) ->
             back_err exp_n.node.at
-              (F.asprintf "slice [%d, %d) out of bounds [0, %d)" idx_l idx_h
-                 (List.length values))
+              (F.asprintf "slice [%d, %s) out of bounds [0, %d)" idx_l
+                 (string_of_slice_end idx_l idx_n)
+                 (Value_array.length values))
         | ListV values ->
-            let values_slice =
-              List.mapi
-                (fun idx value ->
-                  if idx_l <= idx && idx < idx_h then Some value else None)
-                values
-              |> List.filter_map Fun.id
-            in
-            let value_res = Value.Make.list typ values_slice in
+            let values_slice = Value_array.sub values idx_l idx_n in
+            let value_res = Value.Make.list_array typ values_slice in
             Hook.on_value value_res;
             value_res
         | _ ->
@@ -891,18 +910,16 @@ module Make (Interface : Run.INTERFACE) (Extern : Run.EXTERN) () :
               let value = Value.Make.text s_updated in
               Hook.on_value value;
               eval_update_path ctx value_b path value
-        | ListV values when idx_target < 0 || idx_target >= List.length values
-          ->
+        | ListV values
+          when idx_target < 0 || idx_target >= Value_array.length values ->
             back_err exp_i.node.at
               (F.asprintf "index %d out of bounds [0, %d)" idx_target
-                 (List.length values))
+                 (Value_array.length values))
         | ListV values ->
             let values_updated =
-              List.mapi
-                (fun idx value -> if idx = idx_target then value_upd else value)
-                values
+              Value_array.copy_set values idx_target value_upd
             in
-            let value = Value.Make.list typ values_updated in
+            let value = Value.Make.list_array typ values_updated in
             Hook.on_value value;
             eval_update_path ctx value_b path value
         | _ ->
@@ -920,11 +937,14 @@ module Make (Interface : Run.INTERFACE) (Extern : Run.EXTERN) () :
         let idx_n =
           value_n |> Value.Get.num |> Num.to_int |> Bigint.to_int_exn
         in
-        let idx_h = idx_l + idx_n in
         match value.it with
-        | TextV s when idx_l < 0 || idx_h > String.length s ->
+        | TextV s
+          when not
+                 (slice_fits ~length:(String.length s) ~pos:idx_l ~size:idx_n)
+          ->
             back_err exp_n.node.at
-              (F.asprintf "slice [%d, %d) out of bounds [0, %d)" idx_l idx_h
+              (F.asprintf "slice [%d, %s) out of bounds [0, %d)" idx_l
+                 (string_of_slice_end idx_l idx_n)
                  (String.length s))
         | TextV s ->
             let s_upd = Value.Get.text value_upd in
@@ -936,6 +956,7 @@ module Make (Interface : Run.INTERFACE) (Extern : Run.EXTERN) () :
                    idx_n (String.length s_upd)
                    (Sl.Print.string_of_value ~short:true value_upd))
             else
+              let idx_h = idx_l + idx_n in
               let s_upd =
                 String.sub s 0 idx_l ^ s_upd
                 ^ String.sub s idx_h (String.length s - idx_h)
@@ -943,29 +964,28 @@ module Make (Interface : Run.INTERFACE) (Extern : Run.EXTERN) () :
               let value = Value.Make.text s_upd in
               Hook.on_value value;
               eval_update_path ctx value_b path value
-        | ListV values when idx_l < 0 || idx_h > List.length values ->
+        | ListV values
+          when not
+                 (slice_fits ~length:(Value_array.length values) ~pos:idx_l
+                    ~size:idx_n) ->
             back_err exp_n.node.at
-              (F.asprintf "slice [%d, %d) out of bounds [0, %d)" idx_l idx_h
-                 (List.length values))
+              (F.asprintf "slice [%d, %s) out of bounds [0, %d)" idx_l
+                 (string_of_slice_end idx_l idx_n)
+                 (Value_array.length values))
         | ListV values ->
-            let values_upd = Value.Get.list value_upd in
-            if List.length values_upd <> idx_n then
+            let values_upd = Value.Get.list_array value_upd in
+            if Value_array.length values_upd <> idx_n then
               back_err exp_n.node.at
                 (F.asprintf
                    "updating a slice of length %d requires a list of length \
                     %d, but got %s"
-                   idx_n (List.length values_upd)
+                   idx_n (Value_array.length values_upd)
                    (Sl.Print.string_of_value ~short:true value_upd))
             else
               let values_upd =
-                List.mapi
-                  (fun idx value ->
-                    if idx_l <= idx && idx < idx_h then
-                      List.nth values_upd (idx - idx_l)
-                    else value)
-                  values
+                Value_array.replace_slice values ~pos:idx_l values_upd
               in
-              let value = Value.Make.list typ values_upd in
+              let value = Value.Make.list_array typ values_upd in
               Hook.on_value value;
               eval_update_path ctx value_b path value
         | _ ->
@@ -1857,7 +1877,7 @@ module Make (Interface : Run.INTERFACE) (Extern : Run.EXTERN) () :
       match (pattern, value.it) with
       | CaseP mixop_p, CaseV valuecase -> Mixfix.eq_mixop mixop_p valuecase
       | ListP listpattern, ListV values -> (
-          let len_v = List.length values in
+          let len_v = Value_array.length values in
           match listpattern with
           | `Cons -> len_v > 0
           | `Fixed len_p -> len_v = len_p
