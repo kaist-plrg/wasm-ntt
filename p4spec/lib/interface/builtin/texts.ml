@@ -85,3 +85,24 @@ let strip_all_whitespace (add : value -> unit) (at : region) (targs : targ list)
   let value = Value.Make.text text in
   add value;
   value
+
+(* dec $bytes_of_text(text) : byte* *)
+
+let bytes_of_text (add : value -> unit) (at : region) (targs : targ list)
+    (values_input : value list) : value =
+  Extract.zero at targs;
+  let text = Extract.one at values_input |> Value.Get.text in
+  let byte_typ = Il.VarT ("byte" $ no_region, []) in
+  let bytes =
+    text |> String.to_seq
+    |> Seq.map (fun byte ->
+           Value.Make.mk no_region byte_typ
+             (NumV (`Nat (Bigint.of_int (Char.code byte)))))
+    |> List.of_seq
+  in
+  let value =
+    Value.Make.mk no_region (Il.IterT (byte_typ $ no_region, Il.List))
+      (ListV bytes)
+  in
+  add value;
+  value

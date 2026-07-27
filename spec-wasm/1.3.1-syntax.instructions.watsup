@@ -179,6 +179,11 @@ syntax storeop_ = memop<numtype, packtype?>
 syntax vloadop_ = memop<vectype, (packtype, vextension)?>
 syntax vstoreop_ = memop<vectype, void>
 syntax vlaneop_ = memop<vectype, packtype>
+var lop : loadop_
+var sop : storeop_
+var vlop : vloadop_
+var vsop : vstoreop_
+var vlaneop : vlaneop_
 
 syntax blocktype =
   | VarBlockType typeidx

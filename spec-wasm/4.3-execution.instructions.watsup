@@ -1,0 +1,1589 @@
+;;
+;; Small-step Execution
+;;
+
+relation Step: config |- config
+  hint(input %0)
+
+relation Steps: config |- execoutcome
+  hint(input %0)
+
+relation Steps_until: config |- config
+  hint(input %0)
+
+relation Step_plain: store frame value* |- instr : (store, frame, value*, admininstr*)
+  hint(input %0 %1 %2 %3)
+
+relation Step_plain_module:
+  store moduleinst value* |- instr : (store, value*, admininstr*)
+  hint(input %0 %1 %2 %3)
+
+dec $plain_instrs(instr*) : admininstr*
+def $plain_instrs(eps) = eps
+def $plain_instrs(instr_1 :: instr*) =
+  (Plain instr_1) :: $plain_instrs(instr*)
+
+;; Control, call, and exception instructions are lowered by Step itself.
+;; All remaining instructions reuse the existing atomic rule bodies while
+;; those bodies are migrated to Step_plain.
+dec $is_plain_instr(instr) : bool
+def $is_plain_instr(UNREACHABLE) = false
+def $is_plain_instr(BLOCK _ _) = false
+def $is_plain_instr(LOOP _ _) = false
+def $is_plain_instr(IF _ _ ELSE _) = false
+def $is_plain_instr(BR _) = false
+def $is_plain_instr(BR_IF _) = false
+def $is_plain_instr(BR_TABLE _ _) = false
+def $is_plain_instr(BR_ON_NULL _) = false
+def $is_plain_instr(BR_ON_NON_NULL _) = false
+def $is_plain_instr(BR_ON_CAST _ _ _) = false
+def $is_plain_instr(BR_ON_CAST_FAIL _ _ _) = false
+def $is_plain_instr(RETURN) = false
+def $is_plain_instr(CALL _) = false
+def $is_plain_instr(CALL_REF _) = false
+def $is_plain_instr(CALL_INDIRECT _ _) = false
+def $is_plain_instr(RETURN_CALL _) = false
+def $is_plain_instr(RETURN_CALL_REF _) = false
+def $is_plain_instr(RETURN_CALL_INDIRECT _ _) = false
+def $is_plain_instr(THROW _) = false
+def $is_plain_instr(THROW_REF) = false
+def $is_plain_instr(TRY_TABLE _ _ _) = false
+def $is_plain_instr(_) = true  -- otherwise
+
+;; Steps_until is the reflexive-transitive Step closure up to an
+;; administrative terminal state.  Contexts are evaluated structurally, but
+;; every redex and every context return still uses the corresponding Step
+;; rule; no instruction receives a separate big-step implementation.
+rule Steps/values:
+  cf |- ValuesO s v*
+  -- Steps_until: cf |- (s, fr, v*, eps, budget)
+
+rule Steps/trap:
+  cf |- TrapO s
+  -- Steps_until: cf |- (s, fr, v*, (Trapping) :: adm*, budget)
+
+rule Steps/exception:
+  cf |- ExceptionO s ja v_throw*
+  -- Steps_until:
+      cf |- (s, fr, v*, (Throwing ja v_throw*) :: adm*, budget)
+
+rule Steps/exhaustion:
+  cf |- ExhaustionO s
+  -- Steps_until: cf |- (s, fr, v*, (Exhausting) :: adm*, budget)
+
+rule Steps_until/values:
+  (s, fr, v*, eps, budget) |- (s, fr, v*, eps, budget)
+
+rule Steps_until/break:
+  (s, fr, v*, (Breaking l v_break*) :: adm*, budget) |-
+    (s, fr, v*, (Breaking l v_break*) :: adm*, budget)
+
+rule Steps_until/return:
+  (s, fr, v*, (Returning v_return*) :: adm*, budget) |-
+    (s, fr, v*, (Returning v_return*) :: adm*, budget)
+
+rule Steps_until/return-invoke:
+  (s, fr, v*, (ReturningInvoke v_return* fa) :: adm*, budget) |-
+    (s, fr, v*, (ReturningInvoke v_return* fa) :: adm*, budget)
+
+rule Steps_until/throw:
+  (s, fr, v*, (Throwing ja v_throw*) :: adm*, budget) |-
+    (s, fr, v*, (Throwing ja v_throw*) :: adm*, budget)
+
+rule Steps_until/trap:
+  (s, fr, v*, (Trapping) :: adm*, budget) |-
+    (s, fr, v*, (Trapping) :: adm*, budget)
+
+rule Steps_until/exhaustion:
+  (s, fr, v*, (Exhausting) :: adm*, budget) |-
+    (s, fr, v*, (Exhausting) :: adm*, budget)
+
+rule Steps_until/plain:
+  (s, fr, v*, (Plain instr) :: adm*, budget) |- cf_final
+  -- Step:
+      (s, fr, v*, (Plain instr) :: adm*, budget) |- cf'
+  -- Steps_until: cf' |- cf_final
+
+rule Steps_until/refer:
+  (s, fr, v*, (Refer r) :: adm*, budget) |- cf_final
+  -- Step:
+      (s, fr, v*, (Refer r) :: adm*, budget) |- cf'
+  -- Steps_until: cf' |- cf_final
+
+rule Steps_until/invoke:
+  (s, fr, v*, (Invoke fa) :: adm*, budget) |- cf_final
+  -- Step:
+      (s, fr, v*, (Invoke fa) :: adm*, budget) |- cf'
+  -- Steps_until: cf' |- cf_final
+
+rule Steps_until/frame:
+  (s, fr, v*, (Frame n fr_inner v_inner* adm_inner*) :: adm*, budget) |-
+    cf_final
+  -- if $(budget > 0)
+  -- if budget_inner = $(budget - 1)
+  -- Steps_until:
+      (s, fr_inner, v_inner*, adm_inner*, budget_inner) |-
+        (s_inner, fr_inner', v_inner'*, adm_inner'*, budget_inner)
+  -- Step:
+      (s_inner, fr, v*,
+        (Frame n fr_inner' v_inner'* adm_inner'*) :: adm*, budget) |-
+        cf'
+  -- Steps_until: cf' |- cf_final
+
+rule Steps_until/frame-zero:
+  (s, fr, v*, (Frame n fr_inner v_inner* adm_inner*) :: adm*, 0) |-
+    cf_final
+  -- Step:
+      (s, fr, v*, (Frame n fr_inner v_inner* adm_inner*) :: adm*, 0) |-
+        cf'
+  -- Steps_until: cf' |- cf_final
+
+rule Steps_until/label:
+  (s, fr, v*, (Label n instr_0* v_inner* adm_inner*) :: adm*, budget) |-
+    cf_final
+  -- Steps_until:
+      (s, fr, v_inner*, adm_inner*, budget) |-
+        (s_inner, fr_inner', v_inner'*, adm_inner'*, budget)
+  -- Step:
+      (s_inner, fr_inner', v*,
+        (Label n instr_0* v_inner'* adm_inner'*) :: adm*, budget) |-
+        cf'
+  -- Steps_until: cf' |- cf_final
+
+rule Steps_until/handler:
+  (s, fr, v*, (Handler n catch* v_inner* adm_inner*) :: adm*, budget) |-
+    cf_final
+  -- Steps_until:
+      (s, fr, v_inner*, adm_inner*, budget) |-
+        (s_inner, fr_inner', v_inner'*, adm_inner'*, budget)
+  -- Step:
+      (s_inner, fr_inner', v*,
+        (Handler n catch* v_inner'* adm_inner'*) :: adm*, budget) |-
+        cf'
+  -- Steps_until: cf' |- cf_final
+
+rule Step/refer:
+  (s, fr, v*, (Refer r) :: adm*, budget) |-
+    (s, fr, (RefV r) :: v*, adm*, budget)
+
+rule Step/plain:
+  (s, fr, v*, (Plain instr) :: adm*, budget) |-
+    (s', fr', v'*, adm_all*, budget)
+  -- if $is_plain_instr(instr)
+  -- Step_plain: s fr v* |- instr : (s', fr', v'*, adm_emit*)
+  -- if adm_all* = adm_emit* ++ adm*
+
+;;
+;; Administrative Frame contexts
+;;
+
+rule Step/frame-step:
+  (s, fr, v*, (Frame n fr_inner v_inner* adm_inner*) :: adm*, budget) |-
+  (s', fr, v*, (Frame n fr_inner' v_inner'* adm_inner'*) :: adm*, budget)
+  -- if $(budget > 0)
+  -- if budget_inner = $(budget - 1)
+  -- Step: (s, fr_inner, v_inner*, adm_inner*, budget_inner) |-
+      (s', fr_inner', v_inner'*, adm_inner'*, budget_inner)
+
+rule Step/frame-values:
+  (s, fr, v*, (Frame n fr_inner v_inner* eps) :: adm*, budget) |-
+    (s, fr, v_all*, adm*, budget)
+  -- if v_all* = v_inner* ++ v*
+
+rule Step/frame-return:
+  (s, fr, v*, (Frame n fr_inner v_inner*
+    ((Returning v_return*) :: adm_inner*)) :: adm*, budget) |-
+    (s, fr, v_all*, adm*, budget)
+  -- if v_result* = $take_<value>(v_return*, n)
+  -- if v_all* = v_result* ++ v*
+
+rule Step/frame-return-invoke:
+  (s, fr, v*, (Frame n fr_inner v_inner*
+    ((ReturningInvoke v_return* fa) :: adm_inner*)) :: adm*, budget) |-
+    (s, fr, v_all*, (Invoke fa) :: adm*, budget)
+  -- if fi = s.FUNCS[fa]
+  -- if DefFuncT (FuncT t_arg* t_result*) = $expanddt(fi.TYPE)
+  -- if v_arg* = $take_<value>(v_return*, |t_arg*|)
+  -- if v_all* = v_arg* ++ v*
+
+rule Step/frame-break:
+  (s, fr, v*, (Frame n fr_inner v_inner*
+    ((Breaking l v_break*) :: adm_inner*)) :: adm*, budget) |-
+    (s, fr, v*, (Breaking l v_break*) :: adm*, budget)
+
+rule Step/frame-throw:
+  (s, fr, v*, (Frame n fr_inner v_inner*
+    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*, budget) |-
+    (s, fr, v*, (Throwing ja v_throw*) :: adm*, budget)
+
+rule Step/frame-trap:
+  (s, fr, v*, (Frame n fr_inner v_inner*
+    ((Trapping) :: adm_inner*)) :: adm*, budget) |-
+    (s, fr, v*, (Trapping) :: adm*, budget)
+
+rule Step/frame-exhaustion:
+  (s, fr, v*, (Frame n fr_inner v_inner*
+    ((Exhausting) :: adm_inner*)) :: adm*, budget) |-
+    (s, fr, v*, (Exhausting) :: adm*, budget)
+
+;;
+;; Administrative Label contexts
+;;
+
+rule Step/label-step:
+  (s, fr, v*, (Label n instr_0* v_inner* adm_inner*) :: adm*, budget) |-
+    (s', fr', v*, (Label n instr_0* v_inner'* adm_inner'*) :: adm*, budget)
+  -- Step: (s, fr, v_inner*, adm_inner*, budget) |-
+      (s', fr', v_inner'*, adm_inner'*, budget)
+
+rule Step/label-values:
+  (s, fr, v*, (Label n instr_0* v_inner* eps) :: adm*, budget) |-
+    (s, fr, v_all*, adm*, budget)
+  -- if v_all* = v_inner* ++ v*
+
+rule Step/label-break-zero:
+  (s, fr, v*, (Label n instr_0* v_inner* ((Breaking 0 v_break*) :: adm_inner*)) :: adm*, budget) |-
+    (s, fr, v_all*, adm_all*, budget)
+  -- if v_take* = $take_<value>(v_break*, n)
+  -- if v_all* = v_take* ++ v*
+  -- if adm_all* = $plain_instrs(instr_0*) ++ adm*
+
+rule Step/label-break-succ:
+  (s, fr, v*, (Label n instr_0* v_inner* ((Breaking l v_break*) :: adm_inner*)) :: adm*, budget) |-
+    (s, fr, v*, (Breaking l' v_break*) :: adm*, budget)
+  -- if $(l > 0)
+  -- if l' = $(l - 1)
+
+rule Step/label-return:
+  (s, fr, v*, (Label n instr_0* v_inner*
+    ((Returning v_return*) :: adm_inner*)) :: adm*, budget) |-
+    (s, fr, v*, (Returning v_return*) :: adm*, budget)
+
+rule Step/label-return-invoke:
+  (s, fr, v*, (Label n instr_0* v_inner*
+    ((ReturningInvoke v_return* fa) :: adm_inner*)) :: adm*, budget) |-
+    (s, fr, v*, (ReturningInvoke v_return* fa) :: adm*, budget)
+
+rule Step/label-throw:
+  (s, fr, v*, (Label n instr_0* v_inner*
+    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*, budget) |-
+    (s, fr, v*, (Throwing ja v_throw*) :: adm*, budget)
+
+rule Step/label-trap:
+  (s, fr, v*, (Label n instr_0* v_inner*
+    ((Trapping) :: adm_inner*)) :: adm*, budget) |-
+    (s, fr, v*, (Trapping) :: adm*, budget)
+
+rule Step/label-exhaustion:
+  (s, fr, v*, (Label n instr_0* v_inner*
+    ((Exhausting) :: adm_inner*)) :: adm*, budget) |-
+    (s, fr, v*, (Exhausting) :: adm*, budget)
+
+;;
+;; Public constant-expression and invocation compatibility boundaries
+;;
+
+relation Eval_const: store moduleinst |- const : (store, value)
+  hint(input %0 %1 %2)
+
+relation Eval_consts: store moduleinst |- const* : (store, value*)
+  hint(input %0 %1 %2)
+
+relation Invoke: store funcaddr value* |- execoutcome
+  hint(input %0 %1 %2)
+
+relation Invoke_ok: store funcaddr value* |- value* : store
+  hint(input %0 %1 %2)
+
+rule Eval_const/exec:
+  s mm |- const : (s', v)
+  -- if fr_const = { LOCALS eps, MODULE mm }
+  -- if adm_const* = $plain_instrs(const)
+  -- Steps:
+      (s, fr_const, eps, adm_const*, $default_call_budget) |-
+        ValuesO s' (v :: eps)
+
+rule Eval_consts/cons:
+  s mm |- const_1 :: const* : (s_2, v_1 :: v*)
+  -- Eval_const: s mm |- const_1 : (s_1, v_1)
+  -- Eval_consts: s_1 mm |- const* : (s_2, v*)
+
+rule Eval_consts/nil:
+  s mm |- eps : (s, eps)
+
+dec $refs_of_values(value*) : refval*
+def $refs_of_values(eps) = eps
+def $refs_of_values((RefV r) :: v*) = r :: $refs_of_values(v*)
+
+dec $pack_field(storagetype, value) : fieldval
+dec $pack_fields(fieldtype*, value*) : fieldval*
+dec $unpack_field(fieldval) : value
+dec $unpack_field_ext(fieldval, extension) : value
+dec $some_values(value*) : (value?)*
+dec $default_locals(moduleinst, local*) : (value?)*
+dec $default_field_values(fieldtype*) : value*
+dec $storage_size_nat(storagetype) : nat
+dec $fieldval_of_storage_bytes(storagetype, byte*) : fieldval
+dec $fieldvals_of_data(storagetype, byte*, nat, nat) : fieldval*
+dec $fieldvals_of_refs(storagetype, refval*) : fieldval*
+dec $ref_eq(refval, refval) : nat
+
+def $pack_field(ValStorageT _, v) = FieldValue v
+def $pack_field(PackStorageT I8, NumV (I32 n)) = PackedField I8 $byte_of_i32(n)
+def $pack_field(PackStorageT I16, NumV (I32 n)) = PackedField I16 $i32_of_bytes($bytes_of_i32(n)[0:2])
+
+def $unpack_field(FieldValue v) = v
+def $unpack_field(PackedField pt n) = NumV (I32 n)
+
+def $unpack_field_ext(FieldValue v, extension) = v
+def $unpack_field_ext(PackedField I8 n, ZX) = NumV (I32 n)
+def $unpack_field_ext(PackedField I16 n, ZX) = NumV (I32 n)
+def $unpack_field_ext(PackedField I8 n, SX) = NumV (I32 $i32_extend_i8_s(n))
+def $unpack_field_ext(PackedField I16 n, SX) = NumV (I32 $i32_extend_i16_s(n))
+
+def $pack_fields(eps, eps) = eps
+def $pack_fields((FieldT mut zt) :: yt*, v_1 :: v*) =
+  $pack_field(zt, v_1) :: $pack_fields(yt*, v*)
+
+def $some_values(eps) = eps
+def $some_values(v_1 :: v*) = v_1 :: $some_values(v*)
+
+def $default_locals(mm, eps) = eps
+def $default_locals(mm, { LTYPE t } :: local*) =
+  $default_value($inst_valtype(mm, t)) :: $default_locals(mm, local*)
+
+def $default_field_values(eps) = eps
+def $default_field_values((FieldT mut zt) :: yt*) =
+  v_1 :: $default_field_values(yt*)
+  -- if v_1 = $default_value($unpacked_storage_type(zt))
+
+def $storage_size_nat(PackStorageT I8) = 1
+def $storage_size_nat(PackStorageT I16) = 2
+def $storage_size_nat(PackStorageT I32) = 4
+def $storage_size_nat(PackStorageT I64) = 8
+def $storage_size_nat(ValStorageT (NumT I32T)) = 4
+def $storage_size_nat(ValStorageT (NumT I64T)) = 8
+def $storage_size_nat(ValStorageT (NumT F32T)) = 4
+def $storage_size_nat(ValStorageT (NumT F64T)) = 8
+def $storage_size_nat(ValStorageT (VecT V128T)) = 16
+
+def $fieldval_of_storage_bytes(PackStorageT I8, b*) = PackedField I8 b*[0]
+def $fieldval_of_storage_bytes(PackStorageT I16, b*) = PackedField I16 $i32_of_bytes(b*)
+def $fieldval_of_storage_bytes(ValStorageT (NumT I32T), b*) =
+  FieldValue (NumV (I32 $i32_of_bytes(b*)))
+def $fieldval_of_storage_bytes(ValStorageT (NumT I64T), b*) =
+  FieldValue (NumV (I64 $i64_of_bytes(b*)))
+
+def $fieldvals_of_data(zt, b*, offset, n) = eps
+  -- if n = 0
+def $fieldvals_of_data(zt, b*, offset, n) =
+  fv :: $fieldvals_of_data(zt, b*, offset', n')
+  -- if $(n > 0)
+  -- if nsize = $storage_size_nat(zt)
+  -- if fv = $fieldval_of_storage_bytes(zt, b*[offset:nsize])
+  -- if offset' = $(offset + nsize)
+  -- if n' = $(n - 1)
+
+def $fieldvals_of_refs(zt, eps) = eps
+def $fieldvals_of_refs(zt, r_1 :: r_t*) =
+  $pack_field(zt, RefV r_1) :: $fieldvals_of_refs(zt, r_t*)
+
+def $ref_eq(NullRef _, NullRef _) = 1
+def $ref_eq(r, r) = 1
+def $ref_eq(r_1, r_2) = 0
+  -- otherwise
+
+dec $block_result_arity(moduleinst, blocktype) : nat
+dec $block_param_arity(moduleinst, blocktype) : nat
+dec $block_input_stack(value*, nat) : value*
+dec $block_outer_stack(value*, nat) : value*
+
+def $block_result_arity(mm, ValBlockType eps) = 0
+def $block_result_arity(mm, ValBlockType t) = 1
+def $block_result_arity(mm, VarBlockType x) = |t_2*|
+  -- if DefFuncT (FuncT t_1* t_2*) = $expanddt(mm.TYPES[x])
+
+def $block_param_arity(mm, ValBlockType eps) = 0
+def $block_param_arity(mm, ValBlockType t) = 0
+def $block_param_arity(mm, VarBlockType x) = |t_1*|
+  -- if DefFuncT (FuncT t_1* t_2*) = $expanddt(mm.TYPES[x])
+
+def $block_input_stack(v*, n) = $take_<value>(v*, n)
+def $block_outer_stack(v*, n) = v_rest*
+  -- if nrest = $(|v*| - n)
+  -- if v_rest* = v*[n:nrest]
+
+;;
+;; Administrative control transitions
+;;
+
+rule Step/unreachable:
+  (s, fr, v*, (Plain UNREACHABLE) :: adm*, budget) |-
+    (s, fr, v*, (Trapping) :: adm*, budget)
+
+rule Step/block:
+  (s, fr, v*, (Plain (BLOCK blocktype instr*)) :: adm*, budget) |-
+    (s, fr, v_rest*, (Label nresult eps v_arg* adm_body*) :: adm*, budget)
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if nresult = $block_result_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- if v_rest* = $block_outer_stack(v*, nparam)
+  -- if adm_body* = $plain_instrs(instr*)
+
+rule Step/loop:
+  (s, fr, v*, (Plain (LOOP blocktype instr*)) :: adm*, budget) |-
+    (s, fr, v_rest*,
+      (Label nparam ((LOOP blocktype instr*) :: eps) v_arg* adm_body*) :: adm*,
+      budget)
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- if v_rest* = $block_outer_stack(v*, nparam)
+  -- if adm_body* = $plain_instrs(instr*)
+
+rule Step/cond-true:
+  (s, fr, (NumV (I32 i)) :: v*, (Plain (IF blocktype instr_1* ELSE instr_2*)) :: adm*, budget) |-
+    (s, fr, v*, (Plain (BLOCK blocktype instr_1*)) :: adm*, budget)
+  -- if $(i =/= 0)
+
+rule Step/cond-false:
+  (s, fr, (NumV (I32 0)) :: v*, (Plain (IF blocktype instr_1* ELSE instr_2*)) :: adm*, budget) |-
+    (s, fr, v*, (Plain (BLOCK blocktype instr_2*)) :: adm*, budget)
+
+rule Step/br:
+  (s, fr, v*, (Plain (BR l)) :: adm*, budget) |-
+    (s, fr, eps, (Breaking l v*) :: adm*, budget)
+
+rule Step/brif-true:
+  (s, fr, (NumV (I32 i)) :: v*, (Plain (BR_IF l)) :: adm*, budget) |-
+    (s, fr, v*, (Plain (BR l)) :: adm*, budget)
+  -- if $(i =/= 0)
+
+rule Step/brif-false:
+  (s, fr, (NumV (I32 0)) :: v*, (Plain (BR_IF l)) :: adm*, budget) |-
+    (s, fr, v*, adm*, budget)
+
+rule Step/br-table-in:
+  (s, fr, (NumV (I32 i)) :: v*, (Plain (BR_TABLE l* x)) :: adm*, budget) |-
+    (s, fr, v*, (Plain (BR y)) :: adm*, budget)
+  -- if $(i < |l*|)
+  -- if y = l*[i]
+
+rule Step/br-table-out:
+  (s, fr, (NumV (I32 i)) :: v*, (Plain (BR_TABLE l* x)) :: adm*, budget) |-
+    (s, fr, v*, (Plain (BR x)) :: adm*, budget)
+  -- if $(i >= |l*|)
+
+rule Step/br-on-null-null:
+  (s, fr, (RefV (NullRef ht)) :: v*, (Plain (BR_ON_NULL l)) :: adm*, budget) |-
+    (s, fr, v*, (Plain (BR l)) :: adm*, budget)
+
+rule Step/br-on-null-non-null:
+  (s, fr, (RefV r) :: v*, (Plain (BR_ON_NULL l)) :: adm*, budget) |-
+    (s, fr, (RefV r) :: v*, adm*, budget)
+  -- Ref_ok: s |- r : NoNull ht
+
+rule Step/br-on-non-null-null:
+  (s, fr, (RefV (NullRef ht)) :: v*, (Plain (BR_ON_NON_NULL l)) :: adm*, budget) |-
+    (s, fr, v*, adm*, budget)
+
+rule Step/br-on-non-null-non-null:
+  (s, fr, (RefV r) :: v*, (Plain (BR_ON_NON_NULL l)) :: adm*, budget) |-
+    (s, fr, (RefV r) :: v*, (Plain (BR l)) :: adm*, budget)
+  -- Ref_ok: s |- r : NoNull ht
+
+rule Step/br-on-cast-true:
+  (s, fr, (RefV r) :: v*, (Plain (BR_ON_CAST l rt_1 rt_2)) :: adm*, budget) |-
+    (s, fr, (RefV r) :: v*, (Plain (BR l)) :: adm*, budget)
+  -- Ref_ok: s |- r : rtactual
+  -- if rt_expect = $inst_reftype(fr.MODULE, rt_2)
+  -- if $match_reftype(fr.MODULE.TYPES, rtactual, rt_expect)
+
+rule Step/br-on-cast-false:
+  (s, fr, (RefV r) :: v*, (Plain (BR_ON_CAST l rt_1 rt_2)) :: adm*, budget) |-
+    (s, fr, (RefV r) :: v*, adm*, budget)
+  -- Ref_ok: s |- r : rtactual
+  -- if rt_expect = $inst_reftype(fr.MODULE, rt_2)
+  -- if ~$match_reftype(fr.MODULE.TYPES, rtactual, rt_expect)
+
+rule Step/br-on-cast-fail-true:
+  (s, fr, (RefV r) :: v*, (Plain (BR_ON_CAST_FAIL l rt_1 rt_2)) :: adm*, budget) |-
+    (s, fr, (RefV r) :: v*, adm*, budget)
+  -- Ref_ok: s |- r : rtactual
+  -- if rt_expect = $inst_reftype(fr.MODULE, rt_2)
+  -- if $match_reftype(fr.MODULE.TYPES, rtactual, rt_expect)
+
+rule Step/br-on-cast-fail-false:
+  (s, fr, (RefV r) :: v*, (Plain (BR_ON_CAST_FAIL l rt_1 rt_2)) :: adm*, budget) |-
+    (s, fr, (RefV r) :: v*, (Plain (BR l)) :: adm*, budget)
+  -- Ref_ok: s |- r : rtactual
+  -- if rt_expect = $inst_reftype(fr.MODULE, rt_2)
+  -- if ~$match_reftype(fr.MODULE.TYPES, rtactual, rt_expect)
+
+rule Step/return:
+  (s, fr, v*, (Plain RETURN) :: adm*, budget) |-
+    (s, fr, eps, (Returning v*) :: adm*, budget)
+
+;;
+;; Calls and tail calls
+;;
+
+rule Step/call:
+  (s, fr, v*, (Plain (CALL x)) :: adm*, budget) |-
+    (s, fr, v*, (Invoke fa) :: adm*, budget)
+  -- if fa = fr.MODULE.FUNCS[x]
+
+rule Step/call-ref-null:
+  (s, fr, (RefV (NullRef ht)) :: v*, (Plain (CALL_REF x)) :: adm*, budget) |-
+    (s, fr, v*, (Trapping) :: adm*, budget)
+
+rule Step/call-ref:
+  (s, fr, (RefV (FuncRef fa)) :: v*, (Plain (CALL_REF x)) :: adm*, budget) |-
+    (s, fr, v*, (Invoke fa) :: adm*, budget)
+
+rule Step/call-indirect-bounds:
+  (s, fr, (NumV num_i) :: v*, (Plain (CALL_INDIRECT x y)) :: adm*, budget) |-
+    (s, fr, v*, (Trapping) :: adm*, budget)
+  -- if ta = fr.MODULE.TABLES[x]
+  -- if i = $nat_of_num(num_i)
+  -- if $(i >= |s.TABLES[ta].REFS|)
+
+rule Step/call-indirect-null:
+  (s, fr, (NumV num_i) :: v*, (Plain (CALL_INDIRECT x y)) :: adm*, budget) |-
+    (s, fr, v*, (Trapping) :: adm*, budget)
+  -- if ta = fr.MODULE.TABLES[x]
+  -- if i = $nat_of_num(num_i)
+  -- if $(i < |s.TABLES[ta].REFS|)
+  -- if NullRef ht = s.TABLES[ta].REFS[i]
+
+rule Step/call-indirect-mismatch:
+  (s, fr, (NumV num_i) :: v*, (Plain (CALL_INDIRECT x y)) :: adm*, budget) |-
+    (s, fr, v*, (Trapping) :: adm*, budget)
+  -- if ta = fr.MODULE.TABLES[x]
+  -- if i = $nat_of_num(num_i)
+  -- if $(i < |s.TABLES[ta].REFS|)
+  -- if FuncRef fa = s.TABLES[ta].REFS[i]
+  -- if fi = s.FUNCS[fa]
+  -- if ~$match_deftype(eps, fi.TYPE, fr.MODULE.TYPES[y])
+
+rule Step/call-indirect:
+  (s, fr, (NumV num_i) :: v*, (Plain (CALL_INDIRECT x y)) :: adm*, budget) |-
+    (s, fr, v*, (Invoke fa) :: adm*, budget)
+  -- if ta = fr.MODULE.TABLES[x]
+  -- if i = $nat_of_num(num_i)
+  -- if $(i < |s.TABLES[ta].REFS|)
+  -- if FuncRef fa = s.TABLES[ta].REFS[i]
+  -- if fi = s.FUNCS[fa]
+  -- if $match_deftype(eps, fi.TYPE, fr.MODULE.TYPES[y])
+
+rule Step/return-call:
+  (s, fr, v*, (Plain (RETURN_CALL x)) :: adm*, budget) |-
+    (s, fr, eps, (ReturningInvoke v* fa) :: adm*, budget)
+  -- if fa = fr.MODULE.FUNCS[x]
+
+rule Step/return-call-ref-null:
+  (s, fr, (RefV (NullRef ht)) :: v*, (Plain (RETURN_CALL_REF x)) :: adm*, budget) |-
+    (s, fr, v*, (Trapping) :: adm*, budget)
+
+rule Step/return-call-ref:
+  (s, fr, (RefV (FuncRef fa)) :: v*, (Plain (RETURN_CALL_REF x)) :: adm*, budget) |-
+    (s, fr, eps, (ReturningInvoke v* fa) :: adm*, budget)
+
+rule Step/return-call-indirect-bounds:
+  (s, fr, (NumV num_i) :: v*, (Plain (RETURN_CALL_INDIRECT x y)) :: adm*, budget) |-
+    (s, fr, v*, (Trapping) :: adm*, budget)
+  -- if ta = fr.MODULE.TABLES[x]
+  -- if i = $nat_of_num(num_i)
+  -- if $(i >= |s.TABLES[ta].REFS|)
+
+rule Step/return-call-indirect-null:
+  (s, fr, (NumV num_i) :: v*, (Plain (RETURN_CALL_INDIRECT x y)) :: adm*, budget) |-
+    (s, fr, v*, (Trapping) :: adm*, budget)
+  -- if ta = fr.MODULE.TABLES[x]
+  -- if i = $nat_of_num(num_i)
+  -- if $(i < |s.TABLES[ta].REFS|)
+  -- if NullRef ht = s.TABLES[ta].REFS[i]
+
+rule Step/return-call-indirect-mismatch:
+  (s, fr, (NumV num_i) :: v*, (Plain (RETURN_CALL_INDIRECT x y)) :: adm*, budget) |-
+    (s, fr, v*, (Trapping) :: adm*, budget)
+  -- if ta = fr.MODULE.TABLES[x]
+  -- if i = $nat_of_num(num_i)
+  -- if $(i < |s.TABLES[ta].REFS|)
+  -- if FuncRef fa = s.TABLES[ta].REFS[i]
+  -- if fi = s.FUNCS[fa]
+  -- if ~$match_deftype(eps, fi.TYPE, fr.MODULE.TYPES[y])
+
+rule Step/return-call-indirect:
+  (s, fr, (NumV num_i) :: v*, (Plain (RETURN_CALL_INDIRECT x y)) :: adm*, budget) |-
+    (s, fr, eps, (ReturningInvoke v* fa) :: adm*, budget)
+  -- if ta = fr.MODULE.TABLES[x]
+  -- if i = $nat_of_num(num_i)
+  -- if $(i < |s.TABLES[ta].REFS|)
+  -- if FuncRef fa = s.TABLES[ta].REFS[i]
+  -- if fi = s.FUNCS[fa]
+  -- if $match_deftype(eps, fi.TYPE, fr.MODULE.TYPES[y])
+
+rule Step/invoke-exhaustion:
+  (s, fr, v*, (Invoke fa) :: adm*, 0) |-
+    (s, fr, v*, (Exhausting) :: adm*, 0)
+
+rule Step/invoke-ast:
+  (s, fr, v*, (Invoke fa) :: adm*, budget) |-
+    (s, fr, v_rest*,
+      (Frame m fr_callee eps
+        ((Label m eps eps adm_body*) :: eps)) :: adm*,
+      budget)
+  -- if $(budget > 0)
+  -- if fi = s.FUNCS[fa]
+  -- if AstFunc func = fi.CODE
+  -- if DefFuncT (FuncT t_arg* t_result*) = $expanddt(fi.TYPE)
+  -- if n = |t_arg*|
+  -- if m = |t_result*|
+  -- if v_arg_stack* = $take_<value>(v*, n)
+  -- if v_arg* = $rev_<value>(v_arg_stack*)
+  -- if v_rest* = $block_outer_stack(v*, n)
+  -- if fr_callee = {
+      LOCALS ($some_values(v_arg*) ++ $default_locals(fi.MODULE, func.LOCALS)),
+      MODULE fi.MODULE
+    }
+  -- if adm_body* = $plain_instrs(func.BODY)
+
+rule Step/invoke-host-no-result:
+  (s, fr, v*, (Invoke fa) :: adm*, budget) |-
+    (s, fr, v_rest*, adm*, budget)
+  -- if $(budget > 0)
+  -- if fi = s.FUNCS[fa]
+  -- if HostFunc _ = fi.CODE
+  -- if DefFuncT (FuncT t_arg* eps) = $expanddt(fi.TYPE)
+  -- if $(|t_arg*| <= |v*|)
+  -- if v_rest* = $block_outer_stack(v*, |t_arg*|)
+
+;;
+;; Exceptions and try_table handlers
+;;
+
+rule Step/throw:
+  (s, fr, v*, (Plain (THROW x)) :: adm*, budget) |-
+    (s, fr, v_rest*, (Throwing ja v_throw*) :: adm*, budget)
+  -- if ja = fr.MODULE.TAGS[x]
+  -- if TagT dtf = s.TAGS[ja].TYPE
+  -- if DefFuncT (FuncT t_arg* eps) = $expanddt(dtf)
+  -- if n = |t_arg*|
+  -- if v_throw* = $take_<value>(v*, n)
+  -- if v_rest* = $block_outer_stack(v*, n)
+
+rule Step/throw-ref-null:
+  (s, fr, (RefV (NullRef ht)) :: v*, (Plain THROW_REF) :: adm*, budget) |-
+    (s, fr, v*, (Trapping) :: adm*, budget)
+
+rule Step/throw-ref:
+  (s, fr, (RefV (ExnRef a)) :: v*, (Plain THROW_REF) :: adm*, budget) |-
+    (s, fr, v*, (Throwing ja v_throw*) :: adm*, budget)
+  -- if ja = s.EXNS[a].TAG
+  -- if v_throw* = s.EXNS[a].FIELDS
+
+rule Step/try-table:
+  (s, fr, v*, (Plain (TRY_TABLE blocktype catch* instr*)) :: adm*, budget) |-
+    (s, fr, v_rest*,
+      (Handler nresult catch* eps
+        ((Label nresult eps v_arg* adm_body*) :: eps)) :: adm*,
+      budget)
+  -- if nparam = $block_param_arity(fr.MODULE, blocktype)
+  -- if nresult = $block_result_arity(fr.MODULE, blocktype)
+  -- if v_arg* = $block_input_stack(v*, nparam)
+  -- if v_rest* = $block_outer_stack(v*, nparam)
+  -- if adm_body* = $plain_instrs(instr*)
+
+rule Step/handler-values:
+  (s, fr, v*, (Handler n catch* v_inner* eps) :: adm*, budget) |-
+    (s, fr, v_all*, adm*, budget)
+  -- if v_all* = v_inner* ++ v*
+
+rule Step/handler-catch:
+  (s, fr, v*, (Handler n ((Catch x y) :: catch*) v_inner*
+    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*, budget) |-
+    (s, fr, v_all*, (Plain (BR y)) :: adm*, budget)
+  -- if ja = fr.MODULE.TAGS[x]
+  -- if v_all* = v_throw* ++ v*
+
+rule Step/handler-catch-skip:
+  (s, fr, v*, (Handler n ((Catch x y) :: catch*) v_inner*
+    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*, budget) |-
+    (s, fr, v*,
+      (Handler n catch* v_inner*
+        ((Throwing ja v_throw*) :: adm_inner*)) :: adm*,
+      budget)
+  -- if ~(ja = fr.MODULE.TAGS[x])
+
+rule Step/handler-catch-ref:
+  (s, fr, v*, (Handler n ((CatchRef x y) :: catch*) v_inner*
+    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*, budget) |-
+    (s', fr, (RefV (ExnRef a)) :: v_all*, (Plain (BR y)) :: adm*, budget)
+  -- if ja = fr.MODULE.TAGS[x]
+  -- if a = |s.EXNS|
+  -- if s' = s[ .EXNS = s.EXNS ++ [{ TAG ja, FIELDS v_throw* }] ]
+  -- if v_all* = v_throw* ++ v*
+
+rule Step/handler-catch-ref-skip:
+  (s, fr, v*, (Handler n ((CatchRef x y) :: catch*) v_inner*
+    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*, budget) |-
+    (s, fr, v*,
+      (Handler n catch* v_inner*
+        ((Throwing ja v_throw*) :: adm_inner*)) :: adm*,
+      budget)
+  -- if ~(ja = fr.MODULE.TAGS[x])
+
+rule Step/handler-catch-all:
+  (s, fr, v*, (Handler n ((CatchAll x) :: catch*) v_inner*
+    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*, budget) |-
+    (s, fr, v*, (Plain (BR x)) :: adm*, budget)
+
+rule Step/handler-catch-all-ref:
+  (s, fr, v*, (Handler n ((CatchAllRef x) :: catch*) v_inner*
+    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*, budget) |-
+    (s', fr, (RefV (ExnRef a)) :: v*, (Plain (BR x)) :: adm*, budget)
+  -- if a = |s.EXNS|
+  -- if s' = s[ .EXNS = s.EXNS ++ [{ TAG ja, FIELDS v_throw* }] ]
+
+rule Step/handler-rethrow:
+  (s, fr, v*, (Handler n eps v_inner*
+    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*, budget) |-
+    (s, fr, v*, (Throwing ja v_throw*) :: adm*, budget)
+
+rule Step/handler-break:
+  (s, fr, v*, (Handler n catch* v_inner*
+    ((Breaking l v_break*) :: adm_inner*)) :: adm*, budget) |-
+    (s, fr, v*, (Breaking l v_break*) :: adm*, budget)
+
+rule Step/handler-return:
+  (s, fr, v*, (Handler n catch* v_inner*
+    ((Returning v_return*) :: adm_inner*)) :: adm*, budget) |-
+    (s, fr, v*, (Returning v_return*) :: adm*, budget)
+
+rule Step/handler-return-invoke:
+  (s, fr, v*, (Handler n catch* v_inner*
+    ((ReturningInvoke v_return* fa) :: adm_inner*)) :: adm*, budget) |-
+    (s, fr, v*, (ReturningInvoke v_return* fa) :: adm*, budget)
+
+rule Step/handler-trap:
+  (s, fr, v*, (Handler n catch* v_inner*
+    ((Trapping) :: adm_inner*)) :: adm*, budget) |-
+    (s, fr, v*, (Trapping) :: adm*, budget)
+
+rule Step/handler-exhaustion:
+  (s, fr, v*, (Handler n catch* v_inner*
+    ((Exhausting) :: adm_inner*)) :: adm*, budget) |-
+    (s, fr, v*, (Exhausting) :: adm*, budget)
+
+rule Step/handler-step:
+  (s, fr, v*, (Handler n catch* v_inner* adm_inner*) :: adm*, budget) |-
+    (s', fr', v*, (Handler n catch* v_inner'* adm_inner'*) :: adm*, budget)
+  -- Step: (s, fr, v_inner*, adm_inner*, budget) |-
+      (s', fr', v_inner'*, adm_inner'*, budget)
+
+rule Invoke:
+  s fa v_arg* |- eo
+  -- if v_stack* = $rev_<value>(v_arg*)
+  -- if fr_init = { LOCALS eps, MODULE $empty_moduleinst }
+  -- Steps:
+      (s, fr_init, v_stack*, (Invoke fa) :: eps, $default_call_budget) |-
+        eo
+
+rule Invoke_ok:
+  s fa v_arg* |- v_result* : s'
+  -- if fi = s.FUNCS[fa]
+  -- if DefFuncT (FuncT t_arg* t_result*) = $expanddt(fi.TYPE)
+  -- if |v_arg*| = |t_arg*|
+  -- (Val_ok: s |- v_arg : t_actual)*
+  -- (if $match_valtype(eps, t_actual, t_arg))*
+  -- Invoke: s fa v_arg* |- ValuesO s' v_stack_result*
+  -- if v_result* = $rev_<value>(v_stack_result*)
+
+rule Step_plain/module:
+  s fr v* |- instr : (s', fr, v'*, eps)
+  -- Step_plain_module: s fr.MODULE v* |- instr : (s', v'*, eps)
+
+rule Step_plain/local-get:
+  s fr v* |- LOCAL.GET x : (s, fr, v_1 :: v*, eps)
+  -- if v_1 = fr.LOCALS[x]
+
+rule Step_plain/local-set:
+  s fr (v_1 :: v*) |- LOCAL.SET x : (s, fr', v*, eps)
+  -- if fr' = fr[ .LOCALS[x] = v_1 ]
+
+rule Step_plain/local-tee:
+  s fr (v_1 :: v*) |- LOCAL.TEE x : (s, fr', v_1 :: v*, eps)
+  -- if fr' = fr[ .LOCALS[x] = v_1 ]
+
+rule Step_plain/global-set:
+  s fr (v_1 :: v*) |- GLOBAL.SET x : (s', fr, v*, eps)
+  -- if ga = fr.MODULE.GLOBALS[x]
+  -- if s' = s[ .GLOBALS[ga].VALUE = v_1 ]
+
+rule Step_plain/memory-size-i32:
+  s fr v* |- MEMORY.SIZE x : (s, fr, (NumV (I32 pages)) :: v*, eps)
+  -- if ma = fr.MODULE.MEMS[x]
+  -- if MemoryT I32AT lim = s.MEMS[ma].TYPE
+  -- if pages = $(|s.MEMS[ma].BYTES| / $page_size)
+
+rule Step_plain/memory-size-i64:
+  s fr v* |- MEMORY.SIZE x : (s, fr, (NumV (I64 pages)) :: v*, eps)
+  -- if ma = fr.MODULE.MEMS[x]
+  -- if MemoryT I64AT lim = s.MEMS[ma].TYPE
+  -- if pages = $(|s.MEMS[ma].BYTES| / $page_size)
+
+rule Step_plain/memory-grow-i32:
+  s fr ((NumV (I32 n)) :: v*) |- MEMORY.GROW x : (s', fr, (NumV (I32 pages)) :: v*, eps)
+  -- if ma = fr.MODULE.MEMS[x]
+  -- if MemoryT I32AT { MIN i64, MAX eps } = s.MEMS[ma].TYPE
+  -- if pages = $(|s.MEMS[ma].BYTES| / $page_size)
+  -- if newsize = $(pages + n)
+  -- if $(newsize <= 65536)
+  -- if nbytes = $(n * $page_size)
+  -- if s_1 = s[ .MEMS[ma].BYTES = s.MEMS[ma].BYTES ++ $zero_bytes(nbytes) ]
+  -- if s' = s_1[ .MEMS[ma].TYPE = MemoryT I32AT { MIN newsize, MAX eps } ]
+
+rule Step_plain/memory-grow-i32-unbounded-fail:
+  s fr ((NumV (I32 n)) :: v*) |- MEMORY.GROW x : (s, fr, (NumV (I32 4294967295)) :: v*, eps)
+  -- if ma = fr.MODULE.MEMS[x]
+  -- if MemoryT I32AT { MIN i64, MAX eps } = s.MEMS[ma].TYPE
+  -- if pages = $(|s.MEMS[ma].BYTES| / $page_size)
+  -- if newsize = $(pages + n)
+  -- if $(newsize > 65536)
+
+rule Step_plain/memory-grow-i32-bounded:
+  s fr ((NumV (I32 n)) :: v*) |- MEMORY.GROW x : (s', fr, (NumV (I32 pages)) :: v*, eps)
+  -- if ma = fr.MODULE.MEMS[x]
+  -- if MemoryT I32AT { MIN i64, MAX i64_1 } = s.MEMS[ma].TYPE
+  -- if max = $(i64_1)
+  -- if pages = $(|s.MEMS[ma].BYTES| / $page_size)
+  -- if newsize = $(pages + n)
+  -- if $(newsize <= 65536)
+  -- if $(newsize <= max)
+  -- if nbytes = $(n * $page_size)
+  -- if s_1 = s[ .MEMS[ma].BYTES = s.MEMS[ma].BYTES ++ $zero_bytes(nbytes) ]
+  -- if s' = s_1[ .MEMS[ma].TYPE = MemoryT I32AT { MIN newsize, MAX i64_1 } ]
+
+rule Step_plain/memory-grow-i32-bounded-max-fail:
+  s fr ((NumV (I32 n)) :: v*) |- MEMORY.GROW x : (s, fr, (NumV (I32 4294967295)) :: v*, eps)
+  -- if ma = fr.MODULE.MEMS[x]
+  -- if MemoryT I32AT { MIN i64, MAX i64_1 } = s.MEMS[ma].TYPE
+  -- if max = $(i64_1)
+  -- if pages = $(|s.MEMS[ma].BYTES| / $page_size)
+  -- if newsize = $(pages + n)
+  -- if $(newsize > max)
+
+rule Step_plain/memory-grow-i32-bounded-size-fail:
+  s fr ((NumV (I32 n)) :: v*) |- MEMORY.GROW x : (s, fr, (NumV (I32 4294967295)) :: v*, eps)
+  -- if ma = fr.MODULE.MEMS[x]
+  -- if MemoryT I32AT { MIN i64, MAX i64_1 } = s.MEMS[ma].TYPE
+  -- if pages = $(|s.MEMS[ma].BYTES| / $page_size)
+  -- if newsize = $(pages + n)
+  -- if $(newsize > 65536)
+
+rule Step_plain/memory-grow-i64:
+  s fr ((NumV (I64 n)) :: v*) |- MEMORY.GROW x : (s', fr, (NumV (I64 pages)) :: v*, eps)
+  -- if ma = fr.MODULE.MEMS[x]
+  -- if MemoryT I64AT { MIN i64, MAX eps } = s.MEMS[ma].TYPE
+  -- if pages = $(|s.MEMS[ma].BYTES| / $page_size)
+  -- if nsize = $nat_of_num(I64 n)
+  -- if newsize = $(pages + nsize)
+  -- if nbytes = $(nsize * $page_size)
+  -- if s_1 = s[ .MEMS[ma].BYTES = s.MEMS[ma].BYTES ++ $zero_bytes(nbytes) ]
+  -- if s' = s_1[ .MEMS[ma].TYPE = MemoryT I64AT { MIN newsize, MAX eps } ]
+
+rule Step_plain/memory-grow-i64-bounded:
+  s fr ((NumV (I64 n)) :: v*) |- MEMORY.GROW x : (s', fr, (NumV (I64 pages)) :: v*, eps)
+  -- if ma = fr.MODULE.MEMS[x]
+  -- if MemoryT I64AT { MIN i64, MAX i64_1 } = s.MEMS[ma].TYPE
+  -- if max = $(i64_1)
+  -- if pages = $(|s.MEMS[ma].BYTES| / $page_size)
+  -- if nsize = $nat_of_num(I64 n)
+  -- if newsize = $(pages + nsize)
+  -- if $(newsize <= max)
+  -- if nbytes = $(nsize * $page_size)
+  -- if s_1 = s[ .MEMS[ma].BYTES = s.MEMS[ma].BYTES ++ $zero_bytes(nbytes) ]
+  -- if s' = s_1[ .MEMS[ma].TYPE = MemoryT I64AT { MIN newsize, MAX i64_1 } ]
+
+rule Step_plain/memory-grow-i64-bounded-fail:
+  s fr ((NumV (I64 n)) :: v*) |- MEMORY.GROW x : (s, fr, (NumV (I64 fail64)) :: v*, eps)
+  -- if ma = fr.MODULE.MEMS[x]
+  -- if MemoryT I64AT { MIN i64, MAX i64_1 } = s.MEMS[ma].TYPE
+  -- if max = $(i64_1)
+  -- if pages = $(|s.MEMS[ma].BYTES| / $page_size)
+  -- if nsize = $nat_of_num(I64 n)
+  -- if newsize = $(pages + nsize)
+  -- if $(newsize > max)
+  -- if fail64 = $(-1)
+
+rule Step_plain_module/nop:
+  s mm v* |- NOP : (s, v*, eps)
+rule Step_plain_module/drop:
+  s mm (v_1 :: v*) |- DROP : (s, v*, eps)
+rule Step_plain_module/select-true:
+  s mm ((NumV (I32 i)) :: v_2 :: v_1 :: v*) |- SELECT t*? : (s, v_1 :: v*, eps)
+  -- if $(i =/= 0)
+
+rule Step_plain_module/select-false:
+  s mm ((NumV (I32 i)) :: v_2 :: v_1 :: v*) |- SELECT t*? : (s, v_2 :: v*, eps)
+  -- if i = 0
+
+rule Step_plain_module/const:
+  s mm v* |- CONST num : (s, (NumV num) :: v*, eps)
+rule Step_plain_module/vec:
+  s mm v* |- VEC.CONST vec : (s, (VecV vec) :: v*, eps)
+rule Step_plain_module/ref-null:
+  s mm v* |- REF.NULL ht : (s, (RefV (NullRef ht')) :: v*, eps)
+  -- if ht' = $inst_heaptype(mm, ht)
+
+rule Step_plain_module/ref-func:
+  s mm v* |- REF.FUNC x : (s, (RefV (FuncRef mm.FUNCS[x])) :: v*, eps)
+rule Step_plain_module/ref-i31:
+  s mm ((NumV (I32 n)) :: v*) |- REF.I31 : (s, (RefV (I31Ref ni)) :: v*, eps)
+  -- if ni = $i31_of_i32(n)
+
+rule Step_plain_module/i31-get-u:
+  s mm ((RefV (I31Ref ni)) :: v*) |- I31.GET ZX : (s, (NumV (I32 ni)) :: v*, eps)
+rule Step_plain_module/i31-get-s:
+  s mm ((RefV (I31Ref ni)) :: v*) |- I31.GET SX : (s, (NumV (I32 n)) :: v*, eps)
+  -- if n = $i31_get_s(ni)
+
+rule Step_plain_module/ref-is-null-true:
+  s mm ((RefV (NullRef ht)) :: v*) |- REF.IS_NULL : (s, (NumV (I32 1)) :: v*, eps)
+rule Step_plain_module/ref-is-null-false:
+  s mm ((RefV r) :: v*) |- REF.IS_NULL : (s, (NumV (I32 0)) :: v*, eps)
+  -- Ref_ok: s |- r : NoNull ht
+
+rule Step_plain_module/ref-as-non-null:
+  s mm ((RefV r) :: v*) |- REF.AS_NON_NULL : (s, (RefV r) :: v*, eps)
+  -- Ref_ok: s |- r : NoNull ht
+
+rule Step_plain_module/ref-eq:
+  s mm ((RefV r_2) :: (RefV r_1) :: v*) |- REF.EQ : (s, (NumV (I32 n)) :: v*, eps)
+  -- if n = $ref_eq(r_1, r_2)
+
+rule Step_plain_module/ref-test-true:
+  s mm ((RefV r) :: v*) |- REF.TEST rt : (s, (NumV (I32 1)) :: v*, eps)
+  -- Ref_ok: s |- r : rtactual
+  -- if rt_expect = $inst_reftype(mm, rt)
+  -- if $match_reftype(mm.TYPES, rtactual, rt_expect)
+
+rule Step_plain_module/ref-test-false:
+  s mm ((RefV r) :: v*) |- REF.TEST rt : (s, (NumV (I32 0)) :: v*, eps)
+  -- Ref_ok: s |- r : rtactual
+  -- if rt_expect = $inst_reftype(mm, rt)
+  -- if ~$match_reftype(mm.TYPES, rtactual, rt_expect)
+
+rule Step_plain_module/ref-cast:
+  s mm ((RefV r) :: v*) |- REF.CAST rt : (s, (RefV r) :: v*, eps)
+  -- Ref_ok: s |- r : rtactual
+  -- if rt_expect = $inst_reftype(mm, rt)
+  -- if $match_reftype(mm.TYPES, rtactual, rt_expect)
+
+rule Step_plain_module/extern-internalize-null:
+  s mm ((RefV (NullRef ht)) :: v*) |- EXTERN.CONVERT Internalize : (s, (RefV (NullRef NoneHT)) :: v*, eps)
+rule Step_plain_module/extern-internalize:
+  s mm ((RefV (ExternRef r)) :: v*) |- EXTERN.CONVERT Internalize : (s, (RefV r) :: v*, eps)
+rule Step_plain_module/extern-externalize-null:
+  s mm ((RefV (NullRef ht)) :: v*) |- EXTERN.CONVERT Externalize : (s, (RefV (NullRef NoExternHT)) :: v*, eps)
+rule Step_plain_module/extern-externalize:
+  s mm ((RefV r) :: v*) |- EXTERN.CONVERT Externalize : (s, (RefV (ExternRef r)) :: v*, eps)
+  -- Ref_ok: s |- r : NoNull ht
+
+rule Step_plain_module/global-get:
+  s mm v* |- GLOBAL.GET x : (s, s.GLOBALS[mm.GLOBALS[x]].VALUE :: v*, eps)
+rule Step_plain_module/table-get:
+  s mm ((NumV (I32 i)) :: v*) |- TABLE.GET x : (s, (RefV r) :: v*, eps)
+  -- if ta = mm.TABLES[x]
+  -- if TableT I32AT lim rt = s.TABLES[ta].TYPE
+  -- if r = s.TABLES[ta].REFS[i]
+
+rule Step_plain_module/table-get-i64:
+  s mm ((NumV (I64 i)) :: v*) |- TABLE.GET x : (s, (RefV r) :: v*, eps)
+  -- if ta = mm.TABLES[x]
+  -- if TableT I64AT lim rt = s.TABLES[ta].TYPE
+  -- if offset = $nat_of_num(I64 i)
+  -- if r = s.TABLES[ta].REFS[offset]
+
+rule Step_plain_module/table-set:
+  s mm ((RefV r) :: (NumV num) :: v*) |- TABLE.SET x : (s', v*, eps)
+  -- if ta = mm.TABLES[x]
+  -- if offset = $nat_of_num(num)
+  -- if $(offset < |s.TABLES[ta].REFS|)
+  -- if s' = s[ .TABLES[ta].REFS[offset] = r ]
+
+rule Step_plain_module/table-size-i32:
+  s mm v* |- TABLE.SIZE x : (s, (NumV (I32 n)) :: v*, eps)
+  -- if ta = mm.TABLES[x]
+  -- if TableT I32AT lim rt = s.TABLES[ta].TYPE
+  -- if n = |s.TABLES[ta].REFS|
+
+rule Step_plain_module/table-size-i64:
+  s mm v* |- TABLE.SIZE x : (s, (NumV (I64 n)) :: v*, eps)
+  -- if ta = mm.TABLES[x]
+  -- if TableT I64AT lim rt = s.TABLES[ta].TYPE
+  -- if n = |s.TABLES[ta].REFS|
+
+rule Step_plain_module/table-grow-i32-unbounded:
+  s mm ((NumV (I32 n)) :: (RefV r) :: v*) |- TABLE.GROW x : (s', (NumV (I32 old)) :: v*, eps)
+  -- if ta = mm.TABLES[x]
+  -- if TableT I32AT { MIN i64, MAX eps } rt = s.TABLES[ta].TYPE
+  -- if old = |s.TABLES[ta].REFS|
+  -- if newsize = $(old + n)
+  -- if $(newsize <= 4294967295)
+  -- if s_1 = s[ .TABLES[ta].REFS = s.TABLES[ta].REFS ++ $make_<refval>(r, n) ]
+  -- if s' = s_1[ .TABLES[ta].TYPE = TableT I32AT { MIN newsize, MAX eps } rt ]
+
+rule Step_plain_module/table-grow-i32-unbounded-fail:
+  s mm ((NumV (I32 n)) :: (RefV r) :: v*) |- TABLE.GROW x : (s, (NumV (I32 4294967295)) :: v*, eps)
+  -- if ta = mm.TABLES[x]
+  -- if TableT I32AT { MIN i64, MAX eps } rt = s.TABLES[ta].TYPE
+  -- if old = |s.TABLES[ta].REFS|
+  -- if newsize = $(old + n)
+  -- if $(newsize > 4294967295)
+
+rule Step_plain_module/table-grow-i32-bounded:
+  s mm ((NumV (I32 n)) :: (RefV r) :: v*) |- TABLE.GROW x : (s', (NumV (I32 old)) :: v*, eps)
+  -- if ta = mm.TABLES[x]
+  -- if TableT I32AT { MIN i64, MAX i64_1 } rt = s.TABLES[ta].TYPE
+  -- if old = |s.TABLES[ta].REFS|
+  -- if max = $(i64_1)
+  -- if newsize = $(old + n)
+  -- if $(newsize <= max)
+  -- if s_1 = s[ .TABLES[ta].REFS = s.TABLES[ta].REFS ++ $make_<refval>(r, n) ]
+  -- if s' = s_1[ .TABLES[ta].TYPE = TableT I32AT { MIN newsize, MAX i64_1 } rt ]
+
+rule Step_plain_module/table-grow-i32-fail:
+  s mm ((NumV (I32 n)) :: (RefV r) :: v*) |- TABLE.GROW x : (s, (NumV (I32 4294967295)) :: v*, eps)
+  -- if ta = mm.TABLES[x]
+  -- if TableT I32AT { MIN i64, MAX i64_1 } rt = s.TABLES[ta].TYPE
+  -- if old = |s.TABLES[ta].REFS|
+  -- if max = $(i64_1)
+  -- if newsize = $(old + n)
+  -- if $(newsize > max)
+
+rule Step_plain_module/table-grow-i64-unbounded:
+  s mm ((NumV (I64 n)) :: (RefV r) :: v*) |- TABLE.GROW x : (s', (NumV (I64 old)) :: v*, eps)
+  -- if ta = mm.TABLES[x]
+  -- if TableT I64AT { MIN i64, MAX eps } rt = s.TABLES[ta].TYPE
+  -- if old = |s.TABLES[ta].REFS|
+  -- if nsize = $nat_of_num(I64 n)
+  -- if newsize = $(old + nsize)
+  -- if s_1 = s[ .TABLES[ta].REFS = s.TABLES[ta].REFS ++ $make_<refval>(r, nsize) ]
+  -- if s' = s_1[ .TABLES[ta].TYPE = TableT I64AT { MIN newsize, MAX eps } rt ]
+
+rule Step_plain_module/table-grow-i64-bounded:
+  s mm ((NumV (I64 n)) :: (RefV r) :: v*) |- TABLE.GROW x : (s', (NumV (I64 old)) :: v*, eps)
+  -- if ta = mm.TABLES[x]
+  -- if TableT I64AT { MIN i64, MAX i64_1 } rt = s.TABLES[ta].TYPE
+  -- if old = |s.TABLES[ta].REFS|
+  -- if max = $(i64_1)
+  -- if nsize = $nat_of_num(I64 n)
+  -- if newsize = $(old + nsize)
+  -- if $(newsize <= max)
+  -- if s_1 = s[ .TABLES[ta].REFS = s.TABLES[ta].REFS ++ $make_<refval>(r, nsize) ]
+  -- if s' = s_1[ .TABLES[ta].TYPE = TableT I64AT { MIN newsize, MAX i64_1 } rt ]
+
+rule Step_plain_module/table-grow-i64-fail:
+  s mm ((NumV (I64 n)) :: (RefV r) :: v*) |- TABLE.GROW x : (s, (NumV (I64 fail64)) :: v*, eps)
+  -- if ta = mm.TABLES[x]
+  -- if TableT I64AT { MIN i64, MAX i64_1 } rt = s.TABLES[ta].TYPE
+  -- if old = |s.TABLES[ta].REFS|
+  -- if max = $(i64_1)
+  -- if nsize = $nat_of_num(I64 n)
+  -- if newsize = $(old + nsize)
+  -- if $(newsize > max)
+  -- if fail64 = $(-1)
+
+rule Step_plain_module/table-fill:
+  s mm ((NumV num_n) :: (RefV r) :: (NumV num_i) :: v*) |- TABLE.FILL x : (s', v*, eps)
+  -- if ta = mm.TABLES[x]
+  -- if offset = $nat_of_num(num_i)
+  -- if n = $nat_of_num(num_n)
+  -- if $(offset + n <= |s.TABLES[ta].REFS|)
+  -- if s' = s[ .TABLES[ta].REFS = $replace_slice_<refval>(s.TABLES[ta].REFS, offset, $make_<refval>(r, n)) ]
+
+rule Step_plain_module/table-copy:
+  s mm ((NumV num_n) :: (NumV num_s) :: (NumV num_d) :: v*) |- TABLE.COPY x y : (s', v*, eps)
+  -- if ta = mm.TABLES[x]
+  -- if ta' = mm.TABLES[y]
+  -- if n = $nat_of_num(num_n)
+  -- if offset = $nat_of_num(num_d)
+  -- if src = $nat_of_num(num_s)
+  -- if $(offset + n <= |s.TABLES[ta].REFS|)
+  -- if $(src + n <= |s.TABLES[ta'].REFS|)
+  -- if r* = s.TABLES[ta'].REFS[src:n]
+  -- if s' = s[ .TABLES[ta].REFS = $replace_slice_<refval>(s.TABLES[ta].REFS, offset, r*) ]
+
+rule Step_plain_module/table-init:
+  s mm ((NumV num_n) :: (NumV num_s) :: (NumV num_d) :: v*) |- TABLE.INIT x y : (s', v*, eps)
+  -- if ta = mm.TABLES[x]
+  -- if ea = mm.ELEMS[y]
+  -- if n = $nat_of_num(num_n)
+  -- if offset = $nat_of_num(num_d)
+  -- if src = $nat_of_num(num_s)
+  -- if $(offset + n <= |s.TABLES[ta].REFS|)
+  -- if $(src + n <= |s.ELEMS[ea].REFS|)
+  -- if r* = s.ELEMS[ea].REFS[src:n]
+  -- if s' = s[ .TABLES[ta].REFS = $replace_slice_<refval>(s.TABLES[ta].REFS, offset, r*) ]
+
+rule Step_plain_module/elem-drop:
+  s mm v* |- ELEM.DROP x : (s', v*, eps)
+  -- if ea = mm.ELEMS[x]
+  -- if s' = s[ .ELEMS[ea].REFS = eps ]
+
+rule Step_plain_module/data-drop:
+  s mm v* |- DATA.DROP x : (s', v*, eps)
+  -- if da = mm.DATAS[x]
+  -- if s' = s[ .DATAS[da].BYTES = eps ]
+
+rule Step_plain_module/memory-fill:
+  s mm ((NumV num_n) :: (NumV (I32 k)) :: (NumV num_i) :: v*) |- MEMORY.FILL x : (s', v*, eps)
+  -- if ma = mm.MEMS[x]
+  -- if n = $nat_of_num(num_n)
+  -- if offset = $nat_of_num(num_i)
+  -- if byteval = $byte_of_i32(k)
+  -- if $(offset + n <= |s.MEMS[ma].BYTES|)
+  -- if b* = $repeat_byte(byteval, n)
+  -- if s' = s[ .MEMS[ma].BYTES = $replace_bytes(s.MEMS[ma].BYTES, offset, b*) ]
+
+rule Step_plain_module/memory-copy:
+  s mm ((NumV num_n) :: (NumV num_s) :: (NumV num_d) :: v*) |- MEMORY.COPY x y : (s', v*, eps)
+  -- if ma = mm.MEMS[x]
+  -- if ma' = mm.MEMS[y]
+  -- if n = $nat_of_num(num_n)
+  -- if offset = $nat_of_num(num_d)
+  -- if src = $nat_of_num(num_s)
+  -- if $(offset + n <= |s.MEMS[ma].BYTES|)
+  -- if $(src + n <= |s.MEMS[ma'].BYTES|)
+  -- if b* = $slice_bytes(s.MEMS[ma'].BYTES, src, n)
+  -- if s' = s[ .MEMS[ma].BYTES = $replace_bytes(s.MEMS[ma].BYTES, offset, b*) ]
+
+rule Step_plain_module/memory-init:
+  s mm ((NumV num_n) :: (NumV num_s) :: (NumV num_d) :: v*) |- MEMORY.INIT x y : (s', v*, eps)
+  -- if ma = mm.MEMS[x]
+  -- if da = mm.DATAS[y]
+  -- if n = $nat_of_num(num_n)
+  -- if offset = $nat_of_num(num_d)
+  -- if src = $nat_of_num(num_s)
+  -- if $(offset + n <= |s.MEMS[ma].BYTES|)
+  -- if $(src + n <= |s.DATAS[da].BYTES|)
+  -- if b* = $slice_bytes(s.DATAS[da].BYTES, src, n)
+  -- if s' = s[ .MEMS[ma].BYTES = $replace_bytes(s.MEMS[ma].BYTES, offset, b*) ]
+
+;; Calls are lowered to Invoke by Step.
+
+rule Step_plain_module/binop-i32-add:
+  s mm ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- BINOP (I32 IAdd) : (s, (NumV (I32 n)) :: v*, eps)
+  -- if n = $i32_add(i, j)
+
+rule Step_plain_module/binop-i32-sub:
+  s mm ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- BINOP (I32 ISub) : (s, (NumV (I32 n)) :: v*, eps)
+  -- if n = $i32_sub(i, j)
+
+rule Step_plain_module/binop-i32-mul:
+  s mm ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- BINOP (I32 IMul) : (s, (NumV (I32 n)) :: v*, eps)
+  -- if n = $i32_mul(i, j)
+
+rule Step_plain_module/binop-i64-add:
+  s mm ((NumV (I64 j)) :: (NumV (I64 i)) :: v*) |- BINOP (I64 IAdd) : (s, (NumV (I64 n)) :: v*, eps)
+  -- if n = $i64_add(i, j)
+
+rule Step_plain_module/binop-i64-sub:
+  s mm ((NumV (I64 j)) :: (NumV (I64 i)) :: v*) |- BINOP (I64 ISub) : (s, (NumV (I64 n)) :: v*, eps)
+  -- if n = $i64_sub(i, j)
+
+rule Step_plain_module/binop-i64-mul:
+  s mm ((NumV (I64 j)) :: (NumV (I64 i)) :: v*) |- BINOP (I64 IMul) : (s, (NumV (I64 n)) :: v*, eps)
+  -- if n = $i64_mul(i, j)
+
+rule Step_plain_module/binop-f32-add:
+  s mm ((NumV (F32 fpb)) :: (NumV (F32 fpa)) :: v*) |- BINOP (F32 FAdd) : (s, (NumV (F32 fpc)) :: v*, eps)
+  -- if fpc = $f32_add(fpa, fpb)
+
+rule Step_plain_module/binop-f32-sub:
+  s mm ((NumV (F32 fpb)) :: (NumV (F32 fpa)) :: v*) |- BINOP (F32 FSub) : (s, (NumV (F32 fpc)) :: v*, eps)
+  -- if fpc = $f32_sub(fpa, fpb)
+
+rule Step_plain_module/binop-f32-mul:
+  s mm ((NumV (F32 fpb)) :: (NumV (F32 fpa)) :: v*) |- BINOP (F32 FMul) : (s, (NumV (F32 fpc)) :: v*, eps)
+  -- if fpc = $f32_mul(fpa, fpb)
+
+rule Step_plain_module/binop-f64-add:
+  s mm ((NumV (F64 fdb)) :: (NumV (F64 fda)) :: v*) |- BINOP (F64 FAdd) : (s, (NumV (F64 fdc)) :: v*, eps)
+  -- if fdc = $f64_add(fda, fdb)
+
+rule Step_plain_module/binop-f64-sub:
+  s mm ((NumV (F64 fdb)) :: (NumV (F64 fda)) :: v*) |- BINOP (F64 FSub) : (s, (NumV (F64 fdc)) :: v*, eps)
+  -- if fdc = $f64_sub(fda, fdb)
+
+rule Step_plain_module/binop-f64-mul:
+  s mm ((NumV (F64 fdb)) :: (NumV (F64 fda)) :: v*) |- BINOP (F64 FMul) : (s, (NumV (F64 fdc)) :: v*, eps)
+  -- if fdc = $f64_mul(fda, fdb)
+
+rule Step_plain_module/test-i32-eqz:
+  s mm ((NumV (I32 n_1)) :: v*) |- TEST (I32 Eqz) : (s, (NumV (I32 n)) :: v*, eps)
+  -- if n = $i32_eqz(n_1)
+
+rule Step_plain_module/test-i64-eqz:
+  s mm ((NumV (I64 n_1)) :: v*) |- TEST (I64 Eqz) : (s, (NumV (I32 n)) :: v*, eps)
+  -- if n = $i64_eqz(n_1)
+
+rule Step_plain_module/compare-i32-gt-u:
+  s mm ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- COMPARE (I32 GtU) : (s, (NumV (I32 n)) :: v*, eps)
+  -- if n = $i32_gt_u(i, j)
+
+rule Step_plain_module/compare-i32-le-s:
+  s mm ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- COMPARE (I32 LeS) : (s, (NumV (I32 n)) :: v*, eps)
+  -- if n = $i32_le_s(i, j)
+
+rule Step_plain_module/compare-i32-le-u:
+  s mm ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- COMPARE (I32 LeU) : (s, (NumV (I32 n)) :: v*, eps)
+  -- if n = $i32_le_u(i, j)
+
+rule Step_plain_module/compare-i64-le-u:
+  s mm ((NumV (I64 j)) :: (NumV (I64 i)) :: v*) |- COMPARE (I64 LeU) : (s, (NumV (I32 n)) :: v*, eps)
+  -- if n = $i64_le_u(i, j)
+
+rule Step_plain_module/compare-f32-eq:
+  s mm ((NumV (F32 fpb)) :: (NumV (F32 fpa)) :: v*) |- COMPARE (F32 Eq) : (s, (NumV (I32 n)) :: v*, eps)
+  -- if n = $f32_eq(fpa, fpb)
+
+rule Step_plain_module/compare-f32-ne:
+  s mm ((NumV (F32 fpb)) :: (NumV (F32 fpa)) :: v*) |- COMPARE (F32 Ne) : (s, (NumV (I32 n)) :: v*, eps)
+  -- if n = $f32_ne(fpa, fpb)
+
+rule Step_plain_module/compare-f32-le:
+  s mm ((NumV (F32 fpb)) :: (NumV (F32 fpa)) :: v*) |- COMPARE (F32 Le) : (s, (NumV (I32 n)) :: v*, eps)
+  -- if n = $f32_le(fpa, fpb)
+
+rule Step_plain_module/compare-f64-eq:
+  s mm ((NumV (F64 fdb)) :: (NumV (F64 fda)) :: v*) |- COMPARE (F64 Eq) : (s, (NumV (I32 n)) :: v*, eps)
+  -- if n = $f64_eq(fda, fdb)
+
+rule Step_plain_module/compare-f64-ne:
+  s mm ((NumV (F64 fdb)) :: (NumV (F64 fda)) :: v*) |- COMPARE (F64 Ne) : (s, (NumV (I32 n)) :: v*, eps)
+  -- if n = $f64_ne(fda, fdb)
+
+rule Step_plain_module/compare-f64-le:
+  s mm ((NumV (F64 fdb)) :: (NumV (F64 fda)) :: v*) |- COMPARE (F64 Le) : (s, (NumV (I32 n)) :: v*, eps)
+  -- if n = $f64_le(fda, fdb)
+
+rule Step_plain_module/compare-i32-eq-true:
+  s mm ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- COMPARE (I32 Eq) : (s, (NumV (I32 1)) :: v*, eps)
+  -- if i = j
+
+rule Step_plain_module/compare-i32-eq-false:
+  s mm ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- COMPARE (I32 Eq) : (s, (NumV (I32 0)) :: v*, eps)
+  -- if $(i =/= j)
+
+rule Step_plain_module/compare-i32-ne:
+  s mm ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- COMPARE (I32 Ne) : (s, (NumV (I32 n)) :: v*, eps)
+  -- if n = $i32_ne(i, j)
+
+rule Step_plain_module/compare-i64-eq-true:
+  s mm ((NumV (I64 j)) :: (NumV (I64 i)) :: v*) |- COMPARE (I64 Eq) : (s, (NumV (I32 1)) :: v*, eps)
+  -- if i = j
+
+rule Step_plain_module/compare-i64-eq-false:
+  s mm ((NumV (I64 j)) :: (NumV (I64 i)) :: v*) |- COMPARE (I64 Eq) : (s, (NumV (I32 0)) :: v*, eps)
+  -- if i =/= j
+
+rule Step_plain_module/convert-i32-wrap-i64:
+  s mm ((NumV (I64 j)) :: v*) |- CONVERT (I32 WrapI64) : (s, (NumV (I32 n)) :: v*, eps)
+  -- if n = $i32_wrap_i64(j)
+
+rule Step_plain_module/test-generic:
+  s mm ((NumV num) :: v*) |- TEST top : (s, (NumV (I32 n)) :: v*, eps)
+  -- if n = $eval_testop(top, num)
+
+rule Step_plain_module/compare-generic:
+  s mm ((NumV num_2) :: (NumV num_1) :: v*) |- COMPARE rop : (s, (NumV (I32 n)) :: v*, eps)
+  -- if n = $eval_relop(rop, num_1, num_2)
+
+rule Step_plain_module/unop-generic:
+  s mm ((NumV num_1) :: v*) |- UNARY uop : (s, (NumV num_2) :: v*, eps)
+  -- if num_2 = $eval_unop(uop, num_1)
+
+rule Step_plain_module/binop-generic:
+  s mm ((NumV num_2) :: (NumV num_1) :: v*) |- BINOP bop : (s, (NumV num_3) :: v*, eps)
+  -- if num_3 = $eval_binop(bop, num_1, num_2)
+
+rule Step_plain_module/convert-generic:
+  s mm ((NumV num_1) :: v*) |- CONVERT cop : (s, (NumV num_2) :: v*, eps)
+  -- if num_2 = $eval_cvtop(cop, num_1)
+
+rule Step_plain_module/vec-test-generic:
+  s mm ((VecV vec) :: v*) |- VEC.TEST vtop : (s, (NumV (I32 n)) :: v*, eps)
+  -- if n = $eval_vtestop(vtop, vec)
+
+rule Step_plain_module/vec-compare-generic:
+  s mm ((VecV vec_2) :: (VecV vec_1) :: v*) |- VEC.COMPARE vrop : (s, (VecV vec_3) :: v*, eps)
+  -- if vec_3 = $eval_vrelop(vrop, vec_1, vec_2)
+
+rule Step_plain_module/vec-unop-generic:
+  s mm ((VecV vec_1) :: v*) |- VEC.UNARY vuop : (s, (VecV vec_2) :: v*, eps)
+  -- if vec_2 = $eval_vunop(vuop, vec_1)
+
+rule Step_plain_module/vec-binop-generic:
+  s mm ((VecV vec_2) :: (VecV vec_1) :: v*) |- VEC.BINARY vbop : (s, (VecV vec_3) :: v*, eps)
+  -- if vec_3 = $eval_vbinop(vbop, vec_1, vec_2)
+
+rule Step_plain_module/vec-ternop-generic:
+  s mm ((VecV vec_3) :: (VecV vec_2) :: (VecV vec_1) :: v*) |- VEC.TERNARY vterop : (s, (VecV vec_4) :: v*, eps)
+  -- if vec_4 = $eval_vternop(vterop, vec_1, vec_2, vec_3)
+
+rule Step_plain_module/vec-convert-generic:
+  s mm ((VecV vec_1) :: v*) |- VEC.CONVERT vcvop : (s, (VecV vec_2) :: v*, eps)
+  -- if vec_2 = $eval_vcvtop(vcvop, vec_1)
+
+rule Step_plain_module/vec-shift-generic:
+  s mm ((NumV num) :: (VecV vec_1) :: v*) |- VEC.SHIFT vshop : (s, (VecV vec_2) :: v*, eps)
+  -- if vec_2 = $eval_vshiftop(vshop, vec_1, num)
+
+rule Step_plain_module/vec-bitmask-generic:
+  s mm ((VecV vec) :: v*) |- VEC.BITMASK vbitop : (s, (NumV num) :: v*, eps)
+  -- if num = $eval_vbitmaskop(vbitop, vec)
+
+rule Step_plain_module/vec-testbits-generic:
+  s mm ((VecV vec) :: v*) |- VEC.TESTBITS vvtop : (s, (NumV (I32 n)) :: v*, eps)
+  -- if n = $eval_vvtestop(vvtop, vec)
+
+rule Step_plain_module/vec-unarybits-generic:
+  s mm ((VecV vec_1) :: v*) |- VEC.UNARYBITS vvuop : (s, (VecV vec_2) :: v*, eps)
+  -- if vec_2 = $eval_vvunop(vvuop, vec_1)
+
+rule Step_plain_module/vec-binarybits-generic:
+  s mm ((VecV vec_2) :: (VecV vec_1) :: v*) |- VEC.BINARYBITS vvbop : (s, (VecV vec_3) :: v*, eps)
+  -- if vec_3 = $eval_vvbinop(vvbop, vec_1, vec_2)
+
+rule Step_plain_module/vec-ternarybits-generic:
+  s mm ((VecV vec_3) :: (VecV vec_2) :: (VecV vec_1) :: v*) |- VEC.TERNARYBITS vvterop : (s, (VecV vec_4) :: v*, eps)
+  -- if vec_4 = $eval_vvternop(vvterop, vec_1, vec_2, vec_3)
+
+rule Step_plain_module/vec-splat-generic:
+  s mm ((NumV num) :: v*) |- VEC.SPLAT vspop : (s, (VecV vec) :: v*, eps)
+  -- if vec = $eval_vsplatop(vspop, num)
+
+rule Step_plain_module/vec-extract-generic:
+  s mm ((VecV vec) :: v*) |- VEC.EXTRACT vexop : (s, (NumV num) :: v*, eps)
+  -- if num = $eval_vextractop(vexop, vec)
+
+rule Step_plain_module/vec-replace-generic:
+  s mm ((NumV num) :: (VecV vec_1) :: v*) |- VEC.REPLACE vrepop : (s, (VecV vec_2) :: v*, eps)
+  -- if vec_2 = $eval_vreplaceop(vrepop, vec_1, num)
+
+rule Step_plain_module/struct-new-explicit:
+  s mm v* |- STRUCT.NEW x Explicit : (s', (RefV (StructRef a)) :: v_rest*, eps)
+  -- if DefStructT (StructT yt*) = $expanddt(mm.TYPES[x])
+  -- if n = |yt*|
+  -- if v_taken* = $take_<value>(v*, n)
+  -- if v_arg* = $rev_<value>(v_taken*)
+  -- if nrest = $(|v*| - n)
+  -- if v_rest* = v*[n:nrest]
+  -- if fv* = $pack_fields(yt*, v_arg*)
+  -- if si = { TYPE mm.TYPES[x], FIELDS fv* }
+  -- if a = |s.STRUCTS|
+  -- if s' = s[ .STRUCTS = s.STRUCTS ++ [si] ]
+
+rule Step_plain_module/struct-new-implicit:
+  s mm v* |- STRUCT.NEW x Implicit : (s', (RefV (StructRef a)) :: v*, eps)
+  -- if DefStructT (StructT yt*) = $expanddt(mm.TYPES[x])
+  -- if v_arg* = $default_field_values(yt*)
+  -- if fv* = $pack_fields(yt*, v_arg*)
+  -- if si = { TYPE mm.TYPES[x], FIELDS fv* }
+  -- if a = |s.STRUCTS|
+  -- if s' = s[ .STRUCTS = s.STRUCTS ++ [si] ]
+
+rule Step_plain_module/struct-get-some:
+  s mm ((RefV (StructRef a)) :: v*) |- STRUCT.GET x y extension : (s, v_1 :: v*, eps)
+  -- if fv = s.STRUCTS[a].FIELDS[y]
+  -- if v_1 = $unpack_field_ext(fv, extension)
+
+rule Step_plain_module/struct-get-none:
+  s mm ((RefV (StructRef a)) :: v*) |- STRUCT.GET x y eps : (s, v_1 :: v*, eps)
+  -- if fv = s.STRUCTS[a].FIELDS[y]
+  -- if v_1 = $unpack_field(fv)
+
+rule Step_plain_module/struct-set:
+  s mm (v_1 :: (RefV (StructRef a)) :: v*) |- STRUCT.SET x y : (s', v*, eps)
+  -- if DefStructT (StructT yt*) = $expanddt(s.STRUCTS[a].TYPE)
+  -- if FieldT mut zt = yt*[y]
+  -- if fv = $pack_field(zt, v_1)
+  -- if s' = s[ .STRUCTS[a].FIELDS[y] = fv ]
+
+rule Step_plain_module/array-new-explicit:
+  s mm ((NumV (I32 n)) :: v_1 :: v*) |- ARRAY.NEW x Explicit : (s', (RefV (ArrayRef a)) :: v*, eps)
+  -- if DefArrayT (ArrayT (FieldT mut zt)) = $expanddt(mm.TYPES[x])
+  -- if fv = $pack_field(zt, v_1)
+  -- if ai = { TYPE mm.TYPES[x], FIELDS $make_<fieldval>(fv, n) }
+  -- if a = |s.ARRAYS|
+  -- if s' = s[ .ARRAYS = s.ARRAYS ++ [ai] ]
+
+rule Step_plain_module/array-new-implicit:
+  s mm ((NumV (I32 n)) :: v*) |- ARRAY.NEW x Implicit : (s', (RefV (ArrayRef a)) :: v*, eps)
+  -- if DefArrayT (ArrayT (FieldT mut zt)) = $expanddt(mm.TYPES[x])
+  -- if v_default = $default_value($unpacked_storage_type(zt))
+  -- if fv = $pack_field(zt, v_default)
+  -- if ai = { TYPE mm.TYPES[x], FIELDS $make_<fieldval>(fv, n) }
+  -- if a = |s.ARRAYS|
+  -- if s' = s[ .ARRAYS = s.ARRAYS ++ [ai] ]
+
+rule Step_plain_module/array-new-fixed:
+  s mm v* |- ARRAY.NEW_FIXED x n : (s', (RefV (ArrayRef a)) :: v_rest*, eps)
+  -- if DefArrayT (ArrayT (FieldT mut zt)) = $expanddt(mm.TYPES[x])
+  -- if v_taken* = $take_<value>(v*, n)
+  -- if v_arg* = $rev_<value>(v_taken*)
+  -- if nrest = $(|v*| - n)
+  -- if v_rest* = v*[n:nrest]
+  -- if fv* = ($pack_field(zt, v_arg))*
+  -- if ai = { TYPE mm.TYPES[x], FIELDS fv* }
+  -- if a = |s.ARRAYS|
+  -- if s' = s[ .ARRAYS = s.ARRAYS ++ [ai] ]
+
+rule Step_plain_module/array-new-data:
+  s mm ((NumV num_n) :: (NumV num_s) :: v*) |- ARRAY.NEW_DATA x y : (s', (RefV (ArrayRef a)) :: v*, eps)
+  -- if da = mm.DATAS[y]
+  -- if offset = $nat_of_num(num_s)
+  -- if n = $nat_of_num(num_n)
+  -- if DefArrayT (ArrayT (FieldT mut zt)) = $expanddt(mm.TYPES[x])
+  -- if nsize = $storage_size_nat(zt)
+  -- if nbytes = $(n * nsize)
+  -- if $(offset + nbytes <= |s.DATAS[da].BYTES|)
+  -- if fv* = $fieldvals_of_data(zt, s.DATAS[da].BYTES, offset, n)
+  -- if ai = { TYPE mm.TYPES[x], FIELDS fv* }
+  -- if a = |s.ARRAYS|
+  -- if s' = s[ .ARRAYS = s.ARRAYS ++ [ai] ]
+
+rule Step_plain_module/array-new-elem:
+  s mm ((NumV num_n) :: (NumV num_s) :: v*) |- ARRAY.NEW_ELEM x y : (s', (RefV (ArrayRef a)) :: v*, eps)
+  -- if ea = mm.ELEMS[y]
+  -- if offset = $nat_of_num(num_s)
+  -- if n = $nat_of_num(num_n)
+  -- if DefArrayT (ArrayT (FieldT mut zt)) = $expanddt(mm.TYPES[x])
+  -- if $(offset + n <= |s.ELEMS[ea].REFS|)
+  -- if r* = s.ELEMS[ea].REFS[offset:n]
+  -- if fv* = $fieldvals_of_refs(zt, r*)
+  -- if ai = { TYPE mm.TYPES[x], FIELDS fv* }
+  -- if a = |s.ARRAYS|
+  -- if s' = s[ .ARRAYS = s.ARRAYS ++ [ai] ]
+
+rule Step_plain_module/array-get-some:
+  s mm ((NumV (I32 i)) :: (RefV (ArrayRef a)) :: v*) |- ARRAY.GET x extension : (s, v_1 :: v*, eps)
+  -- if fv = s.ARRAYS[a].FIELDS[i]
+  -- if v_1 = $unpack_field_ext(fv, extension)
+
+rule Step_plain_module/array-get-none:
+  s mm ((NumV (I32 i)) :: (RefV (ArrayRef a)) :: v*) |- ARRAY.GET x eps : (s, v_1 :: v*, eps)
+  -- if fv = s.ARRAYS[a].FIELDS[i]
+  -- if v_1 = $unpack_field(fv)
+
+rule Step_plain_module/array-set:
+  s mm (v_1 :: (NumV (I32 i)) :: (RefV (ArrayRef a)) :: v*) |- ARRAY.SET x : (s', v*, eps)
+  -- if DefArrayT (ArrayT (FieldT mut zt)) = $expanddt(s.ARRAYS[a].TYPE)
+  -- if fv = $pack_field(zt, v_1)
+  -- if s' = s[ .ARRAYS[a].FIELDS[i] = fv ]
+
+rule Step_plain_module/array-len:
+  s mm ((RefV (ArrayRef a)) :: v*) |- ARRAY.LEN : (s, (NumV (I32 n)) :: v*, eps)
+  -- if n = |s.ARRAYS[a].FIELDS|
+
+rule Step_plain_module/array-copy:
+  s mm ((NumV num_n) :: (NumV num_s) :: (RefV (ArrayRef a_src)) :: (NumV num_d) :: (RefV (ArrayRef a_dst)) :: v*) |- ARRAY.COPY x y : (s', v*, eps)
+  -- if n = $nat_of_num(num_n)
+  -- if src = $nat_of_num(num_s)
+  -- if offset = $nat_of_num(num_d)
+  -- if $(src + n <= |s.ARRAYS[a_src].FIELDS|)
+  -- if $(offset + n <= |s.ARRAYS[a_dst].FIELDS|)
+  -- if fv* = s.ARRAYS[a_src].FIELDS[src:n]
+  -- if s' = s[ .ARRAYS[a_dst].FIELDS = $replace_slice_<fieldval>(s.ARRAYS[a_dst].FIELDS, offset, fv*) ]
+
+rule Step_plain_module/array-fill:
+  s mm ((NumV num_n) :: v_1 :: (NumV num_i) :: (RefV (ArrayRef a)) :: v*) |- ARRAY.FILL x : (s', v*, eps)
+  -- if DefArrayT (ArrayT (FieldT mut zt)) = $expanddt(s.ARRAYS[a].TYPE)
+  -- if n = $nat_of_num(num_n)
+  -- if offset = $nat_of_num(num_i)
+  -- if fv = $pack_field(zt, v_1)
+  -- if $(offset + n <= |s.ARRAYS[a].FIELDS|)
+  -- if s' = s[ .ARRAYS[a].FIELDS = $replace_slice_<fieldval>(s.ARRAYS[a].FIELDS, offset, $make_<fieldval>(fv, n)) ]
+
+rule Step_plain_module/array-init-data:
+  s mm ((NumV num_n) :: (NumV num_s) :: (NumV num_i) :: (RefV (ArrayRef a)) :: v*) |- ARRAY.INIT_DATA x y : (s', v*, eps)
+  -- if da = mm.DATAS[y]
+  -- if n = $nat_of_num(num_n)
+  -- if src = $nat_of_num(num_s)
+  -- if offset = $nat_of_num(num_i)
+  -- if DefArrayT (ArrayT (FieldT mut zt)) = $expanddt(s.ARRAYS[a].TYPE)
+  -- if nsize = $storage_size_nat(zt)
+  -- if nbytes = $(n * nsize)
+  -- if $(src + nbytes <= |s.DATAS[da].BYTES|)
+  -- if $(offset + n <= |s.ARRAYS[a].FIELDS|)
+  -- if fv* = $fieldvals_of_data(zt, s.DATAS[da].BYTES, src, n)
+  -- if s' = s[ .ARRAYS[a].FIELDS = $replace_slice_<fieldval>(s.ARRAYS[a].FIELDS, offset, fv*) ]
+
+rule Step_plain_module/array-init-elem:
+  s mm ((NumV num_n) :: (NumV num_s) :: (NumV num_i) :: (RefV (ArrayRef a)) :: v*) |- ARRAY.INIT_ELEM x y : (s', v*, eps)
+  -- if ea = mm.ELEMS[y]
+  -- if n = $nat_of_num(num_n)
+  -- if src = $nat_of_num(num_s)
+  -- if offset = $nat_of_num(num_i)
+  -- if DefArrayT (ArrayT (FieldT mut zt)) = $expanddt(s.ARRAYS[a].TYPE)
+  -- if $(src + n <= |s.ELEMS[ea].REFS|)
+  -- if $(offset + n <= |s.ARRAYS[a].FIELDS|)
+  -- if r* = s.ELEMS[ea].REFS[src:n]
+  -- if fv* = $fieldvals_of_refs(zt, r*)
+  -- if s' = s[ .ARRAYS[a].FIELDS = $replace_slice_<fieldval>(s.ARRAYS[a].FIELDS, offset, fv*) ]
+
+rule Step_plain_module/load-num-generic:
+  s mm ((NumV num_1) :: v*) |- LOAD x lop : (s, (NumV num_2) :: v*, eps)
+  -- if ma = mm.MEMS[x]
+  -- if addrval = $addr_plus_offset(num_1, lop.OFFSET)
+  -- if nsize = $loadop_size(lop)
+  -- if $(addrval + nsize <= |s.MEMS[ma].BYTES|)
+  -- if b* = s.MEMS[ma].BYTES[addrval:nsize]
+  -- if num_2 = $eval_load_num(lop, b*)
+
+rule Step_plain_module/store-num-generic:
+  s mm ((NumV num_2) :: (NumV num_1) :: v*) |- STORE x sop : (s', v*, eps)
+  -- if ma = mm.MEMS[x]
+  -- if addrval = $addr_plus_offset(num_1, sop.OFFSET)
+  -- if nsize = $storeop_size(sop)
+  -- if $(addrval + nsize <= |s.MEMS[ma].BYTES|)
+  -- if b* = $eval_store_num(sop, num_2)
+  -- if s' = s[ .MEMS[ma].BYTES = $replace_bytes(s.MEMS[ma].BYTES, addrval, b*) ]
+
+rule Step_plain_module/load-vec-generic:
+  s mm ((NumV num) :: v*) |- VEC.LOAD x vlop : (s, (VecV vec) :: v*, eps)
+  -- if ma = mm.MEMS[x]
+  -- if addrval = $addr_plus_offset(num, vlop.OFFSET)
+  -- if nsize = $vloadop_size(vlop)
+  -- if $(addrval + nsize <= |s.MEMS[ma].BYTES|)
+  -- if b* = s.MEMS[ma].BYTES[addrval:nsize]
+  -- if vec = $eval_load_vec(vlop, b*)
+
+rule Step_plain_module/store-vec-generic:
+  s mm ((VecV vec) :: (NumV num) :: v*) |- VEC.STORE x vsop : (s', v*, eps)
+  -- if ma = mm.MEMS[x]
+  -- if addrval = $addr_plus_offset(num, vsop.OFFSET)
+  -- if nsize = $vstoreop_size(vsop)
+  -- if $(addrval + nsize <= |s.MEMS[ma].BYTES|)
+  -- if b* = $eval_store_vec(vsop, vec)
+  -- if s' = s[ .MEMS[ma].BYTES = $replace_bytes(s.MEMS[ma].BYTES, addrval, b*) ]
+
+rule Step_plain_module/load-vec-lane-generic:
+  s mm ((VecV vec_1) :: (NumV num) :: v*) |- VEC.LOAD_LANE x vlaneop int_1 : (s, (VecV vec_2) :: v*, eps)
+  -- if ma = mm.MEMS[x]
+  -- if addrval = $addr_plus_offset(num, vlaneop.OFFSET)
+  -- if nsize = $vlaneop_size(vlaneop)
+  -- if $(addrval + nsize <= |s.MEMS[ma].BYTES|)
+  -- if b* = s.MEMS[ma].BYTES[addrval:nsize]
+  -- if vec_2 = $eval_load_vec_lane(vlaneop, int_1, b*, vec_1)
+
+rule Step_plain_module/store-vec-lane-generic:
+  s mm ((VecV vec) :: (NumV num) :: v*) |- VEC.STORE_LANE x vlaneop int_1 : (s', v*, eps)
+  -- if ma = mm.MEMS[x]
+  -- if addrval = $addr_plus_offset(num, vlaneop.OFFSET)
+  -- if nsize = $vlaneop_size(vlaneop)
+  -- if $(addrval + nsize <= |s.MEMS[ma].BYTES|)
+  -- if b* = $eval_store_vec_lane(vlaneop, int_1, vec)
+  -- if s' = s[ .MEMS[ma].BYTES = $replace_bytes(s.MEMS[ma].BYTES, addrval, b*) ]

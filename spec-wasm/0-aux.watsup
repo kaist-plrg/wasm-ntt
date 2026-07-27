@@ -37,6 +37,32 @@ def $make_<X>(X, n) = $make_<X>(X, n') ++ [X]
   -- if $(n > 0)
   -- if n' = $(n - 1)
 
+dec $drop_<X>(X*, nat) : X*
+def $drop_<X>(X*, n) = X*
+  -- if n = 0
+def $drop_<X>(eps, n) = eps
+  -- if $(n > 0)
+def $drop_<X>(X_h :: X_t*, n) = $drop_<X>(X_t*, n')
+  -- if $(n > 0)
+  -- if n' = $(n - 1)
+
+dec $take_<X>(X*, nat) : X*
+def $take_<X>(X*, n) = eps
+  -- if n = 0
+def $take_<X>(eps, n) = eps
+  -- if $(n > 0)
+def $take_<X>(X_h :: X_t*, n) = X_h :: $take_<X>(X_t*, n')
+  -- if $(n > 0)
+  -- if n' = $(n - 1)
+
+dec $replace_slice_<X>(X*, nat, X*) : X*
+def $replace_slice_<X>(X*, n, X_r*) = X_r* ++ $drop_<X>(X*, |X_r*|)
+  -- if n = 0
+def $replace_slice_<X>(X_h :: X_t*, n, X_r*) =
+  X_h :: $replace_slice_<X>(X_t*, n', X_r*)
+  -- if $(n > 0)
+  -- if n' = $(n - 1)
+
 dec $list_exists<X>(def $p(X) : bool, X*) : bool
 def $list_exists<X>(def $p, eps) = false
 def $list_exists<X>(def $p, X_h :: X_t*) = true
