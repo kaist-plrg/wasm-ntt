@@ -26,55 +26,55 @@ relation Val_ok: store |- value : valtype
   hint(input %0 %1)
 
 rule Num_ok/i32:
-  s |- I32 _ : I32T
+  STO |- I32 _ : I32T
 
 rule Num_ok/i64:
-  s |- I64 _ : I64T
+  STO |- I64 _ : I64T
 
 rule Num_ok/f32:
-  s |- F32 _ : F32T
+  STO |- F32 _ : F32T
 
 rule Num_ok/f64:
-  s |- F64 _ : F64T
+  STO |- F64 _ : F64T
 
 rule Vec_ok/v128:
-  s |- V128 _ : V128T
+  STO |- V128 _ : V128T
 
 rule Ref_ok/null:
-  s |- NullRef ht : Null $bot_of_heap_type(ht)
+  STO |- NullRef ht : Null $bot_of_heap_type(ht)
 
 rule Ref_ok/func:
-  s |- FuncRef a : NoNull (DefHT s.FUNCS[a].TYPE)
+  STO |- FuncRef a : NoNull (DefHT STO.FUNCS[a].TYPE)
 
 rule Ref_ok/i31:
-  s |- I31Ref _ : NoNull I31HT
+  STO |- I31Ref _ : NoNull I31HT
 
 rule Ref_ok/struct:
-  s |- StructRef a : NoNull (DefHT s.STRUCTS[a].TYPE)
+  STO |- StructRef a : NoNull (DefHT STO.STRUCTS[a].TYPE)
 
 rule Ref_ok/array:
-  s |- ArrayRef a : NoNull (DefHT s.ARRAYS[a].TYPE)
+  STO |- ArrayRef a : NoNull (DefHT STO.ARRAYS[a].TYPE)
 
 rule Ref_ok/exn:
-  s |- ExnRef _ : NoNull ExnHT
+  STO |- ExnRef _ : NoNull ExnHT
 
 rule Ref_ok/host:
-  s |- HostRef _ : NoNull AnyHT
+  STO |- HostRef _ : NoNull AnyHT
 
 rule Ref_ok/extern:
-  s |- ExternRef r : NoNull ExternHT
+  STO |- ExternRef r : NoNull ExternHT
 
 rule Val_ok/num:
-  s |- NumV num : NumT nt
-  -- Num_ok: s |- num : nt
+  STO |- NumV num : NumT nt
+  -- Num_ok: STO |- num : nt
 
 rule Val_ok/vec:
-  s |- VecV vec : VecT vt
-  -- Vec_ok: s |- vec : vt
+  STO |- VecV vec : VecT vt
+  -- Vec_ok: STO |- vec : vt
 
 rule Val_ok/ref:
-  s |- RefV r : RefT rt
-  -- Ref_ok: s |- r : rt
+  STO |- RefV r : RefT rt
+  -- Ref_ok: STO |- r : rt
 
 ;; External addresses
 
@@ -84,16 +84,16 @@ relation Externaddr_ok: store |- externaddr : externtype
   hint(input %0 %1)
 
 rule Externaddr_ok/func:
-  s |- FuncAddr a : ExtFunct s.FUNCS[a].TYPE
+  STO |- FuncAddr a : ExtFunct STO.FUNCS[a].TYPE
 
 rule Externaddr_ok/global:
-  s |- GlobalAddr a : ExtGlobalT s.GLOBALS[a].TYPE
+  STO |- GlobalAddr a : ExtGlobalT STO.GLOBALS[a].TYPE
 
 rule Externaddr_ok/table:
-  s |- TableAddr a : ExtTableT s.TABLES[a].TYPE
+  STO |- TableAddr a : ExtTableT STO.TABLES[a].TYPE
 
 rule Externaddr_ok/mem:
-  s |- MemAddr a : ExtMemoryT s.MEMS[a].TYPE
+  STO |- MemAddr a : ExtMemoryT STO.MEMS[a].TYPE
 
 rule Externaddr_ok/tag:
-  s |- TagAddr a : ExtTagT s.TAGS[a].TYPE
+  STO |- TagAddr a : ExtTagT STO.TAGS[a].TYPE

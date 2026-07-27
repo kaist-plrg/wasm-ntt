@@ -195,10 +195,8 @@ var fpc : f32
 var fda : f64
 var fdb : f64
 var fdc : f64
-var s : store
+var STO : store
 var fr : frame
-var mm : moduleinst
-var mmbase : moduleinst
 var base : nat
 var ni : nat
 var nparam : nat

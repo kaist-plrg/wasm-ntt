@@ -59,14 +59,14 @@ dec $inst_memtype(moduleinst, memtype) : memtype
 dec $inst_tagtype(moduleinst, tagtype) : tagtype
 dec $inst_externtype(moduleinst, externtype) : externtype
 
-def $inst_valtype(mm, t) = $subst_all_valtype(t, mm.TYPES)
-def $inst_heaptype(mm, ht) = $subst_all_heaptype(ht, mm.TYPES)
-def $inst_reftype(mm, rt) = $subst_all_reftype(rt, mm.TYPES)
-def $inst_globaltype(mm, gt) = $subst_all_globaltype(gt, mm.TYPES)
-def $inst_tabletype(mm, tt) = $subst_all_tabletype(tt, mm.TYPES)
-def $inst_memtype(mm, mt) = $subst_all_memtype(mt, mm.TYPES)
-def $inst_tagtype(mm, jt) = $subst_all_tagtype(jt, mm.TYPES)
-def $inst_externtype(mm, xt) = $subst_all_externtype(xt, mm.TYPES)
+def $inst_valtype(moduleinst, t) = $subst_all_valtype(t, moduleinst.TYPES)
+def $inst_heaptype(moduleinst, ht) = $subst_all_heaptype(ht, moduleinst.TYPES)
+def $inst_reftype(moduleinst, rt) = $subst_all_reftype(rt, moduleinst.TYPES)
+def $inst_globaltype(moduleinst, gt) = $subst_all_globaltype(gt, moduleinst.TYPES)
+def $inst_tabletype(moduleinst, tt) = $subst_all_tabletype(tt, moduleinst.TYPES)
+def $inst_memtype(moduleinst, mt) = $subst_all_memtype(mt, moduleinst.TYPES)
+def $inst_tagtype(moduleinst, jt) = $subst_all_tagtype(jt, moduleinst.TYPES)
+def $inst_externtype(moduleinst, xt) = $subst_all_externtype(xt, moduleinst.TYPES)
 
 dec $deftype_at(deftype*, typeidx) : deftype
 def $deftype_at(dt_h :: dt_t*, x) = dt_h
