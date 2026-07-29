@@ -188,37 +188,27 @@ rule Imports_match_ok/nil:
 
 ;; Active segment execution required by instantiation.
 
-relation Run_elem: store moduleinst elemidx |- elem : store
+relation Run_elem: store moduleinst elemidx |- elem : execoutcome
   hint(input %0 %1 %2 %3)
-relation Run_elems_from: store moduleinst elemidx |- elem* : store
+relation Run_elems_from: store moduleinst elemidx |- elem* : execoutcome
   hint(input %0 %1 %2 %3)
-relation Run_elem_trap: store moduleinst elemidx |- elem : store
+relation Run_data: store moduleinst dataidx |- data : execoutcome
   hint(input %0 %1 %2 %3)
-relation Run_elems_trap_from: store moduleinst elemidx |- elem* : store
+relation Run_datas_from: store moduleinst dataidx |- data* : execoutcome
   hint(input %0 %1 %2 %3)
-relation Run_data: store moduleinst dataidx |- data : store
-  hint(input %0 %1 %2 %3)
-relation Run_datas_from: store moduleinst dataidx |- data* : store
-  hint(input %0 %1 %2 %3)
-relation Run_data_trap: store moduleinst dataidx |- data : store
-  hint(input %0 %1 %2 %3)
-relation Run_datas_trap_from: store moduleinst dataidx |- data* : store
-  hint(input %0 %1 %2 %3)
-relation Run_start: store moduleinst |- start? : store
-  hint(input %0 %1 %2)
-relation Run_start_trap: store moduleinst |- start? : store
+relation Run_start: store moduleinst |- start? : execoutcome
   hint(input %0 %1 %2)
 
 rule Run_elem/passive:
-  STO moduleinst i |- { ETYPE _, EINIT _, EMODE Passive } : STO
+  STO moduleinst i |- { ETYPE _, EINIT _, EMODE Passive } : ValuesO STO eps
 
 rule Run_elem/declarative:
-  STO moduleinst i |- { ETYPE _, EINIT _, EMODE Declarative } : STO'
+  STO moduleinst i |- { ETYPE _, EINIT _, EMODE Declarative } : ValuesO STO' eps
   -- if ea = moduleinst.ELEMS[i]
   -- if STO' = STO[ .ELEMS[ea].REFS = eps ]
 
 rule Run_elem/active:
-  STO moduleinst i |- { ETYPE _, EINIT _, EMODE (Active { INDEX x, OFFSET const }) } : STO'
+  STO moduleinst i |- { ETYPE _, EINIT _, EMODE (Active { INDEX x, OFFSET const }) } : ValuesO STO' eps
   -- Eval_const: STO moduleinst |- const : (STO_eval, NumV num)
   -- if offset = $nat_of_num(num)
   -- if ea = moduleinst.ELEMS[i]
@@ -229,17 +219,8 @@ rule Run_elem/active:
   -- if STO_1 = STO_eval[ .TABLES[ta].REFS = $replace_slice_<refval>(STO_eval.TABLES[ta].REFS, offset, r*) ]
   -- if STO' = STO_1[ .ELEMS[ea].REFS = eps ]
 
-rule Run_elems_from/cons:
-  STO moduleinst i |- elem_1 :: elem* : STO_2
-  -- Run_elem: STO moduleinst i |- elem_1 : STO_1
-  -- if i' = $(i + 1)
-  -- Run_elems_from: STO_1 moduleinst i' |- elem* : STO_2
-
-rule Run_elems_from/nil:
-  STO moduleinst i |- eps : STO
-
-rule Run_elem_trap/active-oob:
-  STO moduleinst i |- { ETYPE _, EINIT _, EMODE (Active { INDEX x, OFFSET const }) } : STO_eval
+rule Run_elem/active-oob:
+  STO moduleinst i |- { ETYPE _, EINIT _, EMODE (Active { INDEX x, OFFSET const }) } : TrapO STO_eval
   -- Eval_const: STO moduleinst |- const : (STO_eval, NumV num)
   -- if offset = $nat_of_num(num)
   -- if ea = moduleinst.ELEMS[i]
@@ -248,21 +229,24 @@ rule Run_elem_trap/active-oob:
   -- if n = |r*|
   -- if $(offset + n > |STO_eval.TABLES[ta].REFS|)
 
-rule Run_elems_trap_from/head:
-  STO moduleinst i |- elem_1 :: elem* : STO_trap
-  -- Run_elem_trap: STO moduleinst i |- elem_1 : STO_trap
-
-rule Run_elems_trap_from/tail:
-  STO moduleinst i |- elem_1 :: elem* : STO_trap
-  -- Run_elem: STO moduleinst i |- elem_1 : STO_1
+rule Run_elems_from/cons:
+  STO moduleinst i |- elem_1 :: elem* : eo
+  -- Run_elem: STO moduleinst i |- elem_1 : ValuesO STO_1 eps
   -- if i' = $(i + 1)
-  -- Run_elems_trap_from: STO_1 moduleinst i' |- elem* : STO_trap
+  -- Run_elems_from: STO_1 moduleinst i' |- elem* : eo
+
+rule Run_elems_from/head-trap:
+  STO moduleinst i |- elem_1 :: elem* : TrapO STO_trap
+  -- Run_elem: STO moduleinst i |- elem_1 : TrapO STO_trap
+
+rule Run_elems_from/nil:
+  STO moduleinst i |- eps : ValuesO STO eps
 
 rule Run_data/passive:
-  STO moduleinst i |- { DINIT _, DMODE Passive } : STO
+  STO moduleinst i |- { DINIT _, DMODE Passive } : ValuesO STO eps
 
 rule Run_data/active:
-  STO moduleinst i |- { DINIT _, DMODE (Active { INDEX x, OFFSET const }) } : STO'
+  STO moduleinst i |- { DINIT _, DMODE (Active { INDEX x, OFFSET const }) } : ValuesO STO' eps
   -- Eval_const: STO moduleinst |- const : (STO_eval, NumV num)
   -- if offset = $nat_of_num(num)
   -- if da = moduleinst.DATAS[i]
@@ -273,17 +257,8 @@ rule Run_data/active:
   -- if STO_1 = STO_eval[ .MEMS[ma].BYTES = $replace_bytes(STO_eval.MEMS[ma].BYTES, offset, b*) ]
   -- if STO' = STO_1[ .DATAS[da].BYTES = eps ]
 
-rule Run_datas_from/cons:
-  STO moduleinst i |- data_1 :: data* : STO_2
-  -- Run_data: STO moduleinst i |- data_1 : STO_1
-  -- if i' = $(i + 1)
-  -- Run_datas_from: STO_1 moduleinst i' |- data* : STO_2
-
-rule Run_datas_from/nil:
-  STO moduleinst i |- eps : STO
-
-rule Run_data_trap/active-oob:
-  STO moduleinst i |- { DINIT _, DMODE (Active { INDEX x, OFFSET const }) } : STO_eval
+rule Run_data/active-oob:
+  STO moduleinst i |- { DINIT _, DMODE (Active { INDEX x, OFFSET const }) } : TrapO STO_eval
   -- Eval_const: STO moduleinst |- const : (STO_eval, NumV num)
   -- if offset = $nat_of_num(num)
   -- if da = moduleinst.DATAS[i]
@@ -292,28 +267,26 @@ rule Run_data_trap/active-oob:
   -- if n = |b*|
   -- if $(offset + n > |STO_eval.MEMS[ma].BYTES|)
 
-rule Run_datas_trap_from/head:
-  STO moduleinst i |- data_1 :: data* : STO_trap
-  -- Run_data_trap: STO moduleinst i |- data_1 : STO_trap
-
-rule Run_datas_trap_from/tail:
-  STO moduleinst i |- data_1 :: data* : STO_trap
-  -- Run_data: STO moduleinst i |- data_1 : STO_1
+rule Run_datas_from/cons:
+  STO moduleinst i |- data_1 :: data* : eo
+  -- Run_data: STO moduleinst i |- data_1 : ValuesO STO_1 eps
   -- if i' = $(i + 1)
-  -- Run_datas_trap_from: STO_1 moduleinst i' |- data* : STO_trap
+  -- Run_datas_from: STO_1 moduleinst i' |- data* : eo
+
+rule Run_datas_from/head-trap:
+  STO moduleinst i |- data_1 :: data* : TrapO STO_trap
+  -- Run_data: STO moduleinst i |- data_1 : TrapO STO_trap
+
+rule Run_datas_from/nil:
+  STO moduleinst i |- eps : ValuesO STO eps
 
 rule Run_start/none:
-  STO moduleinst |- eps : STO
+  STO moduleinst |- eps : ValuesO STO eps
 
 rule Run_start/some:
-  STO moduleinst |- { SFUNC x } : STO'
+  STO moduleinst |- { SFUNC x } : eo
   -- if fa = moduleinst.FUNCS[x]
-  -- Invoke: STO fa eps |- ValuesO STO' eps
-
-rule Run_start_trap/some:
-  STO moduleinst |- { SFUNC x } : STO'
-  -- if fa = moduleinst.FUNCS[x]
-  -- Invoke: STO fa eps |- TrapO STO'
+  -- Invoke: STO fa eps |- eo
 
 ;; Instantiation relations.
 ;; Init_with_store_ok makes the OCaml heap/store explicit. Init_ok is the public
@@ -321,9 +294,7 @@ rule Run_start_trap/some:
 
 relation Init_allocated: store module externaddr* |- moduleinst : store
   hint(input %0 %1 %2)
-relation Init_with_store_ok: store module externaddr* |- moduleinst : store
-  hint(input %0 %1 %2)
-relation Init_trap_with_store_ok: store module externaddr* |- store
+relation Init_with_store_ok: store module externaddr* |- moduleinst : execoutcome
   hint(input %0 %1 %2)
 relation Init_ok: module externaddr* |- moduleinst : OK
   hint(input %0 %1)
@@ -360,6 +331,7 @@ rule Init_allocated:
       EXPORTS eps
     }
   -- Imports_match_ok: STO_0 moduleinst_0 |- externaddr* module.IMPORTS : OK
+  ;; If `Imports_match_ok` fails, it's a LinkError. (Eval.Link)
   -- if xi* = $allocexports(moduleinst_0, module.EXPORTS)
   -- if moduleinst = moduleinst_0[ .EXPORTS = xi* ]
   -- Alloc_funcs: STO_0 moduleinst dt* |- module.FUNCS : STO_1
@@ -370,81 +342,27 @@ rule Init_allocated:
   -- Alloc_elems: STO_5 moduleinst |- module.ELEMS : STO_6
   -- Alloc_datas: STO_6 moduleinst |- module.DATAS : STO_7
 
-rule Init_with_store_ok:
-  STO_0 module externaddr* |- moduleinst : STO_final
-  -- Module_ok: |- module : OK ;; 1. Check if module is valid
-  ----
-  -- if dt* = $alloctypes(module.TYPES) ;; eval.ml, line 1176, init_type, spec page 172. #8
-  ;; Extract the externaddr* by type; funcaddr, globaladdr, tableaddr, memaddr, tagaddr.
-  -- if fa_import* = $externaddr_funcaddr(externaddr*)
-  -- if ga_import* = $externaddr_globaladdr(externaddr*)
-  -- if ta_import* = $externaddr_tableaddr(externaddr*)
-  -- if ma_import* = $externaddr_memaddr(externaddr*)
-  -- if ja_import* = $externaddr_tagaddr(externaddr*)
-  ----
-  ;; Concatenate the imported externaddr* with the newly allocated module instance's own addresses.
-  -- if fa* = fa_import* ++ $range_from(|STO_0.FUNCS|, |module.FUNCS|)
-  -- if ga* = ga_import* ++ $range_from(|STO_0.GLOBALS|, |module.GLOBALS|)
-  -- if ta* = ta_import* ++ $range_from(|STO_0.TABLES|, |module.TABLES|)
-  -- if ma* = ma_import* ++ $range_from(|STO_0.MEMS|, |module.MEMS|)
-  -- if ja* = ja_import* ++ $range_from(|STO_0.TAGS|, |module.TAGS|)
-  -- if ea* = $range_from(|STO_0.ELEMS|, |module.ELEMS|)
-  -- if da* = $range_from(|STO_0.DATAS|, |module.DATAS|)
-  ;; 여기까지 static index 를 runtime address 로 변환하는 표는 이미 완성이 된 것임.
-  ;; 실제 runtime object 를 store 에 추가하는 것은 아래에서 수행됨.
-  ----
-  ;; Prepare the moduleinst_0 to evaluate the initializer
-  -- if moduleinst_0 = {
-      TYPES dt*,
-      FUNCS fa*,
-      GLOBALS ga*,
-      TABLES ta*,
-      MEMS ma*,
-      TAGS ja*,
-      ELEMS ea*,
-      DATAS da*,
-      EXPORTS eps
-    }
-  ----
-  -- Imports_match_ok: STO_0 moduleinst_0 |- externaddr* module.IMPORTS : OK ;; 2. Check if the arity and types of the given externaddr* match the module's import declarations
-  ----
-  -- if xi* = $allocexports(moduleinst_0, module.EXPORTS)
-  -- if moduleinst = moduleinst_0[ .EXPORTS = xi* ]
-  ----
-  ;; 실제 runtime object 를 store 에 채우는 과정
-  -- Alloc_funcs: STO_0 moduleinst dt* |- module.FUNCS : STO_1
-  -- Alloc_globals: STO_1 moduleinst |- module.GLOBALS : STO_2
-  -- Alloc_tables: STO_2 moduleinst |- module.TABLES : STO_3
-  -- Alloc_mems: STO_3 moduleinst |- module.MEMS : STO_4
-  -- Alloc_tags: STO_4 moduleinst dt* |- module.TAGS : STO_5
-  -- Alloc_elems: STO_5 moduleinst |- module.ELEMS : STO_6
-  -- Alloc_datas: STO_6 moduleinst |- module.DATAS : STO_7
-  ----
-  -- Run_elems_from: STO_7 moduleinst 0 |- module.ELEMS : STO_8
-  -- Run_datas_from: STO_8 moduleinst 0 |- module.DATAS : STO_9
-  -- Run_start: STO_9 moduleinst |- module.START : STO_final
-
-rule Init_trap_with_store_ok/elem:
-  STO_0 module externaddr* |- STO_trap
+rule Init_with_store_ok/elem-trap:
+  STO_0 module externaddr* |- moduleinst : TrapO STO_trap
   -- Init_allocated: STO_0 module externaddr* |- moduleinst : STO_7
-  -- Run_elems_trap_from: STO_7 moduleinst 0 |- module.ELEMS : STO_trap
+  -- Run_elems_from: STO_7 moduleinst 0 |- module.ELEMS : TrapO STO_trap ;; element segment initializer 를 실행해서 table 초기화
 
-rule Init_trap_with_store_ok/data:
-  STO_0 module externaddr* |- STO_trap
+rule Init_with_store_ok/data-trap:
+  STO_0 module externaddr* |- moduleinst : TrapO STO_trap
   -- Init_allocated: STO_0 module externaddr* |- moduleinst : STO_7
-  -- Run_elems_from: STO_7 moduleinst 0 |- module.ELEMS : STO_8
-  -- Run_datas_trap_from: STO_8 moduleinst 0 |- module.DATAS : STO_trap
+  -- Run_elems_from: STO_7 moduleinst 0 |- module.ELEMS : ValuesO STO_8 eps ;; element segment initializer 를 실행해서 table 초기화
+  -- Run_datas_from: STO_8 moduleinst 0 |- module.DATAS : TrapO STO_trap ;; data segment initializer 를 실행해서 memory 초기화
 
-rule Init_trap_with_store_ok/start:
-  STO_0 module externaddr* |- STO_trap
+rule Init_with_store_ok/start:
+  STO_0 module externaddr* |- moduleinst : eo
   -- Init_allocated: STO_0 module externaddr* |- moduleinst : STO_7
-  -- Run_elems_from: STO_7 moduleinst 0 |- module.ELEMS : STO_8
-  -- Run_datas_from: STO_8 moduleinst 0 |- module.DATAS : STO_9
-  -- Run_start_trap: STO_9 moduleinst |- module.START : STO_trap
+  -- Run_elems_from: STO_7 moduleinst 0 |- module.ELEMS : ValuesO STO_8 eps ;; element segment initializer 를 실행해서 table 초기화
+  -- Run_datas_from: STO_8 moduleinst 0 |- module.DATAS : ValuesO STO_9 eps ;; data segment initializer 를 실행해서 memory 초기화
+  -- Run_start: STO_9 moduleinst |- module.START : eo
 
 rule Init_ok:
   module externaddr* |- moduleinst : OK
-  -- Init_with_store_ok: $empty_store module externaddr* |- moduleinst : STO
+  -- Init_with_store_ok: $empty_store module externaddr* |- moduleinst : ValuesO STO eps
 
 rule Module_init_ok:
   |- module : moduleinst

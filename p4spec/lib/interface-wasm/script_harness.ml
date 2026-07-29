@@ -30,6 +30,19 @@ type instance_entry = {
   store : value;
 }
 
+type exec_outcome =
+  | Returned of {
+      store : value;
+      values : value list;
+    }
+  | Trapped of value
+  | Thrown of {
+      store : value;
+      tagaddr : value;
+      values : value list;
+    }
+  | Exhausted of value
+
 type state = {
   store : value;
   modules : module_entry StringMap.t;
@@ -576,20 +589,39 @@ let module_entry_of_definition def =
   let module_, custom = Run.run_definition def in
   { module_; custom; value = Construct.il_of_module module_ }
 
-let instance_of_outputs at outputs =
-  match outputs with
-  | [ module_inst; store ] -> { module_inst; store }
-  | _ -> error at "Init_with_store_ok returned unexpected outputs"
+let exec_outcome_of_value at value =
+  match case_tag value with
+  | Some ("ValuesO", [ store; values ]) ->
+      Returned { store; values = as_list at values }
+  | Some ("TrapO", [ store ]) ->
+      Trapped store
+  | Some ("ExceptionO", [ store; tagaddr; values ]) ->
+      Thrown { store; tagaddr; values = as_list at values }
+  | Some ("ExhaustionO", [ store ]) ->
+      Exhausted store
+  | _ -> error at "expected execoutcome"
 
-let store_of_outputs at outputs =
+let store_of_exec_outcome = function
+  | Returned { store; _ }
+  | Trapped store
+  | Thrown { store; _ }
+  | Exhausted store ->
+      store
+
+let init_outputs at outputs =
   match outputs with
-  | [ store ] -> store
-  | _ -> error at "Init_trap_with_store_ok returned unexpected outputs"
+  | [ module_inst; outcome ] ->
+      (module_inst, exec_outcome_of_value at outcome)
+  | _ -> error at "Init_with_store_ok returned unexpected outputs"
 
 let invoke_outputs at outputs =
   match outputs with
-  | [ values; store ] -> (as_list at values, store)
-  | _ -> error at "Invoke_ok returned unexpected outputs"
+  | [ outcome ] -> (
+      match exec_outcome_of_value at outcome with
+      | Returned { store; values } ->
+          Returned { store; values = List.rev values }
+      | outcome -> outcome)
+  | _ -> error at "Invoke returned unexpected outputs"
 
 let ref_case_tag value =
   match case_tag value with

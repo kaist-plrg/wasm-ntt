@@ -35,58 +35,43 @@ module Wasm_run = struct
     let module S = Wasm_interpreter.Script in
     let commands = Wasm_interface.Parse.parse_commands path_wasm in
     let total_commands = List.length commands in
-    let eval_rel relname values_input =
+    let eval_dynamic_rel relname values_input =
       match Simulator.Interp.eval_rel relname values_input with
       | Pass values -> values
-      | Fail (at, msg) -> H.error at msg
+      | Fail (at, msg) -> H.error at (relname ^ " failed: " ^ msg)
+    in
+    let eval_init state module_entry =
+      let externaddr_value =
+        H.resolve_imports no_region state module_entry.H.module_
+        |> H.externaddr_list
+      in
+      eval_dynamic_rel "Init_with_store_ok"
+        [ state.H.store; module_entry.H.value; externaddr_value ]
+      |> H.init_outputs no_region
     in
     let instantiate state var_opt module_entry =
-      let externaddr_value =
-        H.resolve_imports no_region state module_entry.H.module_
-        |> H.externaddr_list
-      in
-      let outputs =
-        eval_rel "Init_with_store_ok"
-          [ state.H.store; module_entry.H.value; externaddr_value ]
-      in
-      let instance = H.instance_of_outputs no_region outputs in
-      H.bind_instance no_region var_opt instance state
-    in
-    let expect_rel_failure msg relname values_input =
-      try
-        match Simulator.Interp.eval_rel relname values_input with
-        | Pass _ -> H.error no_region msg
-        | Fail _ -> ()
-      with InterpError _ -> ()
-    in
-    let expect_unlinkable state module_entry =
-      ignore (eval_rel "Module_ok" [ module_entry.H.value ]);
-      try
-        let externaddr_value =
-          H.resolve_imports no_region state module_entry.H.module_
-          |> H.externaddr_list
-        in
-        expect_rel_failure "expected linking failure" "Init_with_store_ok"
-          [ state.H.store; module_entry.H.value; externaddr_value ]
-      with InterpError _ -> ()
+      match eval_init state module_entry with
+      | module_inst, H.Returned { store; values = [] } ->
+          let instance : H.instance_entry = { module_inst; store } in
+          H.bind_instance no_region var_opt instance state
+      | _, H.Returned _ ->
+          H.error no_region "instantiation returned unexpected values"
+      | _, H.Trapped _ ->
+          H.error no_region "unexpected trap during instantiation"
+      | _, H.Thrown _ ->
+          H.error no_region "unexpected exception during instantiation"
+      | _, H.Exhausted _ ->
+          H.error no_region "unexpected exhaustion during instantiation"
     in
     let expect_uninstantiable state module_entry =
-      ignore (eval_rel "Module_ok" [ module_entry.H.value ]);
-      let externaddr_value =
-        H.resolve_imports no_region state module_entry.H.module_
-        |> H.externaddr_list
-      in
-      let init_inputs = [ state.H.store; module_entry.H.value; externaddr_value ] in
-      let trap_store_or_keep () =
-        match Simulator.Interp.eval_rel "Init_trap_with_store_ok" init_inputs with
-        | Pass outputs ->
-            let store = H.store_of_outputs no_region outputs in
-            { state with H.store }
-        | Fail _ -> state
-      in
-      match Simulator.Interp.eval_rel "Init_with_store_ok" init_inputs with
-      | Pass _ -> H.error no_region "expected instantiation failure"
-      | Fail _ -> trap_store_or_keep ()
+      match eval_init state module_entry with
+      | _, H.Trapped store -> { state with H.store = store }
+      | _, H.Returned _ ->
+          H.error no_region "expected instantiation trap, got return"
+      | _, H.Thrown _ ->
+          H.error no_region "expected instantiation trap, got exception"
+      | _, H.Exhausted _ ->
+          H.error no_region "expected instantiation trap, got exhaustion"
     in
     let run_action state (act : S.action) =
       match act.it with
@@ -96,112 +81,101 @@ module Wasm_run = struct
             H.funcaddr_of_export no_region instance.H.module_inst name
           in
           let arguments = H.value_list (List.map H.value_of_literal literals) in
-          let outputs =
-            eval_rel "Invoke_ok" [ state.H.store; funcaddr; arguments ]
-          in
-          let values, store = H.invoke_outputs no_region outputs in
-          ({ state with H.store }, values)
+          eval_dynamic_rel "Invoke" [ state.H.store; funcaddr; arguments ]
+          |> H.invoke_outputs no_region
       | S.Get (var_opt, name) ->
           let instance = H.lookup_instance no_region var_opt state in
           let globaladdr =
             H.globaladdr_of_export no_region instance.H.module_inst name
           in
           let value = H.global_value no_region state.H.store globaladdr in
-          (state, [ value ])
-    in
-    let expect_action_failure state act =
-      try
-        ignore (run_action state act);
-        H.error no_region "expected runtime error"
-      with InterpError _ -> ()
-    in
-    let unsupported_state_msg =
-      "unsupported wasm script command prevents reliable instantiation state"
-    in
-    let protect_after_unsupported unsupported_seen thunk =
-      if not unsupported_seen then thunk ()
-      else
-        try thunk ()
-        with InterpError _ -> H.error no_region unsupported_state_msg
+          H.Returned { store = state.H.store; values = [ value ] }
     in
     let context_error ~index cmd at msg =
       H.error at (H.debug_error_message ~index ~total:total_commands cmd msg)
     in
-    let run_command ~index state unsupported_seen (cmd : S.command) =
+    let run_command ~index state (cmd : S.command) =
       H.trace_command ~index ~total:total_commands cmd;
       try
         match cmd.it with
         | S.Module (var_opt, def) ->
             let entry = H.module_entry_of_definition def in
-            ignore (eval_rel "Module_ok" [ entry.value ]);
-            let state = H.bind_module no_region var_opt entry state in
-            (state, unsupported_seen)
+            H.bind_module no_region var_opt entry state
         | S.Instance (var_opt, source_var_opt) ->
             let module_entry = H.lookup_module no_region source_var_opt state in
-            let state =
-              protect_after_unsupported unsupported_seen (fun () ->
-                  instantiate state var_opt module_entry)
-            in
-            (state, unsupported_seen)
+            instantiate state var_opt module_entry
         | S.Register (name, var_opt) ->
             let instance = H.lookup_instance no_region var_opt state in
-            let state = H.bind_registry name instance state in
-            (state, unsupported_seen)
+            H.bind_registry name instance state
         | S.Assertion ass -> (
             match ass.it with
             | S.AssertInvalid (def, _) ->
                 let entry = H.module_entry_of_definition def in
-                expect_rel_failure "expected validation failure" "Module_ok"
-                  [ entry.value ];
-                (state, unsupported_seen)
-            | S.AssertUnlinkable (var_opt, _) ->
-                let module_entry = H.lookup_module no_region var_opt state in
-                protect_after_unsupported unsupported_seen (fun () ->
-                    expect_unlinkable state module_entry);
-                (state, unsupported_seen)
+                (match
+                   Simulator.Interp.eval_rel "Module_ok" [ entry.H.value ]
+                 with
+                | Fail _ -> state
+                | Pass _ ->
+                    H.error no_region "expected validation failure")
             | S.AssertUninstantiable (var_opt, _) ->
                 let module_entry = H.lookup_module no_region var_opt state in
-                let state =
-                  protect_after_unsupported unsupported_seen (fun () ->
-                      expect_uninstantiable state module_entry)
-                in
-                (state, unsupported_seen)
+                expect_uninstantiable state module_entry
             | S.AssertReturn (act, results) ->
-                let state, values =
-                  protect_after_unsupported unsupported_seen (fun () ->
-                      run_action state act)
-                in
-                H.assert_action_results no_region act values results;
-                (state, unsupported_seen)
-            | S.AssertTrap (act, _) | S.AssertExhaustion (act, _) ->
-                protect_after_unsupported unsupported_seen (fun () ->
-                    expect_action_failure state act);
-                (state, unsupported_seen)
-            | S.AssertMalformed _ | S.AssertMalformedCustom _
-            | S.AssertInvalidCustom _ ->
-                (state, unsupported_seen)
+                (match run_action state act with
+                | H.Returned { store; values } ->
+                    H.assert_action_results no_region act values results;
+                    { state with H.store = store }
+                | H.Trapped _ ->
+                    H.error no_region "expected return, got trap"
+                | H.Thrown _ ->
+                    H.error no_region "expected return, got exception"
+                | H.Exhausted _ ->
+                    H.error no_region "expected return, got exhaustion")
+            | S.AssertTrap (act, _) ->
+                (match run_action state act with
+                | H.Trapped store -> { state with H.store = store }
+                | H.Returned _ ->
+                    H.error no_region "expected runtime trap, got return"
+                | H.Thrown _ ->
+                    H.error no_region "expected runtime trap, got exception"
+                | H.Exhausted _ ->
+                    H.error no_region "expected runtime trap, got exhaustion")
             | S.AssertException act ->
-                protect_after_unsupported unsupported_seen (fun () ->
-                    expect_action_failure state act);
-                (state, unsupported_seen))
+                (match run_action state act with
+                | H.Thrown { store; _ } ->
+                    { state with H.store = store }
+                | H.Returned _ ->
+                    H.error no_region "expected exception, got return"
+                | H.Trapped _ ->
+                    H.error no_region "expected exception, got trap"
+                | H.Exhausted _ ->
+                    H.error no_region "expected exception, got exhaustion")
+            | S.AssertMalformed _
+            | S.AssertMalformedCustom _
+            | S.AssertInvalidCustom _
+            | S.AssertUnlinkable _
+            | S.AssertExhaustion _ ->
+                state)
         | S.Action act ->
-            let state, _values =
-              protect_after_unsupported unsupported_seen (fun () ->
-                  run_action state act)
-            in
-            (state, unsupported_seen)
-        | S.Meta _ -> (state, true)
+            (match run_action state act with
+            | H.Returned { store; _ } ->
+                { state with H.store = store }
+            | H.Trapped _ ->
+                H.error no_region "unexpected runtime trap"
+            | H.Thrown _ ->
+                H.error no_region "unexpected exception"
+            | H.Exhausted _ ->
+                H.error no_region "unexpected exhaustion")
+        | S.Meta _ -> state
       with InterpError (at, msg) -> context_error ~index cmd at msg
     in
-    let rec run index state unsupported_seen = function
+    let rec run index state = function
       | [] -> ()
       | cmd :: commands_t ->
-          let state, unsupported_seen =
-            run_command ~index state unsupported_seen cmd
-          in
-          run (index + 1) state unsupported_seen commands_t
+          let state = run_command ~index state cmd in
+          run (index + 1) state commands_t
     in
-    run 1 (H.initial_state ()) false commands;
+    run 1 (H.initial_state ()) commands;
     WasmPass []
 
   let run (module Simulator : SIM) (relname : string) (path_wasm : string) :
