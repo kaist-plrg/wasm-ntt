@@ -172,6 +172,10 @@ syntax execoutcome =
   | ExceptionO store tagaddr value*
   | ExhaustionO store
 
+syntax numresult =
+  | NumValue num_
+  | NumTrap
+
 ;; Meta variables
 
 var a : addr
@@ -188,6 +192,7 @@ var v : value
 var adm : admininstr
 var cf : config
 var eo : execoutcome
+var nr : numresult
 var b : byte
 var fpa : f32
 var fpb : f32
@@ -334,8 +339,8 @@ builtin dec $replace_bytes(byte*, nat, byte*) : byte*
 builtin dec $eval_testop(testop_, num_) : nat
 builtin dec $eval_relop(relop_, num_, num_) : nat
 builtin dec $eval_unop(unop_, num_) : num_
-builtin dec $eval_binop(binop_, num_, num_) : num_
-builtin dec $eval_cvtop(cvtop_, num_) : num_
+builtin dec $eval_binop(binop_, num_, num_) : numresult
+builtin dec $eval_cvtop(cvtop_, num_) : numresult
 builtin dec $eval_vtestop(vtestop_, vec_) : nat
 builtin dec $eval_vrelop(vrelop_, vec_, vec_) : vec_
 builtin dec $eval_vunop(vunop_, vec_) : vec_

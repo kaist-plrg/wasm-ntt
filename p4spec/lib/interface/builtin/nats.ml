@@ -15,6 +15,7 @@ module F64 = Wasm_interpreter.F64
 module Ast = Wasm_interpreter.Ast
 module Eval_num = Wasm_interpreter.Eval_num
 module Eval_vec = Wasm_interpreter.Eval_vec
+module Ixx = Wasm_interpreter.Ixx
 module Pack = Wasm_interpreter.Pack
 module Types = Wasm_interpreter.Types
 module V128 = Wasm_interpreter.V128
@@ -749,6 +750,24 @@ let num_value add num = il_of_num num |> add_value add
 
 let vec_value add vec = il_of_vec vec |> add_value add
 
+let numresult_value add num =
+  [ Term "NumValue"; NT (num_value add num) ] #@ "numresult"
+  |> add_value add
+
+let numresult_trap add =
+  [ Term "NumTrap" ] #@ "numresult"
+  |> add_value add
+
+let eval_numresult add thunk =
+  match
+    try `Value (thunk ()) with
+    | Ixx.Overflow
+    | Ixx.DivideByZero
+    | Ixx.InvalidConversion -> `Trap
+  with
+  | `Value num -> numresult_value add num
+  | `Trap -> numresult_trap add
+
 let trap_as_unmatch at thunk =
   try thunk () with exn -> error at (Printexc.to_string exn)
 
@@ -805,26 +824,26 @@ let eval_unop add at targs values_input =
         (Eval_num.eval_unop (sl_to_unop op)
            (sl_to_num num)))
 
-(* dec $eval_binop(binop_, num_, num_) : num_ *)
+(* dec $eval_binop(binop_, num_, num_) : numresult *)
 
 let eval_binop add at targs values_input =
   Extract.zero at targs;
   trap_as_unmatch at (fun () ->
       let op, lhs, rhs = Extract.three at values_input in
-      num_value add
-        (Eval_num.eval_binop (sl_to_binop op)
-           (sl_to_num lhs)
-           (sl_to_num rhs)))
+      let op' = sl_to_binop op in
+      let lhs' = sl_to_num lhs in
+      let rhs' = sl_to_num rhs in
+      eval_numresult add (fun () -> Eval_num.eval_binop op' lhs' rhs'))
 
-(* dec $eval_cvtop(cvtop_, num_) : num_ *)
+(* dec $eval_cvtop(cvtop_, num_) : numresult *)
 
 let eval_cvtop add at targs values_input =
   Extract.zero at targs;
   trap_as_unmatch at (fun () ->
       let op, num = Extract.two at values_input in
-      num_value add
-        (Eval_num.eval_cvtop (sl_to_cvtop op)
-           (sl_to_num num)))
+      let op' = sl_to_cvtop op in
+      let num' = sl_to_num num in
+      eval_numresult add (fun () -> Eval_num.eval_cvtop op' num'))
 
 (* dec $eval_vtestop(vtestop_, vec_) : nat *)
 

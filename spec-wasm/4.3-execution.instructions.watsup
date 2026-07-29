@@ -23,6 +23,12 @@ def $plain_instrs(eps) = eps
 def $plain_instrs(instr_1 :: instr*) =
   (Plain instr_1) :: $plain_instrs(instr*)
 
+dec $apply_numresult(numresult, value*) : (value*, admininstr*)
+def $apply_numresult(NumValue num, v*) =
+  ((NumV num) :: v*, eps)
+def $apply_numresult(NumTrap, v*) =
+  (v*, (Trapping) :: eps)
+
 ;; Control, call, and exception instructions are lowered by Step itself.
 ;; All remaining instructions reuse the existing atomic rule bodies while
 ;; those bodies are migrated to Step_plain.
@@ -800,8 +806,9 @@ rule Invoke_ok:
   -- if v_result* = $rev_<value>(v_stack_result*)
 
 rule Step_plain/module:
-  STO fr v* |- instr : (STO', fr, v'*, eps)
-  -- Step_plain_module: STO fr.MODULE v* |- instr : (STO', v'*, eps)
+  STO fr v* |- instr : (STO', fr, v'*, adm_emit*)
+  -- Step_plain_module:
+      STO fr.MODULE v* |- instr : (STO', v'*, adm_emit*)
 
 rule Step_plain/local-get:
   STO fr v* |- LOCAL.GET x : (STO, fr, v_1 :: v*, eps)
@@ -948,6 +955,10 @@ rule Step_plain_module/i31-get-STO:
   STO moduleinst ((RefV (I31Ref ni)) :: v*) |- I31.GET SX : (STO, (NumV (I32 n)) :: v*, eps)
   -- if n = $i31_get_s(ni)
 
+rule Step_plain_module/i31-get-null:
+  STO moduleinst ((RefV (NullRef ht)) :: v*) |- I31.GET extension :
+    (STO, v*, (Trapping) :: eps)
+
 rule Step_plain_module/ref-is-null-true:
   STO moduleinst ((RefV (NullRef ht)) :: v*) |- REF.IS_NULL : (STO, (NumV (I32 1)) :: v*, eps)
 rule Step_plain_module/ref-is-null-false:
@@ -957,6 +968,10 @@ rule Step_plain_module/ref-is-null-false:
 rule Step_plain_module/ref-as-non-null:
   STO moduleinst ((RefV r) :: v*) |- REF.AS_NON_NULL : (STO, (RefV r) :: v*, eps)
   -- Ref_ok: STO |- r : NoNull ht
+
+rule Step_plain_module/ref-as-non-null-null:
+  STO moduleinst ((RefV (NullRef ht)) :: v*) |- REF.AS_NON_NULL :
+    (STO, v*, (Trapping) :: eps)
 
 rule Step_plain_module/ref-eq:
   STO moduleinst ((RefV r_2) :: (RefV r_1) :: v*) |- REF.EQ : (STO, (NumV (I32 n)) :: v*, eps)
@@ -980,6 +995,13 @@ rule Step_plain_module/ref-cast:
   -- if rt_expect = $inst_reftype(moduleinst, rt)
   -- if $match_reftype(moduleinst.TYPES, rtactual, rt_expect)
 
+rule Step_plain_module/ref-cast-fail:
+  STO moduleinst ((RefV r) :: v*) |- REF.CAST rt :
+    (STO, v*, (Trapping) :: eps)
+  -- Ref_ok: STO |- r : rtactual
+  -- if rt_expect = $inst_reftype(moduleinst, rt)
+  -- if ~$match_reftype(moduleinst.TYPES, rtactual, rt_expect)
+
 rule Step_plain_module/extern-internalize-null:
   STO moduleinst ((RefV (NullRef ht)) :: v*) |- EXTERN.CONVERT Internalize : (STO, (RefV (NullRef NoneHT)) :: v*, eps)
 rule Step_plain_module/extern-internalize:
@@ -996,14 +1018,31 @@ rule Step_plain_module/table-get:
   STO moduleinst ((NumV (I32 i)) :: v*) |- TABLE.GET x : (STO, (RefV r) :: v*, eps)
   -- if ta = moduleinst.TABLES[x]
   -- if TableT I32AT lim rt = STO.TABLES[ta].TYPE
+  -- if $(i < |STO.TABLES[ta].REFS|)
   -- if r = STO.TABLES[ta].REFS[i]
+
+rule Step_plain_module/table-get-oob:
+  STO moduleinst ((NumV (I32 i)) :: v*) |- TABLE.GET x :
+    (STO, v*, (Trapping) :: eps)
+  -- if ta = moduleinst.TABLES[x]
+  -- if TableT I32AT lim rt = STO.TABLES[ta].TYPE
+  -- if $(i >= |STO.TABLES[ta].REFS|)
 
 rule Step_plain_module/table-get-i64:
   STO moduleinst ((NumV (I64 i)) :: v*) |- TABLE.GET x : (STO, (RefV r) :: v*, eps)
   -- if ta = moduleinst.TABLES[x]
   -- if TableT I64AT lim rt = STO.TABLES[ta].TYPE
   -- if offset = $nat_of_num(I64 i)
+  -- if $(offset < |STO.TABLES[ta].REFS|)
   -- if r = STO.TABLES[ta].REFS[offset]
+
+rule Step_plain_module/table-get-i64-oob:
+  STO moduleinst ((NumV (I64 i)) :: v*) |- TABLE.GET x :
+    (STO, v*, (Trapping) :: eps)
+  -- if ta = moduleinst.TABLES[x]
+  -- if TableT I64AT lim rt = STO.TABLES[ta].TYPE
+  -- if offset = $nat_of_num(I64 i)
+  -- if $(offset >= |STO.TABLES[ta].REFS|)
 
 rule Step_plain_module/table-set:
   STO moduleinst ((RefV r) :: (NumV num) :: v*) |- TABLE.SET x : (STO', v*, eps)
@@ -1011,6 +1050,13 @@ rule Step_plain_module/table-set:
   -- if offset = $nat_of_num(num)
   -- if $(offset < |STO.TABLES[ta].REFS|)
   -- if STO' = STO[ .TABLES[ta].REFS[offset] = r ]
+
+rule Step_plain_module/table-set-oob:
+  STO moduleinst ((RefV r) :: (NumV num) :: v*) |- TABLE.SET x :
+    (STO, v*, (Trapping) :: eps)
+  -- if ta = moduleinst.TABLES[x]
+  -- if offset = $nat_of_num(num)
+  -- if $(offset >= |STO.TABLES[ta].REFS|)
 
 rule Step_plain_module/table-size-i32:
   STO moduleinst v* |- TABLE.SIZE x : (STO, (NumV (I32 n)) :: v*, eps)
@@ -1103,6 +1149,14 @@ rule Step_plain_module/table-fill:
   -- if $(offset + n <= |STO.TABLES[ta].REFS|)
   -- if STO' = STO[ .TABLES[ta].REFS = $replace_slice_<refval>(STO.TABLES[ta].REFS, offset, $make_<refval>(r, n)) ]
 
+rule Step_plain_module/table-fill-oob:
+  STO moduleinst ((NumV num_n) :: (RefV r) :: (NumV num_i) :: v*) |-
+    TABLE.FILL x : (STO, v*, (Trapping) :: eps)
+  -- if ta = moduleinst.TABLES[x]
+  -- if offset = $nat_of_num(num_i)
+  -- if n = $nat_of_num(num_n)
+  -- if $(offset + n > |STO.TABLES[ta].REFS|)
+
 rule Step_plain_module/table-copy:
   STO moduleinst ((NumV num_n) :: (NumV num_s) :: (NumV num_d) :: v*) |- TABLE.COPY x y : (STO', v*, eps)
   -- if ta = moduleinst.TABLES[x]
@@ -1115,6 +1169,17 @@ rule Step_plain_module/table-copy:
   -- if r* = STO.TABLES[ta'].REFS[src:n]
   -- if STO' = STO[ .TABLES[ta].REFS = $replace_slice_<refval>(STO.TABLES[ta].REFS, offset, r*) ]
 
+rule Step_plain_module/table-copy-oob:
+  STO moduleinst ((NumV num_n) :: (NumV num_s) :: (NumV num_d) :: v*) |-
+    TABLE.COPY x y : (STO, v*, (Trapping) :: eps)
+  -- if ta = moduleinst.TABLES[x]
+  -- if ta' = moduleinst.TABLES[y]
+  -- if n = $nat_of_num(num_n)
+  -- if offset = $nat_of_num(num_d)
+  -- if src = $nat_of_num(num_s)
+  -- if $(offset + n > |STO.TABLES[ta].REFS|) \/
+        $(src + n > |STO.TABLES[ta'].REFS|)
+
 rule Step_plain_module/table-init:
   STO moduleinst ((NumV num_n) :: (NumV num_s) :: (NumV num_d) :: v*) |- TABLE.INIT x y : (STO', v*, eps)
   -- if ta = moduleinst.TABLES[x]
@@ -1126,6 +1191,17 @@ rule Step_plain_module/table-init:
   -- if $(src + n <= |STO.ELEMS[ea].REFS|)
   -- if r* = STO.ELEMS[ea].REFS[src:n]
   -- if STO' = STO[ .TABLES[ta].REFS = $replace_slice_<refval>(STO.TABLES[ta].REFS, offset, r*) ]
+
+rule Step_plain_module/table-init-oob:
+  STO moduleinst ((NumV num_n) :: (NumV num_s) :: (NumV num_d) :: v*) |-
+    TABLE.INIT x y : (STO, v*, (Trapping) :: eps)
+  -- if ta = moduleinst.TABLES[x]
+  -- if ea = moduleinst.ELEMS[y]
+  -- if n = $nat_of_num(num_n)
+  -- if offset = $nat_of_num(num_d)
+  -- if src = $nat_of_num(num_s)
+  -- if $(offset + n > |STO.TABLES[ta].REFS|) \/
+        $(src + n > |STO.ELEMS[ea].REFS|)
 
 rule Step_plain_module/elem-drop:
   STO moduleinst v* |- ELEM.DROP x : (STO', v*, eps)
@@ -1147,6 +1223,14 @@ rule Step_plain_module/memory-fill:
   -- if b* = $repeat_byte(byteval, n)
   -- if STO' = STO[ .MEMS[ma].BYTES = $replace_bytes(STO.MEMS[ma].BYTES, offset, b*) ]
 
+rule Step_plain_module/memory-fill-oob:
+  STO moduleinst ((NumV num_n) :: (NumV (I32 k)) :: (NumV num_i) :: v*) |-
+    MEMORY.FILL x : (STO, v*, (Trapping) :: eps)
+  -- if ma = moduleinst.MEMS[x]
+  -- if n = $nat_of_num(num_n)
+  -- if offset = $nat_of_num(num_i)
+  -- if $(offset + n > |STO.MEMS[ma].BYTES|)
+
 rule Step_plain_module/memory-copy:
   STO moduleinst ((NumV num_n) :: (NumV num_s) :: (NumV num_d) :: v*) |- MEMORY.COPY x y : (STO', v*, eps)
   -- if ma = moduleinst.MEMS[x]
@@ -1159,6 +1243,17 @@ rule Step_plain_module/memory-copy:
   -- if b* = $slice_bytes(STO.MEMS[ma'].BYTES, src, n)
   -- if STO' = STO[ .MEMS[ma].BYTES = $replace_bytes(STO.MEMS[ma].BYTES, offset, b*) ]
 
+rule Step_plain_module/memory-copy-oob:
+  STO moduleinst ((NumV num_n) :: (NumV num_s) :: (NumV num_d) :: v*) |-
+    MEMORY.COPY x y : (STO, v*, (Trapping) :: eps)
+  -- if ma = moduleinst.MEMS[x]
+  -- if ma' = moduleinst.MEMS[y]
+  -- if n = $nat_of_num(num_n)
+  -- if offset = $nat_of_num(num_d)
+  -- if src = $nat_of_num(num_s)
+  -- if $(offset + n > |STO.MEMS[ma].BYTES|) \/
+        $(src + n > |STO.MEMS[ma'].BYTES|)
+
 rule Step_plain_module/memory-init:
   STO moduleinst ((NumV num_n) :: (NumV num_s) :: (NumV num_d) :: v*) |- MEMORY.INIT x y : (STO', v*, eps)
   -- if ma = moduleinst.MEMS[x]
@@ -1170,6 +1265,17 @@ rule Step_plain_module/memory-init:
   -- if $(src + n <= |STO.DATAS[da].BYTES|)
   -- if b* = $slice_bytes(STO.DATAS[da].BYTES, src, n)
   -- if STO' = STO[ .MEMS[ma].BYTES = $replace_bytes(STO.MEMS[ma].BYTES, offset, b*) ]
+
+rule Step_plain_module/memory-init-oob:
+  STO moduleinst ((NumV num_n) :: (NumV num_s) :: (NumV num_d) :: v*) |-
+    MEMORY.INIT x y : (STO, v*, (Trapping) :: eps)
+  -- if ma = moduleinst.MEMS[x]
+  -- if da = moduleinst.DATAS[y]
+  -- if n = $nat_of_num(num_n)
+  -- if offset = $nat_of_num(num_d)
+  -- if src = $nat_of_num(num_s)
+  -- if $(offset + n > |STO.MEMS[ma].BYTES|) \/
+        $(src + n > |STO.DATAS[da].BYTES|)
 
 ;; Calls are lowered to Invoke by Step.
 
@@ -1306,12 +1412,16 @@ rule Step_plain_module/unop-generic:
   -- if num_2 = $eval_unop(uop, num_1)
 
 rule Step_plain_module/binop-generic:
-  STO moduleinst ((NumV num_2) :: (NumV num_1) :: v*) |- BINOP bop : (STO, (NumV num_3) :: v*, eps)
-  -- if num_3 = $eval_binop(bop, num_1, num_2)
+  STO moduleinst ((NumV num_2) :: (NumV num_1) :: v*) |- BINOP bop :
+    (STO, v'*, adm_emit*)
+  -- if nr = $eval_binop(bop, num_1, num_2)
+  -- if (v'*, adm_emit*) = $apply_numresult(nr, v*)
 
 rule Step_plain_module/convert-generic:
-  STO moduleinst ((NumV num_1) :: v*) |- CONVERT cop : (STO, (NumV num_2) :: v*, eps)
-  -- if num_2 = $eval_cvtop(cop, num_1)
+  STO moduleinst ((NumV num_1) :: v*) |- CONVERT cop :
+    (STO, v'*, adm_emit*)
+  -- if nr = $eval_cvtop(cop, num_1)
+  -- if (v'*, adm_emit*) = $apply_numresult(nr, v*)
 
 rule Step_plain_module/vec-test-generic:
   STO moduleinst ((VecV vec) :: v*) |- VEC.TEST vtop : (STO, (NumV (I32 n)) :: v*, eps)
@@ -1400,10 +1510,18 @@ rule Step_plain_module/struct-get-some:
   -- if fv = STO.STRUCTS[a].FIELDS[y]
   -- if v_1 = $unpack_field_ext(fv, extension)
 
+rule Step_plain_module/struct-get-some-null:
+  STO moduleinst ((RefV (NullRef ht)) :: v*) |- STRUCT.GET x y extension :
+    (STO, v*, (Trapping) :: eps)
+
 rule Step_plain_module/struct-get-none:
   STO moduleinst ((RefV (StructRef a)) :: v*) |- STRUCT.GET x y eps : (STO, v_1 :: v*, eps)
   -- if fv = STO.STRUCTS[a].FIELDS[y]
   -- if v_1 = $unpack_field(fv)
+
+rule Step_plain_module/struct-get-none-null:
+  STO moduleinst ((RefV (NullRef ht)) :: v*) |- STRUCT.GET x y eps :
+    (STO, v*, (Trapping) :: eps)
 
 rule Step_plain_module/struct-set:
   STO moduleinst (v_1 :: (RefV (StructRef a)) :: v*) |- STRUCT.SET x y : (STO', v*, eps)
@@ -1411,6 +1529,10 @@ rule Step_plain_module/struct-set:
   -- if FieldT mut zt = yt*[y]
   -- if fv = $pack_field(zt, v_1)
   -- if STO' = STO[ .STRUCTS[a].FIELDS[y] = fv ]
+
+rule Step_plain_module/struct-set-null:
+  STO moduleinst (v_1 :: (RefV (NullRef ht)) :: v*) |- STRUCT.SET x y :
+    (STO, v*, (Trapping) :: eps)
 
 rule Step_plain_module/array-new-explicit:
   STO moduleinst ((NumV (I32 n)) :: v_1 :: v*) |- ARRAY.NEW x Explicit : (STO', (RefV (ArrayRef a)) :: v*, eps)
@@ -1455,6 +1577,18 @@ rule Step_plain_module/array-new-data:
   -- if a = |STO.ARRAYS|
   -- if STO' = STO[ .ARRAYS = STO.ARRAYS ++ [ai] ]
 
+rule Step_plain_module/array-new-data-oob:
+  STO moduleinst ((NumV num_n) :: (NumV num_s) :: v*) |-
+    ARRAY.NEW_DATA x y : (STO, v*, (Trapping) :: eps)
+  -- if da = moduleinst.DATAS[y]
+  -- if offset = $nat_of_num(num_s)
+  -- if n = $nat_of_num(num_n)
+  -- if DefArrayT (ArrayT (FieldT mut zt)) =
+        $expanddt(moduleinst.TYPES[x])
+  -- if nsize = $storage_size_nat(zt)
+  -- if nbytes = $(n * nsize)
+  -- if $(offset + nbytes > |STO.DATAS[da].BYTES|)
+
 rule Step_plain_module/array-new-elem:
   STO moduleinst ((NumV num_n) :: (NumV num_s) :: v*) |- ARRAY.NEW_ELEM x y : (STO', (RefV (ArrayRef a)) :: v*, eps)
   -- if ea = moduleinst.ELEMS[y]
@@ -1468,25 +1602,67 @@ rule Step_plain_module/array-new-elem:
   -- if a = |STO.ARRAYS|
   -- if STO' = STO[ .ARRAYS = STO.ARRAYS ++ [ai] ]
 
+rule Step_plain_module/array-new-elem-oob:
+  STO moduleinst ((NumV num_n) :: (NumV num_s) :: v*) |-
+    ARRAY.NEW_ELEM x y : (STO, v*, (Trapping) :: eps)
+  -- if ea = moduleinst.ELEMS[y]
+  -- if offset = $nat_of_num(num_s)
+  -- if n = $nat_of_num(num_n)
+  -- if $(offset + n > |STO.ELEMS[ea].REFS|)
+
 rule Step_plain_module/array-get-some:
   STO moduleinst ((NumV (I32 i)) :: (RefV (ArrayRef a)) :: v*) |- ARRAY.GET x extension : (STO, v_1 :: v*, eps)
+  -- if $(i < |STO.ARRAYS[a].FIELDS|)
   -- if fv = STO.ARRAYS[a].FIELDS[i]
   -- if v_1 = $unpack_field_ext(fv, extension)
 
+rule Step_plain_module/array-get-some-null:
+  STO moduleinst ((NumV (I32 i)) :: (RefV (NullRef ht)) :: v*) |-
+    ARRAY.GET x extension : (STO, v*, (Trapping) :: eps)
+
+rule Step_plain_module/array-get-some-oob:
+  STO moduleinst ((NumV (I32 i)) :: (RefV (ArrayRef a)) :: v*) |-
+    ARRAY.GET x extension : (STO, v*, (Trapping) :: eps)
+  -- if $(i >= |STO.ARRAYS[a].FIELDS|)
+
 rule Step_plain_module/array-get-none:
   STO moduleinst ((NumV (I32 i)) :: (RefV (ArrayRef a)) :: v*) |- ARRAY.GET x eps : (STO, v_1 :: v*, eps)
+  -- if $(i < |STO.ARRAYS[a].FIELDS|)
   -- if fv = STO.ARRAYS[a].FIELDS[i]
   -- if v_1 = $unpack_field(fv)
+
+rule Step_plain_module/array-get-none-null:
+  STO moduleinst ((NumV (I32 i)) :: (RefV (NullRef ht)) :: v*) |-
+    ARRAY.GET x eps : (STO, v*, (Trapping) :: eps)
+
+rule Step_plain_module/array-get-none-oob:
+  STO moduleinst ((NumV (I32 i)) :: (RefV (ArrayRef a)) :: v*) |-
+    ARRAY.GET x eps : (STO, v*, (Trapping) :: eps)
+  -- if $(i >= |STO.ARRAYS[a].FIELDS|)
 
 rule Step_plain_module/array-set:
   STO moduleinst (v_1 :: (NumV (I32 i)) :: (RefV (ArrayRef a)) :: v*) |- ARRAY.SET x : (STO', v*, eps)
   -- if DefArrayT (ArrayT (FieldT mut zt)) = $expanddt(STO.ARRAYS[a].TYPE)
+  -- if $(i < |STO.ARRAYS[a].FIELDS|)
   -- if fv = $pack_field(zt, v_1)
   -- if STO' = STO[ .ARRAYS[a].FIELDS[i] = fv ]
+
+rule Step_plain_module/array-set-null:
+  STO moduleinst (v_1 :: (NumV (I32 i)) :: (RefV (NullRef ht)) :: v*) |-
+    ARRAY.SET x : (STO, v*, (Trapping) :: eps)
+
+rule Step_plain_module/array-set-oob:
+  STO moduleinst (v_1 :: (NumV (I32 i)) :: (RefV (ArrayRef a)) :: v*) |-
+    ARRAY.SET x : (STO, v*, (Trapping) :: eps)
+  -- if $(i >= |STO.ARRAYS[a].FIELDS|)
 
 rule Step_plain_module/array-len:
   STO moduleinst ((RefV (ArrayRef a)) :: v*) |- ARRAY.LEN : (STO, (NumV (I32 n)) :: v*, eps)
   -- if n = |STO.ARRAYS[a].FIELDS|
+
+rule Step_plain_module/array-len-null:
+  STO moduleinst ((RefV (NullRef ht)) :: v*) |- ARRAY.LEN :
+    (STO, v*, (Trapping) :: eps)
 
 rule Step_plain_module/array-copy:
   STO moduleinst ((NumV num_n) :: (NumV num_s) :: (RefV (ArrayRef a_src)) :: (NumV num_d) :: (RefV (ArrayRef a_dst)) :: v*) |- ARRAY.COPY x y : (STO', v*, eps)
@@ -1498,6 +1674,36 @@ rule Step_plain_module/array-copy:
   -- if fv* = STO.ARRAYS[a_src].FIELDS[src:n]
   -- if STO' = STO[ .ARRAYS[a_dst].FIELDS = $replace_slice_<fieldval>(STO.ARRAYS[a_dst].FIELDS, offset, fv*) ]
 
+rule Step_plain_module/array-copy-src-null:
+  STO moduleinst
+    ((NumV num_n) :: (NumV num_s) :: (RefV (NullRef ht)) ::
+      (NumV num_d) :: (RefV r) :: v*) |-
+    ARRAY.COPY x y : (STO, v*, (Trapping) :: eps)
+
+rule Step_plain_module/array-copy-dst-null:
+  STO moduleinst
+    ((NumV num_n) :: (NumV num_s) :: (RefV r) ::
+      (NumV num_d) :: (RefV (NullRef ht)) :: v*) |-
+    ARRAY.COPY x y : (STO, v*, (Trapping) :: eps)
+
+rule Step_plain_module/array-copy-src-oob:
+  STO moduleinst
+    ((NumV num_n) :: (NumV num_s) :: (RefV (ArrayRef a_src)) ::
+      (NumV num_d) :: (RefV (ArrayRef a_dst)) :: v*) |-
+    ARRAY.COPY x y : (STO, v*, (Trapping) :: eps)
+  -- if n = $nat_of_num(num_n)
+  -- if src = $nat_of_num(num_s)
+  -- if $(src + n > |STO.ARRAYS[a_src].FIELDS|)
+
+rule Step_plain_module/array-copy-dst-oob:
+  STO moduleinst
+    ((NumV num_n) :: (NumV num_s) :: (RefV (ArrayRef a_src)) ::
+      (NumV num_d) :: (RefV (ArrayRef a_dst)) :: v*) |-
+    ARRAY.COPY x y : (STO, v*, (Trapping) :: eps)
+  -- if n = $nat_of_num(num_n)
+  -- if offset = $nat_of_num(num_d)
+  -- if $(offset + n > |STO.ARRAYS[a_dst].FIELDS|)
+
 rule Step_plain_module/array-fill:
   STO moduleinst ((NumV num_n) :: v_1 :: (NumV num_i) :: (RefV (ArrayRef a)) :: v*) |- ARRAY.FILL x : (STO', v*, eps)
   -- if DefArrayT (ArrayT (FieldT mut zt)) = $expanddt(STO.ARRAYS[a].TYPE)
@@ -1506,6 +1712,21 @@ rule Step_plain_module/array-fill:
   -- if fv = $pack_field(zt, v_1)
   -- if $(offset + n <= |STO.ARRAYS[a].FIELDS|)
   -- if STO' = STO[ .ARRAYS[a].FIELDS = $replace_slice_<fieldval>(STO.ARRAYS[a].FIELDS, offset, $make_<fieldval>(fv, n)) ]
+
+rule Step_plain_module/array-fill-null:
+  STO moduleinst
+    ((NumV num_n) :: v_1 :: (NumV num_i) ::
+      (RefV (NullRef ht)) :: v*) |-
+    ARRAY.FILL x : (STO, v*, (Trapping) :: eps)
+
+rule Step_plain_module/array-fill-oob:
+  STO moduleinst
+    ((NumV num_n) :: v_1 :: (NumV num_i) ::
+      (RefV (ArrayRef a)) :: v*) |-
+    ARRAY.FILL x : (STO, v*, (Trapping) :: eps)
+  -- if n = $nat_of_num(num_n)
+  -- if offset = $nat_of_num(num_i)
+  -- if $(offset + n > |STO.ARRAYS[a].FIELDS|)
 
 rule Step_plain_module/array-init-data:
   STO moduleinst ((NumV num_n) :: (NumV num_s) :: (NumV num_i) :: (RefV (ArrayRef a)) :: v*) |- ARRAY.INIT_DATA x y : (STO', v*, eps)
@@ -1521,6 +1742,35 @@ rule Step_plain_module/array-init-data:
   -- if fv* = $fieldvals_of_data(zt, STO.DATAS[da].BYTES, src, n)
   -- if STO' = STO[ .ARRAYS[a].FIELDS = $replace_slice_<fieldval>(STO.ARRAYS[a].FIELDS, offset, fv*) ]
 
+rule Step_plain_module/array-init-data-null:
+  STO moduleinst
+    ((NumV num_n) :: (NumV num_s) :: (NumV num_i) ::
+      (RefV (NullRef ht)) :: v*) |-
+    ARRAY.INIT_DATA x y : (STO, v*, (Trapping) :: eps)
+
+rule Step_plain_module/array-init-data-array-oob:
+  STO moduleinst
+    ((NumV num_n) :: (NumV num_s) :: (NumV num_i) ::
+      (RefV (ArrayRef a)) :: v*) |-
+    ARRAY.INIT_DATA x y : (STO, v*, (Trapping) :: eps)
+  -- if n = $nat_of_num(num_n)
+  -- if offset = $nat_of_num(num_i)
+  -- if $(offset + n > |STO.ARRAYS[a].FIELDS|)
+
+rule Step_plain_module/array-init-data-segment-oob:
+  STO moduleinst
+    ((NumV num_n) :: (NumV num_s) :: (NumV num_i) ::
+      (RefV (ArrayRef a)) :: v*) |-
+    ARRAY.INIT_DATA x y : (STO, v*, (Trapping) :: eps)
+  -- if da = moduleinst.DATAS[y]
+  -- if n = $nat_of_num(num_n)
+  -- if src = $nat_of_num(num_s)
+  -- if DefArrayT (ArrayT (FieldT mut zt)) =
+        $expanddt(STO.ARRAYS[a].TYPE)
+  -- if nsize = $storage_size_nat(zt)
+  -- if nbytes = $(n * nsize)
+  -- if $(src + nbytes > |STO.DATAS[da].BYTES|)
+
 rule Step_plain_module/array-init-elem:
   STO moduleinst ((NumV num_n) :: (NumV num_s) :: (NumV num_i) :: (RefV (ArrayRef a)) :: v*) |- ARRAY.INIT_ELEM x y : (STO', v*, eps)
   -- if ea = moduleinst.ELEMS[y]
@@ -1534,6 +1784,31 @@ rule Step_plain_module/array-init-elem:
   -- if fv* = $fieldvals_of_refs(zt, r*)
   -- if STO' = STO[ .ARRAYS[a].FIELDS = $replace_slice_<fieldval>(STO.ARRAYS[a].FIELDS, offset, fv*) ]
 
+rule Step_plain_module/array-init-elem-null:
+  STO moduleinst
+    ((NumV num_n) :: (NumV num_s) :: (NumV num_i) ::
+      (RefV (NullRef ht)) :: v*) |-
+    ARRAY.INIT_ELEM x y : (STO, v*, (Trapping) :: eps)
+
+rule Step_plain_module/array-init-elem-array-oob:
+  STO moduleinst
+    ((NumV num_n) :: (NumV num_s) :: (NumV num_i) ::
+      (RefV (ArrayRef a)) :: v*) |-
+    ARRAY.INIT_ELEM x y : (STO, v*, (Trapping) :: eps)
+  -- if n = $nat_of_num(num_n)
+  -- if offset = $nat_of_num(num_i)
+  -- if $(offset + n > |STO.ARRAYS[a].FIELDS|)
+
+rule Step_plain_module/array-init-elem-segment-oob:
+  STO moduleinst
+    ((NumV num_n) :: (NumV num_s) :: (NumV num_i) ::
+      (RefV (ArrayRef a)) :: v*) |-
+    ARRAY.INIT_ELEM x y : (STO, v*, (Trapping) :: eps)
+  -- if ea = moduleinst.ELEMS[y]
+  -- if n = $nat_of_num(num_n)
+  -- if src = $nat_of_num(num_s)
+  -- if $(src + n > |STO.ELEMS[ea].REFS|)
+
 rule Step_plain_module/load-num-generic:
   STO moduleinst ((NumV num_1) :: v*) |- LOAD x lop : (STO, (NumV num_2) :: v*, eps)
   -- if ma = moduleinst.MEMS[x]
@@ -1542,6 +1817,14 @@ rule Step_plain_module/load-num-generic:
   -- if $(addrval + nsize <= |STO.MEMS[ma].BYTES|)
   -- if b* = STO.MEMS[ma].BYTES[addrval:nsize]
   -- if num_2 = $eval_load_num(lop, b*)
+
+rule Step_plain_module/load-num-oob:
+  STO moduleinst ((NumV num_1) :: v*) |- LOAD x lop :
+    (STO, v*, (Trapping) :: eps)
+  -- if ma = moduleinst.MEMS[x]
+  -- if addrval = $addr_plus_offset(num_1, lop.OFFSET)
+  -- if nsize = $loadop_size(lop)
+  -- if $(addrval + nsize > |STO.MEMS[ma].BYTES|)
 
 rule Step_plain_module/store-num-generic:
   STO moduleinst ((NumV num_2) :: (NumV num_1) :: v*) |- STORE x sop : (STO', v*, eps)
@@ -1552,6 +1835,14 @@ rule Step_plain_module/store-num-generic:
   -- if b* = $eval_store_num(sop, num_2)
   -- if STO' = STO[ .MEMS[ma].BYTES = $replace_bytes(STO.MEMS[ma].BYTES, addrval, b*) ]
 
+rule Step_plain_module/store-num-oob:
+  STO moduleinst ((NumV num_2) :: (NumV num_1) :: v*) |- STORE x sop :
+    (STO, v*, (Trapping) :: eps)
+  -- if ma = moduleinst.MEMS[x]
+  -- if addrval = $addr_plus_offset(num_1, sop.OFFSET)
+  -- if nsize = $storeop_size(sop)
+  -- if $(addrval + nsize > |STO.MEMS[ma].BYTES|)
+
 rule Step_plain_module/load-vec-generic:
   STO moduleinst ((NumV num) :: v*) |- VEC.LOAD x vlop : (STO, (VecV vec) :: v*, eps)
   -- if ma = moduleinst.MEMS[x]
@@ -1560,6 +1851,14 @@ rule Step_plain_module/load-vec-generic:
   -- if $(addrval + nsize <= |STO.MEMS[ma].BYTES|)
   -- if b* = STO.MEMS[ma].BYTES[addrval:nsize]
   -- if vec = $eval_load_vec(vlop, b*)
+
+rule Step_plain_module/load-vec-oob:
+  STO moduleinst ((NumV num) :: v*) |- VEC.LOAD x vlop :
+    (STO, v*, (Trapping) :: eps)
+  -- if ma = moduleinst.MEMS[x]
+  -- if addrval = $addr_plus_offset(num, vlop.OFFSET)
+  -- if nsize = $vloadop_size(vlop)
+  -- if $(addrval + nsize > |STO.MEMS[ma].BYTES|)
 
 rule Step_plain_module/store-vec-generic:
   STO moduleinst ((VecV vec) :: (NumV num) :: v*) |- VEC.STORE x vsop : (STO', v*, eps)
@@ -1570,6 +1869,14 @@ rule Step_plain_module/store-vec-generic:
   -- if b* = $eval_store_vec(vsop, vec)
   -- if STO' = STO[ .MEMS[ma].BYTES = $replace_bytes(STO.MEMS[ma].BYTES, addrval, b*) ]
 
+rule Step_plain_module/store-vec-oob:
+  STO moduleinst ((VecV vec) :: (NumV num) :: v*) |- VEC.STORE x vsop :
+    (STO, v*, (Trapping) :: eps)
+  -- if ma = moduleinst.MEMS[x]
+  -- if addrval = $addr_plus_offset(num, vsop.OFFSET)
+  -- if nsize = $vstoreop_size(vsop)
+  -- if $(addrval + nsize > |STO.MEMS[ma].BYTES|)
+
 rule Step_plain_module/load-vec-lane-generic:
   STO moduleinst ((VecV vec_1) :: (NumV num) :: v*) |- VEC.LOAD_LANE x vlaneop int_1 : (STO, (VecV vec_2) :: v*, eps)
   -- if ma = moduleinst.MEMS[x]
@@ -1579,6 +1886,14 @@ rule Step_plain_module/load-vec-lane-generic:
   -- if b* = STO.MEMS[ma].BYTES[addrval:nsize]
   -- if vec_2 = $eval_load_vec_lane(vlaneop, int_1, b*, vec_1)
 
+rule Step_plain_module/load-vec-lane-oob:
+  STO moduleinst ((VecV vec_1) :: (NumV num) :: v*) |-
+    VEC.LOAD_LANE x vlaneop int_1 : (STO, v*, (Trapping) :: eps)
+  -- if ma = moduleinst.MEMS[x]
+  -- if addrval = $addr_plus_offset(num, vlaneop.OFFSET)
+  -- if nsize = $vlaneop_size(vlaneop)
+  -- if $(addrval + nsize > |STO.MEMS[ma].BYTES|)
+
 rule Step_plain_module/store-vec-lane-generic:
   STO moduleinst ((VecV vec) :: (NumV num) :: v*) |- VEC.STORE_LANE x vlaneop int_1 : (STO', v*, eps)
   -- if ma = moduleinst.MEMS[x]
@@ -1587,3 +1902,11 @@ rule Step_plain_module/store-vec-lane-generic:
   -- if $(addrval + nsize <= |STO.MEMS[ma].BYTES|)
   -- if b* = $eval_store_vec_lane(vlaneop, int_1, vec)
   -- if STO' = STO[ .MEMS[ma].BYTES = $replace_bytes(STO.MEMS[ma].BYTES, addrval, b*) ]
+
+rule Step_plain_module/store-vec-lane-oob:
+  STO moduleinst ((VecV vec) :: (NumV num) :: v*) |-
+    VEC.STORE_LANE x vlaneop int_1 : (STO, v*, (Trapping) :: eps)
+  -- if ma = moduleinst.MEMS[x]
+  -- if addrval = $addr_plus_offset(num, vlaneop.OFFSET)
+  -- if nsize = $vlaneop_size(vlaneop)
+  -- if $(addrval + nsize > |STO.MEMS[ma].BYTES|)
