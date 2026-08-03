@@ -10,6 +10,25 @@ open Runtime.Testgen_neg
 open Envs
 module Sim = Runtime.Sim.Signature
 
+type wasm_phase = Validation | Instantiation
+
+let wasm_phase_of_string = function
+  | "validation" -> Ok Validation
+  | "instantiation" -> Ok Instantiation
+  | value ->
+      Error
+        (Format.sprintf
+           "unknown Wasm testgen phase %S (expected validation or instantiation)"
+           value)
+
+let string_of_wasm_phase = function
+  | Validation -> "validation"
+  | Instantiation -> "instantiation"
+
+let coverage_relation = function
+  | Validation -> "Modules_ok"
+  | Instantiation -> "Init_with_store_ok"
+
 (* Hyperparameters for the fuzzing loop *)
 
 (* Max number of seeds per dangle *)
@@ -41,6 +60,15 @@ type specenv = {
   includes_p4 : string list;
 }
 
+type wasm_specenv = {
+  simulator : (module Sim.SIM);
+  printer : Sl.value -> string;
+  spec : Sim.spec;
+  phase : wasm_phase;
+  tdenv : TDEnv.t;
+  mixopenv : MixopEnv.t;
+}
+
 (* Storage for generated files *)
 
 type storage = {
@@ -50,6 +78,10 @@ type storage = {
   dirname_close_miss_p4 : string;
   dirname_welltyped_p4 : string;
   dirname_illtyped_p4 : string;
+  dirname_instantiated_wasm : string;
+  dirname_trapped_wasm : string;
+  dirname_exception_wasm : string;
+  dirname_unlinkable_wasm : string;
 }
 
 (* Seed for the fuzz campaign *)
@@ -58,12 +90,25 @@ type seed = { mutable cover : DCov_multi.Cover.t }
 
 (* Configuration for the fuzz campaign *)
 
+type wasm_focus = { iid : iid; filename_wasm : string }
+
+type wasm_budget = WasmFuel of int | WasmTimeout of int
+
 type t = {
   rand : int;
   modes : Modes.t;
   specenv : specenv;
   storage : storage;
   seed : seed;
+}
+
+type tw = {
+  rand : int;
+  modes : Modes.t;
+  specenv : wasm_specenv;
+  storage : storage;
+  seed : seed;
+  focus : wasm_focus option;
 }
 
 (* Load mixop groups into the environment *)
@@ -175,6 +220,24 @@ let init_specenv (spec : spec) (relname : string) (includes_p4 : string list) :
   let spec = Sim.SL spec in
   { simulator; printer; spec; relname; tdenv; mixopenv; includes_p4 }
 
+let init_wasm_specenv (spec : spec) (phase : wasm_phase) : wasm_specenv =
+  let (module Simulator : Sim.SIM) = Backend_sim.Build.gen_p4_placeholder () in
+  Simulator.init (Sim.SL spec);
+  let simulator = (module Simulator : Sim.SIM) in
+  let printer value_program =
+    value_program
+    |> Wasm_interface.Deconstruct.sl_to_list
+         Wasm_interface.Deconstruct.sl_to_module
+    |> List.map (fun wasm_module ->
+           (wasm_module, [])
+           |> Wasm_interpreter.Arrange.module_with_custom
+           |> Wasm_interpreter.Sexpr.to_string 80)
+    |> String.concat "\n"
+  in
+  let tdenv, mixopenv = load_wasm_spec TDEnv.empty MixopEnv.empty spec in
+  let spec = Sim.SL spec in
+  { simulator; printer; spec; phase; tdenv; mixopenv }
+
 let init_storage (dirname_gen : string) : storage =
   Util.Filesys.mkdir dirname_gen;
   let dirname_log = dirname_gen ^ "/log" in
@@ -187,6 +250,14 @@ let init_storage (dirname_gen : string) : storage =
   Util.Filesys.mkdir dirname_welltyped_p4;
   let dirname_illtyped_p4 = dirname_gen ^ "/illtyped" in
   Util.Filesys.mkdir dirname_illtyped_p4;
+  let dirname_instantiated_wasm = dirname_gen ^ "/instantiated" in
+  Util.Filesys.mkdir dirname_instantiated_wasm;
+  let dirname_trapped_wasm = dirname_gen ^ "/trapped" in
+  Util.Filesys.mkdir dirname_trapped_wasm;
+  let dirname_exception_wasm = dirname_gen ^ "/exception" in
+  Util.Filesys.mkdir dirname_exception_wasm;
+  let dirname_unlinkable_wasm = dirname_gen ^ "/unlinkable" in
+  Util.Filesys.mkdir dirname_unlinkable_wasm;
   {
     dirname_gen;
     dirname_log;
@@ -194,7 +265,20 @@ let init_storage (dirname_gen : string) : storage =
     dirname_close_miss_p4;
     dirname_welltyped_p4;
     dirname_illtyped_p4;
+    dirname_instantiated_wasm;
+    dirname_trapped_wasm;
+    dirname_exception_wasm;
+    dirname_unlinkable_wasm;
   }
+
+let directory_for_output_category storage = function
+  | Wasm_policy.ValidationValid -> storage.dirname_welltyped_p4
+  | Wasm_policy.ValidationInvalid -> storage.dirname_illtyped_p4
+  | Wasm_policy.InitSuccess -> storage.dirname_instantiated_wasm
+  | Wasm_policy.InitTrap -> storage.dirname_trapped_wasm
+  | Wasm_policy.InitException -> storage.dirname_exception_wasm
+  | Wasm_policy.InitUnlinkable -> storage.dirname_unlinkable_wasm
+  | Wasm_policy.CloseMiss -> storage.dirname_close_miss_p4
 
 let init_seed (cover : DCov_multi.t) : seed = { cover }
 
@@ -203,6 +287,13 @@ let init (randseed : int option) (modes : Modes.t) (specenv : specenv)
   let rand = Option.value ~default:2025 randseed in
   Random.init rand;
   { rand; modes; specenv; storage; seed }
+
+let initw ?(focus : wasm_focus option = None) (randseed : int option)
+    (modes : Modes.t) (specenv : wasm_specenv) (storage : storage)
+    (seed : seed) : tw =
+  let rand = Option.value ~default:2026 randseed in
+  Random.init rand;
+  { rand; modes; specenv; storage; seed; focus }
 
 (* Seed updater *)
 
@@ -233,6 +324,33 @@ let update_hit_seed (config : t) (filename_p4 : string) (welltyped : bool)
   in
   config.seed.cover <- cover_seed
 
+let update_hit_seedw (config : tw) (filename_wasm : string) (welltyped : bool)
+    (iids_hit : IIdSet.t) : unit =
+  let cover_seed = config.seed.cover in
+  let cover_seed =
+    IIdSet.fold
+      (fun iid_hit cover_seed ->
+        let branch : DCov_multi.Branch.t =
+          DCov_multi.Cover.find iid_hit cover_seed
+        in
+        let branch =
+          match branch.status with
+          | Hit (likely, filenames_wasm) ->
+              let likely = likely && not welltyped in
+              let filenames_wasm = filename_wasm :: filenames_wasm in
+              DCov_multi.Branch.
+                { branch with status = Hit (likely, filenames_wasm) }
+          | _ ->
+              let likely = not welltyped in
+              let filenames_wasm = [ filename_wasm ] in
+              DCov_multi.Branch.
+                { branch with status = Hit (likely, filenames_wasm) }
+        in
+        DCov_multi.Cover.add iid_hit branch cover_seed)
+      iids_hit cover_seed
+  in
+  config.seed.cover <- cover_seed
+
 let update_close_miss_seed (config : t) (filename_p4 : string)
     (iids_close_miss : IIdSet.t) : unit =
   let cover_seed = config.seed.cover in
@@ -242,6 +360,21 @@ let update_close_miss_seed (config : t) (filename_p4 : string)
         let branch = DCov_multi.Cover.find iid_close_miss cover_seed in
         let branch =
           DCov_multi.Branch.{ branch with status = Miss [ filename_p4 ] }
+        in
+        DCov_multi.Cover.add iid_close_miss branch cover_seed)
+      iids_close_miss cover_seed
+  in
+  config.seed.cover <- cover_seed
+
+let update_close_miss_seedw (config : tw) (filename_wasm : string)
+    (iids_close_miss : IIdSet.t) : unit =
+  let cover_seed = config.seed.cover in
+  let cover_seed =
+    IIdSet.fold
+      (fun iid_close_miss cover_seed ->
+        let branch = DCov_multi.Cover.find iid_close_miss cover_seed in
+        let branch =
+          DCov_multi.Branch.{ branch with status = Miss [ filename_wasm ] }
         in
         DCov_multi.Cover.add iid_close_miss branch cover_seed)
       iids_close_miss cover_seed
