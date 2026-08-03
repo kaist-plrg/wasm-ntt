@@ -171,6 +171,7 @@ syntax execoutcome =
   | TrapO store
   | ExceptionO store tagaddr value*
   | ExhaustionO store
+  | LinkO store
 
 syntax numresult =
   | NumValue num_

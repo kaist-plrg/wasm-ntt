@@ -145,6 +145,35 @@ def $allocexport(moduleinst, { NAME name, EDESC (TagExport x) }) =
 dec $allocexports(moduleinst, export*) : exportinst*
 def $allocexports(moduleinst, export*) = ($allocexport(moduleinst, export))*
 
+;; Prepare the module instance without allocating runtime objects in the store.
+dec $initialize_moduleinst(store, module, externaddr*) : moduleinst
+
+def $initialize_moduleinst(STO_0, module, externaddr*) = moduleinst_0
+  -- if dt* = $alloctypes(module.TYPES)
+  -- if fa_import* = $externaddr_funcaddr(externaddr*)
+  -- if ga_import* = $externaddr_globaladdr(externaddr*)
+  -- if ta_import* = $externaddr_tableaddr(externaddr*)
+  -- if ma_import* = $externaddr_memaddr(externaddr*)
+  -- if ja_import* = $externaddr_tagaddr(externaddr*)
+  -- if fa* = fa_import* ++ $range_from(|STO_0.FUNCS|, |module.FUNCS|)
+  -- if ga* = ga_import* ++ $range_from(|STO_0.GLOBALS|, |module.GLOBALS|)
+  -- if ta* = ta_import* ++ $range_from(|STO_0.TABLES|, |module.TABLES|)
+  -- if ma* = ma_import* ++ $range_from(|STO_0.MEMS|, |module.MEMS|)
+  -- if ja* = ja_import* ++ $range_from(|STO_0.TAGS|, |module.TAGS|)
+  -- if ea* = $range_from(|STO_0.ELEMS|, |module.ELEMS|)
+  -- if da* = $range_from(|STO_0.DATAS|, |module.DATAS|)
+  -- if moduleinst_0 = {
+      TYPES dt*,
+      FUNCS fa*,
+      GLOBALS ga*,
+      TABLES ta*,
+      MEMS ma*,
+      TAGS ja*,
+      ELEMS ea*,
+      DATAS da*,
+      EXPORTS eps
+    }
+
 ;; Import initialization.
 ;; OCaml eval.ml first checks that the supplied extern list has the same length
 ;; as module imports, then checks each extern type before appending imported
@@ -163,28 +192,24 @@ def $import_externtype(moduleinst, { MODULENAME _, ITEMNAME _, IDESC (MemImport 
 def $import_externtype(moduleinst, { MODULENAME _, ITEMNAME _, IDESC (TagImport x) }) =
   ExtTagT (TagT ($deftype_at(moduleinst.TYPES, x)))
 
-relation Import_match_ok: store moduleinst |- externaddr import : OK
-  hint(input %0 %1 %2 %3)
-relation Imports_match_ok: store moduleinst |- externaddr* import* : OK
+relation Imports_type_match: store moduleinst |- externaddr* import* : execoutcome
   hint(input %0 %1 %2 %3)
 
-rule Import_match_ok:
-  STO moduleinst |- xa import : OK
+rule Imports_type_match/link:
+  STO moduleinst |- (xa :: xa_t*) (im :: im_t*) : LinkO STO
   -- Externaddr_ok: STO |- xa : xt_actual
-  -- if xt_expect = $import_externtype(moduleinst, import)
-  -- if $match_externtype(moduleinst.TYPES, xt_actual, xt_expect)
+  -- if xt_expect = $import_externtype(moduleinst, im)
+  -- if $match_externtype(moduleinst.TYPES, xt_actual, xt_expect) = false
 
-rule Imports_match_ok/cons:
-  STO moduleinst |- externaddr* import* : OK
-  -- if xa :: xa_t* = externaddr*
-  -- if import_1 :: import_t* = import*
-  -- Import_match_ok: STO moduleinst |- xa import_1 : OK
-  -- Imports_match_ok: STO moduleinst |- xa_t* import_t* : OK
+rule Imports_type_match/cons:
+  STO moduleinst |- (xa :: xa_t*) (im :: im_t*) : eo
+  -- Externaddr_ok: STO |- xa : xt_actual
+  -- if xt_expect = $import_externtype(moduleinst, im)
+  -- if $match_externtype(moduleinst.TYPES, xt_actual, xt_expect) = true
+  -- Imports_type_match: STO moduleinst |- xa_t* im_t* : eo
 
-rule Imports_match_ok/nil:
-  STO moduleinst |- externaddr* import* : OK
-  -- if externaddr* = eps
-  -- if import* = eps
+rule Imports_type_match/nil:
+  STO moduleinst |- eps eps : ValuesO STO eps
 
 ;; Active segment execution required by instantiation.
 
@@ -294,7 +319,7 @@ rule Run_start/some:
 
 relation Init_allocated: store module externaddr* |- moduleinst : store
   hint(input %0 %1 %2)
-relation Init_with_store_ok: store module externaddr* |- moduleinst : execoutcome
+relation Init_with_store_ok: store module externaddr* |- moduleinst? : execoutcome
   hint(input %0 %1 %2)
 relation Init_ok: module externaddr* |- moduleinst : OK
   hint(input %0 %1)
@@ -305,56 +330,44 @@ relation Modules_init_ok: |- module* : OK
 
 rule Init_allocated:
   STO_0 module externaddr* |- moduleinst : STO_7
-  -- Module_ok: |- module : OK
-  -- if dt* = $alloctypes(module.TYPES)
-  -- if fa_import* = $externaddr_funcaddr(externaddr*)
-  -- if ga_import* = $externaddr_globaladdr(externaddr*)
-  -- if ta_import* = $externaddr_tableaddr(externaddr*)
-  -- if ma_import* = $externaddr_memaddr(externaddr*)
-  -- if ja_import* = $externaddr_tagaddr(externaddr*)
-  -- if fa* = fa_import* ++ $range_from(|STO_0.FUNCS|, |module.FUNCS|)
-  -- if ga* = ga_import* ++ $range_from(|STO_0.GLOBALS|, |module.GLOBALS|)
-  -- if ta* = ta_import* ++ $range_from(|STO_0.TABLES|, |module.TABLES|)
-  -- if ma* = ma_import* ++ $range_from(|STO_0.MEMS|, |module.MEMS|)
-  -- if ja* = ja_import* ++ $range_from(|STO_0.TAGS|, |module.TAGS|)
-  -- if ea* = $range_from(|STO_0.ELEMS|, |module.ELEMS|)
-  -- if da* = $range_from(|STO_0.DATAS|, |module.DATAS|)
-  -- if moduleinst_0 = {
-      TYPES dt*,
-      FUNCS fa*,
-      GLOBALS ga*,
-      TABLES ta*,
-      MEMS ma*,
-      TAGS ja*,
-      ELEMS ea*,
-      DATAS da*,
-      EXPORTS eps
-    }
-  -- Imports_match_ok: STO_0 moduleinst_0 |- externaddr* module.IMPORTS : OK
-  ;; If `Imports_match_ok` fails, it's a LinkError. (Eval.Link)
+  -- if moduleinst_0 = $initialize_moduleinst(STO_0, module, externaddr*)
+  -- Imports_type_match: STO_0 moduleinst_0 |- externaddr* module.IMPORTS : ValuesO STO_0 eps
   -- if xi* = $allocexports(moduleinst_0, module.EXPORTS)
   -- if moduleinst = moduleinst_0[ .EXPORTS = xi* ]
-  -- Alloc_funcs: STO_0 moduleinst dt* |- module.FUNCS : STO_1
+  -- Alloc_funcs: STO_0 moduleinst moduleinst_0.TYPES |- module.FUNCS : STO_1
   -- Alloc_globals: STO_1 moduleinst |- module.GLOBALS : STO_2
   -- Alloc_tables: STO_2 moduleinst |- module.TABLES : STO_3
   -- Alloc_mems: STO_3 moduleinst |- module.MEMS : STO_4
-  -- Alloc_tags: STO_4 moduleinst dt* |- module.TAGS : STO_5
+  -- Alloc_tags: STO_4 moduleinst moduleinst_0.TYPES |- module.TAGS : STO_5
   -- Alloc_elems: STO_5 moduleinst |- module.ELEMS : STO_6
   -- Alloc_datas: STO_6 moduleinst |- module.DATAS : STO_7
 
+rule Init_with_store_ok/arity-link:
+  STO_0 module externaddr* |- eps : LinkO STO_0
+  -- if $(|externaddr*| =/= |module.IMPORTS|)
+
+rule Init_with_store_ok/type-link:
+  STO_0 module externaddr* |- eps : LinkO STO_0
+  -- if |externaddr*| = |module.IMPORTS|
+  -- if moduleinst_0 = $initialize_moduleinst(STO_0, module, externaddr*)
+  -- Imports_type_match: STO_0 moduleinst_0 |- externaddr* module.IMPORTS : LinkO STO_0
+
 rule Init_with_store_ok/elem-trap:
   STO_0 module externaddr* |- moduleinst : TrapO STO_trap
+  -- if |externaddr*| = |module.IMPORTS|
   -- Init_allocated: STO_0 module externaddr* |- moduleinst : STO_7
   -- Run_elems_from: STO_7 moduleinst 0 |- module.ELEMS : TrapO STO_trap ;; element segment initializer 를 실행해서 table 초기화
 
 rule Init_with_store_ok/data-trap:
   STO_0 module externaddr* |- moduleinst : TrapO STO_trap
+  -- if |externaddr*| = |module.IMPORTS|
   -- Init_allocated: STO_0 module externaddr* |- moduleinst : STO_7
   -- Run_elems_from: STO_7 moduleinst 0 |- module.ELEMS : ValuesO STO_8 eps ;; element segment initializer 를 실행해서 table 초기화
   -- Run_datas_from: STO_8 moduleinst 0 |- module.DATAS : TrapO STO_trap ;; data segment initializer 를 실행해서 memory 초기화
 
 rule Init_with_store_ok/start:
   STO_0 module externaddr* |- moduleinst : eo
+  -- if |externaddr*| = |module.IMPORTS|
   -- Init_allocated: STO_0 module externaddr* |- moduleinst : STO_7
   -- Run_elems_from: STO_7 moduleinst 0 |- module.ELEMS : ValuesO STO_8 eps ;; element segment initializer 를 실행해서 table 초기화
   -- Run_datas_from: STO_8 moduleinst 0 |- module.DATAS : ValuesO STO_9 eps ;; data segment initializer 를 실행해서 memory 초기화
@@ -362,6 +375,7 @@ rule Init_with_store_ok/start:
 
 rule Init_ok:
   module externaddr* |- moduleinst : OK
+  -- Module_ok: |- module : OK
   -- Init_with_store_ok: $empty_store module externaddr* |- moduleinst : ValuesO STO eps
 
 rule Module_init_ok:
