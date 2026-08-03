@@ -21,8 +21,36 @@ let parse parser filename =
     num_parse_fail := !num_parse_fail + 1;
     Printexc.raise_with_backtrace e bt
 
+let pos_leq (left : Source.pos) (right : Source.pos) =
+  left.line < right.line || (left.line = right.line && left.column <= right.column)
+
+let region_contains (outer : Source.region) (inner : Source.region) =
+  outer.left.file = inner.left.file
+  && pos_leq outer.left inner.left
+  && pos_leq inner.right outer.right
+
+let is_module_form_instantiation_assertion (command : Script.command) =
+  match command.it with
+  | Script.Assertion assertion -> (
+      match assertion.it with
+      | Script.AssertUninstantiable _ | Script.AssertUnlinkable _ -> true
+      | _ -> false)
+  | _ -> false
+
+let normalize_desugared_regions (commands : Script.command list) =
+  let rec loop = function
+    | (module_command : Script.command) :: (assertion_command : Script.command) :: rest
+      when (match module_command.it with Script.Module _ -> true | _ -> false)
+           && is_module_form_instantiation_assertion assertion_command
+           && region_contains assertion_command.at module_command.at ->
+        { module_command with at = assertion_command.at } :: assertion_command :: loop rest
+    | command :: rest -> command :: loop rest
+    | [] -> []
+  in
+  loop commands
+
 let parse_commands (filename : string) : Script.command list =
-  filename |> parse Wasm_interpreter.Parse.Script.parse_file
+  filename |> parse Wasm_interpreter.Parse.Script.parse_file |> normalize_desugared_regions
 
 let is_validation_command (cmd : Script.command) : bool =
   match cmd.it with

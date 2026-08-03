@@ -95,6 +95,59 @@ let add_node ~(taint : bool) (graph : t) (value : value) : unit =
 let find_node (graph : t) (vid : vid) : Node.t option =
   G.find_opt graph.nodes vid
 
+let source_vids_under_root (graph : t) ~(root : value)
+    ~(exclude_root : bool) : VIdSet.t =
+  let rec collect (visited : VIdSet.t) (sources : VIdSet.t) (value : value) =
+    let vid = value.note.vid in
+    if VIdSet.mem vid visited then (visited, sources)
+    else
+      let visited = VIdSet.add vid visited in
+      let sources =
+        match find_node graph vid with
+        | Some node when Node.is_source (Node.taint node) ->
+            VIdSet.add vid sources
+        | Some _ | None -> sources
+      in
+      match value.it with
+      | BoolV _ | NumV _ | TextV _ | FuncV _ | ExternV _ ->
+          (visited, sources)
+      | StructV fields ->
+          List.fold_left
+            (fun (visited, sources) (_, child) ->
+              collect visited sources child)
+            (visited, sources) fields
+      | CaseV case ->
+          Domain.Mixfix.fold
+            (fun (visited, sources) child -> collect visited sources child)
+            (visited, sources) case
+      | TupleV values ->
+          List.fold_left
+            (fun (visited, sources) child -> collect visited sources child)
+            (visited, sources) values
+      | OptV None -> (visited, sources)
+      | OptV (Some child) -> collect visited sources child
+      | ListV values ->
+          Value_array.fold_left
+            (fun (visited, sources) child -> collect visited sources child)
+            (visited, sources) values
+  in
+  let _, sources = collect VIdSet.empty VIdSet.empty root in
+  if exclude_root then VIdSet.remove root.note.vid sources else sources
+
+let rec add_value_subtree ~(taint : bool) (graph : t) (value : value) : unit =
+  if not (G.mem graph.nodes value.note.vid) then (
+    (match value.it with
+    | BoolV _ | NumV _ | TextV _ | FuncV _ | ExternV _ -> ()
+    | StructV fields ->
+        List.iter (fun (_, child) -> add_value_subtree ~taint graph child) fields
+    | CaseV case ->
+        Domain.Mixfix.iter (add_value_subtree ~taint graph) case
+    | TupleV values -> List.iter (add_value_subtree ~taint graph) values
+    | OptV None -> ()
+    | OptV (Some child) -> add_value_subtree ~taint graph child
+    | ListV values -> Value_array.iter (add_value_subtree ~taint graph) values);
+    add_node ~taint graph value)
+
 (* Assemblers *)
 
 let rec assemble_graph (value : value) : t =

@@ -7,6 +7,12 @@ let version = "0.1"
 
 exception CommandError of string
 
+let wasm_testgen_phase_arg =
+  Core.Command.Arg_type.create (fun value ->
+      match Backend_testgen_neg.Config.wasm_phase_of_string value with
+      | Ok phase -> phase
+      | Error message -> failwith message)
+
 (* Operations *)
 
 let run_with_instr (module Simulator : SIM) spec_sim relname includes_p4 path_p4
@@ -854,35 +860,119 @@ let wasm_run_testgen_command =
     ~summary:"generate negative type checker tests from a Wasm spec"
     (let open Core.Command.Let_syntax in
      let open Core.Command.Param in
-     let%map _paths_spec =
+     let%map paths_spec =
        anon (non_empty_sequence_as_list ("path" %: string))
-     and _relname = flag "-rel" (required string) ~doc:"relation to run"
-     and _fuel = flag "-fuel" (required int) ~doc:"fuel for test generation"
-     and _gendir =
+     and phase =
+       flag "-phase" (required wasm_testgen_phase_arg)
+         ~doc:"PHASE validation or instantiation"
+     and fuel = flag "-fuel" (optional int) ~doc:"fuel for test generation"
+     and timeout =
+       flag "-timeout" (optional int)
+         ~doc:"seconds to run focused Wasm test generation"
+     and gendir =
        flag "-gen-dir" (required string)
          ~doc:"directory for generated wasm programs"
-     and _name_campaign =
+     and name_campaign =
        flag "-name" (optional string)
          ~doc:"name of the test generation campaign"
-     and _silent = flag "-silent" no_arg ~doc:"do not print logs to stdout"
-     and _randseed =
+     and silent = flag "-silent" no_arg ~doc:"do not print logs to stdout"
+     and randseed =
        flag "-seed" (optional int) ~doc:"seed for random number generator"
-     and _bootdir =
+     and bootdir =
        flag "-boot-dir" (optional string) ~doc:"seed wasm directory for boot"
-     and _path_boot =
+     and path_boot =
        flag "-boot-file" (optional string) ~doc:"coverage file for boot"
-     and _random = flag "-random" no_arg ~doc:"randomize AST selection"
-     and _hybrid =
+     and random = flag "-random" no_arg ~doc:"randomize AST selection"
+     and hybrid =
        flag "-hybrid" no_arg
          ~doc:"randomize AST selection when no derivations exist"
-     and _strict =
+     and strict =
        flag "-strict" no_arg
          ~doc:"cover a new dangling only if it was intended by a mutation"
+     and pid =
+       flag "-pid" (optional int)
+         ~doc:"legacy spelling for the dangling instruction id to close-miss"
+     and filename_wasm =
+       flag "-w" (optional string) ~doc:"Wasm program to close-miss with"
+     and focus =
+       flag "-focus" no_arg
+         ~doc:"focus on one dangling id and its close-missing Wasm program"
      in
      fun () ->
-       Format.printf
-         "wasm-testgen is not available on the concrete runner yet; use \
-          run-wasm or wasm-cover-run, or port the fuzzer to SIM first.\n")
+       try
+         let spec_sl = Pass.structure ~final:true paths_spec in
+         let logmode =
+           if silent then Backend_testgen_neg.Modes.Silent
+           else Backend_testgen_neg.Modes.Verbose
+         in
+         let bootmode =
+           match (bootdir, path_boot) with
+           | Some bootdir, None ->
+               Backend_testgen_neg.Modes.Cold ([], bootdir)
+           | None, Some path_boot -> Backend_testgen_neg.Modes.Warm path_boot
+           | Some _, Some _ ->
+               raise
+                 (CommandError
+                    "Error: should specify only one of -boot-dir or -boot-file")
+           | None, None ->
+               raise
+                 (CommandError
+                    "Error: should specify either -boot-dir or -boot-file")
+         in
+         let mutationmode =
+           if random then Backend_testgen_neg.Modes.Random
+           else if hybrid then Backend_testgen_neg.Modes.Hybrid
+           else Backend_testgen_neg.Modes.Derive
+         in
+         let covermode =
+           if strict then Backend_testgen_neg.Modes.Strict
+           else Backend_testgen_neg.Modes.Relaxed
+         in
+         let focus =
+           match (focus, pid, filename_wasm) with
+           | true, Some iid, Some filename_wasm ->
+               Some Backend_testgen_neg.Config.{ iid; filename_wasm }
+           | true, _, _ ->
+               raise
+                 (CommandError "Error: -focus requires both -pid and -w")
+           | false, None, None -> None
+           | false, _, _ ->
+               raise
+                 (CommandError
+                    "Error: -pid and -w are only valid with -focus")
+         in
+         let budget =
+           match (fuel, timeout, focus) with
+           | Some _, Some _, _ ->
+               raise
+                 (CommandError
+                    "Error: should specify only one of -fuel or -timeout")
+           | Some fuel, None, _ ->
+               if fuel < 0 then
+                 raise (CommandError "Error: -fuel should be non-negative")
+               else Backend_testgen_neg.Config.WasmFuel fuel
+           | None, Some timeout, Some _ ->
+               if timeout <= 0 then
+                 raise (CommandError "Error: -timeout should be positive")
+               else Backend_testgen_neg.Config.WasmTimeout timeout
+           | None, Some _, None ->
+               raise
+                 (CommandError "Error: -timeout is only valid with -focus")
+           | None, None, _ ->
+               raise
+                 (CommandError
+                    "Error: should specify either -fuel or -timeout")
+         in
+         Backend_testgen_neg.Gen.wasm_fuzzer budget spec_sl phase gendir
+           name_campaign randseed logmode bootmode mutationmode covermode focus
+       with
+       | CommandError msg -> Format.printf "%s\n" msg
+       | ParseError (at, msg)
+       | ElabError (at, msg)
+       | StructError (at, msg)
+       | InterpError (at, msg)
+       | ExternError (at, msg) ->
+           Format.printf "%s\n" (string_of_error at msg))
 
 let run_testgen_debug_command =
   Core.Command.basic

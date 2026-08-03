@@ -11,4 +11,7 @@
   runtime
   interp
   interface
-  backend_sim))
+  wasm_interface
+  wasm_interpreter
+  backend_sim
+  yojson))

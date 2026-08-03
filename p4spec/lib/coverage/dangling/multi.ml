@@ -164,6 +164,14 @@ end
 
 type t = Cover.t
 
+type hit_confidence = Exact | Likely
+
+type extension_policy = {
+  merge_hits : bool;
+  hit_confidence : hit_confidence;
+  record_close_misses : bool;
+}
+
 (* Querying coverage *)
 
 let is_hit (cover : t) (iid : iid) : bool =
@@ -195,34 +203,77 @@ let measure_coverage (cover : t) : int * int * float =
   in
   (total, hits, coverage)
 
-(* Extension from single coverage:
+(* Extension from single coverage.  Hit confidence is represented by the legacy
+   bool where [true] is likely and [false] is exact. *)
 
-   A close-miss is added only if the program is well-typed and well-formed *)
-
-let extend (cover : t) (path_p4 : string) (wellformed : bool) (welltyped : bool)
-    (cover_single : Single.t) : t =
+let extend_with_policy (cover : t) (path_p4 : string)
+    (policy : extension_policy) (cover_single : Single.t) : t =
   Cover.mapi
     (fun (iid : iid) (branch : Branch.t) ->
       let branch_single = Single.Cover.find iid cover_single in
       match branch.status with
       | Hit (likely, paths_p4) -> (
           match branch_single.status with
-          | Hit ->
-              let likely = likely && not (wellformed && welltyped) in
+          | Hit when policy.merge_hits ->
+              let likely =
+                likely
+                && match policy.hit_confidence with Likely -> true | Exact -> false
+              in
               let paths_p4 = path_p4 :: paths_p4 in
               { branch with status = Hit (likely, paths_p4) }
           | _ -> branch)
       | Miss paths_p4 -> (
           match branch_single.status with
-          | Hit ->
-              let likely = not (wellformed && welltyped) in
+          | Hit when policy.merge_hits ->
+              let likely =
+                match policy.hit_confidence with Likely -> true | Exact -> false
+              in
               let paths_p4 = [ path_p4 ] in
               { branch with status = Hit (likely, paths_p4) }
-          | Miss (_ :: _) when wellformed && welltyped ->
+          | Hit -> branch
+          | Miss (_ :: _) when policy.record_close_misses ->
               let paths_p4 = path_p4 :: paths_p4 in
               { branch with status = Miss paths_p4 }
           | Miss _ -> branch))
     cover
+
+let extend_selected_with_policy (cover : t) (path_p4 : string)
+    (policy : extension_policy) ~(hits : IIdSet.t)
+    ~(close_misses : IIdSet.t) : t =
+  Cover.mapi
+    (fun iid (branch : Branch.t) ->
+      if IIdSet.mem iid hits && policy.merge_hits then
+        let likely_new =
+          match policy.hit_confidence with Likely -> true | Exact -> false
+        in
+        let status =
+          match branch.status with
+          | Hit (likely, paths) ->
+              Branch.Hit (likely && likely_new, path_p4 :: paths)
+          | Miss _ -> Branch.Hit (likely_new, [ path_p4 ])
+        in
+        { branch with status }
+      else if
+        IIdSet.mem iid close_misses && policy.record_close_misses
+      then
+        match branch.status with
+        | Hit _ -> branch
+        | Miss paths ->
+            { branch with status = Branch.Miss (path_p4 :: paths) }
+      else branch)
+    cover
+
+(* Compatibility wrapper for existing callers. *)
+
+let extend (cover : t) (path_p4 : string) (wellformed : bool) (welltyped : bool)
+    (cover_single : Single.t) : t =
+  let exact = wellformed && welltyped in
+  let policy =
+    { merge_hits = true;
+      hit_confidence = if exact then Exact else Likely;
+      record_close_misses = exact }
+  in
+  extend_with_policy cover path_p4 policy cover_single
 
 (* Logging *)
 

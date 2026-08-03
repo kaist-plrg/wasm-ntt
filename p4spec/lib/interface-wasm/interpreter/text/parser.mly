@@ -1449,7 +1449,7 @@ script_instance :
   | script_module  /* sugar */
     { let isdef, var_opt, m = $1 in
       if isdef then error (at $sloc) "misplaced module definition";
-      [Module (None, m) @@ $sloc], (var_opt, None) }
+      [Module (var_opt, m) @@ $sloc], (var_opt, var_opt) }
 
 instance :
   | LPAR MODULE INSTANCE instance_var module_var RPAR
