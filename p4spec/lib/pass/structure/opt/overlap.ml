@@ -98,6 +98,63 @@ let rec disjoint_exp_literal (exp_a : exp) (exp_b : exp) : bool =
   | ListE _, ListE _ -> true
   | _ -> false
 
+let complementary_num_cmpop (cmpop_a : cmpop) (cmpop_b : cmpop) : bool =
+  match (cmpop_a, cmpop_b) with
+  | `LeOp, `GtOp
+  | `GtOp, `LeOp
+  | `LtOp, `GeOp
+  | `GeOp, `LtOp ->
+      true
+  | _ -> false
+
+let reverse_cmpop (cmpop : cmpop) : cmpop =
+  match cmpop with
+  | `LtOp -> `GtOp
+  | `GtOp -> `LtOp
+  | `LeOp -> `GeOp
+  | `GeOp -> `LeOp
+  | `EqOp -> `EqOp
+  | `NeOp -> `NeOp
+
+let complementary_cmp_exp (exp_a : exp) (exp_b : exp) : bool =
+  match (exp_a.it, exp_b.it) with
+  | ( CmpE (cmpop_a, optyp_a, exp_a_l, exp_a_r),
+      CmpE (cmpop_b, optyp_b, exp_b_l, exp_b_r) ) ->
+      optyp_a = optyp_b
+      &&
+      ( (eq_exp exp_a_l exp_b_l
+         && eq_exp exp_a_r exp_b_r
+         && complementary_num_cmpop cmpop_a cmpop_b)
+        ||
+        (eq_exp exp_a_l exp_b_r
+         && eq_exp exp_a_r exp_b_l
+         && complementary_num_cmpop
+              cmpop_a
+              (reverse_cmpop cmpop_b)) )
+  | _ -> false
+
+let rec complementary_exp (exp_a : exp) (exp_b : exp) : bool =
+  match (exp_a.it, exp_b.it) with
+  | UnE (`NotOp, _, exp), _ ->
+      eq_exp exp exp_b
+  | _, UnE (`NotOp, _, exp) ->
+      eq_exp exp_a exp
+  | CmpE _, CmpE _ ->
+      complementary_cmp_exp exp_a exp_b
+  (* not (A /\ B) = not A \/ not B *)
+  | ( BinE (`AndOp, _, exp_a_l, exp_a_r),
+      BinE (`OrOp, _, exp_b_l, exp_b_r) )
+  (* not (A \/ B) = not A /\ not B *)
+  | ( BinE (`OrOp, _, exp_a_l, exp_a_r),
+      BinE (`AndOp, _, exp_b_l, exp_b_r) ) ->
+      (complementary_exp exp_a_l exp_b_l
+       && complementary_exp exp_a_r exp_b_r)
+      ||
+      (complementary_exp exp_a_l exp_b_r
+       && complementary_exp exp_a_r exp_b_l)
+
+  | _ -> false
+
 let overlap_typ (tdenv : TDEnv.t) (exp : exp) (typ_a : typ) (typ_b : typ) :
     overlap =
   match (typ_as_variant tdenv typ_a, typ_as_variant tdenv typ_b) with
@@ -214,6 +271,30 @@ and overlap_exp (tdenv : TDEnv.t) (exp_a : exp) (exp_b : exp) : overlap =
           ( exp_a_l,
             CmpG (`EqOp, optyp_a, exp_a_r),
             CmpG (`NeOp, optyp_b, exp_b_l) )
+    (* Other comparisons *)
+    | ( CmpE (cmpop_a, optyp_a, exp_a_l, exp_a_r),
+        CmpE (cmpop_b, optyp_b, exp_b_l, exp_b_r) )
+      when optyp_a = optyp_b && eq_exp exp_a_l exp_b_l && eq_exp exp_a_r exp_b_r
+            && complementary_num_cmpop cmpop_a cmpop_b
+      ->
+        Partition
+          ( exp_a_l,
+            CmpG (cmpop_a, optyp_a, exp_a_r),
+            CmpG (cmpop_b, optyp_b, exp_b_r) )
+    | ( CmpE (cmpop_a, optyp_a, exp_a_l, exp_a_r),
+        CmpE (cmpop_b, optyp_b, exp_b_l, exp_b_r) )
+      when optyp_a = optyp_b && eq_exp exp_a_l exp_b_r && eq_exp exp_a_r exp_b_l
+            && complementary_num_cmpop cmpop_a (reverse_cmpop cmpop_b)
+      ->
+        let cmpop_b = reverse_cmpop cmpop_b in
+        Partition
+          ( exp_a_l,
+            CmpG (cmpop_a, optyp_a, exp_a_r),
+            CmpG (cmpop_b, optyp_b, exp_b_l) )
+    | (BinE (`AndOp, _, _, _), BinE (`OrOp, _, _, _)) | (BinE (`OrOp, _, _, _), BinE (`AndOp, _, _, _))
+      when complementary_exp exp_a exp_b
+      ->
+        Partition (exp_a, BoolG true, BoolG false)
     (* Subtyping *)
     | SubE (exp_a, typ_a), SubE (exp_b, typ_b) when eq_exp exp_a exp_b ->
         overlap_typ tdenv exp_a typ_a typ_b
