@@ -16,6 +16,7 @@ module WasmExtern = Wasm_interpreter.Extern
 module WasmI31 = Wasm_interpreter.I31
 module WasmSource = Wasm_interpreter.Source
 module WasmValue = Wasm_interpreter.Value
+module Sim = Runtime.Sim.Signature
 
 module StringMap = Map.Make (String)
 
@@ -43,11 +44,25 @@ type exec_outcome =
     }
   | Exhausted of value
 
+type import_resolution_error =
+  | UnknownImport of string
+
+type init_outcome =
+  | InitExecuted of {
+      module_inst : value;
+      outcome : exec_outcome;
+    }
+  | LinkFailed of value
+
 type state = {
   store : value;
   modules : module_entry StringMap.t;
   instances : instance_entry StringMap.t;
   registry : instance_entry StringMap.t;
+}
+
+type runtime = {
+  simulator : (module Sim.SIM);
 }
 
 let script_harness_relname = "Scripts_init_ok"
@@ -235,6 +250,11 @@ let as_list at value =
   match value.it with
   | ListV values -> Value_array.to_list values
   | _ -> error at "expected list value"
+
+let as_option at value =
+  match value.it with
+  | OptV value_opt -> value_opt
+  | _ -> error at "expected option"
 
 let as_nat at value =
   try value |> Runtime.Value.Get.num |> Xl.Num.to_int |> Bigint.to_int_exn
@@ -503,6 +523,8 @@ let bind_module at var_opt (entry : module_entry) state =
     modules = bind_default_and_named at "module" state.modules key entry;
   }
 
+let bind_module_entry state var_opt entry = bind_module no_region var_opt entry state
+
 let lookup_module at var_opt state =
   lookup at "module" state.modules (key_of_var_opt var_opt)
 
@@ -563,17 +585,31 @@ let global_value at store globaladdr =
 
 let resolve_import at state (import : Ast.import) =
   let module_key = key_of_name import.it.module_name in
-  let provider =
-    match StringMap.find_opt module_key state.registry with
-    | Some provider -> provider
-    | None ->
-        error at
-          ("unknown import module " ^ module_key)
-  in
-  lookup_export at provider.module_inst import.it.item_name
+  match StringMap.find_opt module_key state.registry with
+  | None ->
+      Error (UnknownImport ("unknown import module " ^ module_key))
+  | Some provider ->
+      let item_key = key_of_name import.it.item_name in
+      let exports = field at "EXPORTS" provider.module_inst |> as_list at in
+      let matches export =
+        field at "NAME" export |> as_text at = item_key
+      in
+      (match List.find_opt matches exports with
+      | Some export -> Ok (field at "ADDR" export)
+      | None ->
+          Error
+            (UnknownImport
+               ("unknown import " ^ module_key ^ "." ^ item_key)))
 
 let resolve_imports at state (module_ : Ast.module_) =
-  List.map (resolve_import at state) module_.it.imports
+  let rec loop acc = function
+    | [] -> Ok (List.rev acc)
+    | import :: imports -> (
+        match resolve_import at state import with
+        | Ok externaddr -> loop (externaddr :: acc) imports
+        | Error error -> Error error)
+  in
+  loop [] module_.it.imports
 
 let externaddr_list externaddrs = list_value "externaddr" externaddrs
 
@@ -610,8 +646,20 @@ let store_of_exec_outcome = function
 
 let init_outputs at outputs =
   match outputs with
-  | [ module_inst; outcome ] ->
-      (module_inst, exec_outcome_of_value at outcome)
+  | [ module_inst_opt; outcome_value ] -> (
+      match (as_option at module_inst_opt, case_tag outcome_value) with
+      | None, Some ("LinkO", [ store ]) ->
+          LinkFailed store
+      | Some _, Some ("LinkO", _) ->
+          error at "LinkO returned a module instance"
+      | None, _ ->
+          error at "execution outcome returned no module instance"
+      | Some module_inst, _ ->
+          InitExecuted
+            {
+              module_inst;
+              outcome = exec_outcome_of_value at outcome_value;
+            })
   | _ -> error at "Init_with_store_ok returned unexpected outputs"
 
 let invoke_outputs at outputs =
@@ -744,3 +792,154 @@ let assert_action_results at act got expect =
   try assert_results at got expect
   with Util.Error.InterpError (_, msg) ->
     error at (action_label act ^ ": " ^ msg)
+
+let eval_dynamic_rel runtime relname values_input =
+  let module Simulator = (val runtime.simulator : Sim.SIM) in
+  match Simulator.Interp.eval_rel relname values_input with
+  | Pass values -> values
+  | Fail (at, msg) -> error at (relname ^ " failed: " ^ msg)
+
+let eval_init runtime state module_entry =
+  ignore (eval_dynamic_rel runtime "Module_ok" [ module_entry.value ]);
+  match resolve_imports no_region state module_entry.module_ with
+  | Error error -> Error error
+  | Ok externaddrs ->
+      let externaddr_value = externaddr_list externaddrs in
+      Ok
+        (eval_dynamic_rel runtime "Init_with_store_ok"
+           [ state.store; module_entry.value; externaddr_value ]
+        |> init_outputs no_region)
+
+let instantiate runtime state var_opt module_entry =
+  match eval_init runtime state module_entry with
+  | Ok
+      (InitExecuted
+        {
+          module_inst;
+          outcome = Returned { store; values = [] };
+        }) ->
+      let instance : instance_entry = { module_inst; store } in
+      bind_instance no_region var_opt instance state
+  | Error (UnknownImport _)
+  | Ok (LinkFailed _) ->
+      error no_region "unexpected link failure during instantiation"
+  | Ok (InitExecuted { outcome = Returned _; _ }) ->
+      error no_region "instantiation returned unexpected values"
+  | Ok (InitExecuted { outcome = Trapped _; _ }) ->
+      error no_region "unexpected trap during instantiation"
+  | Ok (InitExecuted { outcome = Thrown _; _ }) ->
+      error no_region "unexpected exception during instantiation"
+  | Ok (InitExecuted { outcome = Exhausted _; _ }) ->
+      error no_region "unexpected exhaustion during instantiation"
+
+let expect_uninstantiable runtime state module_entry =
+  match eval_init runtime state module_entry with
+  | Ok (InitExecuted { outcome = Trapped store; _ }) -> { state with store }
+  | Error (UnknownImport _)
+  | Ok (LinkFailed _) ->
+      error no_region "expected instantiation trap, got link error"
+  | Ok (InitExecuted { outcome = Returned _; _ }) ->
+      error no_region "expected instantiation trap, got return"
+  | Ok (InitExecuted { outcome = Thrown _; _ }) ->
+      error no_region "expected instantiation trap, got exception"
+  | Ok (InitExecuted { outcome = Exhausted _; _ }) ->
+      error no_region "expected instantiation trap, got exhaustion"
+
+let expect_unlinkable runtime state module_entry =
+  match eval_init runtime state module_entry with
+  | Error (UnknownImport _) -> state
+  | Ok (LinkFailed store) -> { state with store }
+  | Ok (InitExecuted { outcome = Returned _; _ }) ->
+      error no_region "expected linking error, got return"
+  | Ok (InitExecuted { outcome = Trapped _; _ }) ->
+      error no_region "expected linking error, got trap"
+  | Ok (InitExecuted { outcome = Thrown _; _ }) ->
+      error no_region "expected linking error, got exception"
+  | Ok (InitExecuted { outcome = Exhausted _; _ }) ->
+      error no_region "expected linking error, got exhaustion"
+
+let run_action runtime state (act : Script.action) =
+  match act.it with
+  | Script.Invoke (var_opt, name, literals) ->
+      let instance = lookup_instance no_region var_opt state in
+      let funcaddr = funcaddr_of_export no_region instance.module_inst name in
+      let arguments = value_list (List.map value_of_literal literals) in
+      eval_dynamic_rel runtime "Invoke" [ state.store; funcaddr; arguments ]
+      |> invoke_outputs no_region
+  | Script.Get (var_opt, name) ->
+      let instance = lookup_instance no_region var_opt state in
+      let globaladdr = globaladdr_of_export no_region instance.module_inst name in
+      let value = global_value no_region state.store globaladdr in
+      Returned { store = state.store; values = [ value ] }
+
+let run_command runtime ~index ~total state (cmd : Script.command) =
+  trace_command ~index ~total cmd;
+  let context_error at msg =
+    error at (debug_error_message ~index ~total cmd msg)
+  in
+  try
+    match cmd.it with
+    | Script.Module (var_opt, def) ->
+        let entry = module_entry_of_definition def in
+        bind_module no_region var_opt entry state
+    | Script.Instance (var_opt, source_var_opt) ->
+        let module_entry = lookup_module no_region source_var_opt state in
+        instantiate runtime state var_opt module_entry
+    | Script.Register (name, var_opt) ->
+        let instance = lookup_instance no_region var_opt state in
+        bind_registry name instance state
+    | Script.Assertion ass -> (
+        match ass.it with
+        | Script.AssertInvalid (def, _) ->
+            let entry = module_entry_of_definition def in
+            (match
+               let module Simulator = (val runtime.simulator : Sim.SIM) in
+               Simulator.Interp.eval_rel "Module_ok" [ entry.value ]
+             with
+            | Fail _ -> state
+            | Pass _ -> error no_region "expected validation failure")
+        | Script.AssertUninstantiable (var_opt, _) ->
+            let module_entry = lookup_module no_region var_opt state in
+            expect_uninstantiable runtime state module_entry
+        | Script.AssertUnlinkable (var_opt, _) ->
+            let module_entry = lookup_module no_region var_opt state in
+            expect_unlinkable runtime state module_entry
+        | Script.AssertReturn (act, results) -> (
+            match run_action runtime state act with
+            | Returned { store; values } ->
+                assert_action_results no_region act values results;
+                { state with store }
+            | Trapped _ -> error no_region "expected return, got trap"
+            | Thrown _ -> error no_region "expected return, got exception"
+            | Exhausted _ -> error no_region "expected return, got exhaustion")
+        | Script.AssertTrap (act, _) -> (
+            match run_action runtime state act with
+            | Trapped store -> { state with store }
+            | Returned _ -> error no_region "expected runtime trap, got return"
+            | Thrown _ -> error no_region "expected runtime trap, got exception"
+            | Exhausted _ -> error no_region "expected runtime trap, got exhaustion")
+        | Script.AssertException act -> (
+            match run_action runtime state act with
+            | Thrown { store; _ } -> { state with store }
+            | Returned _ -> error no_region "expected exception, got return"
+            | Trapped _ -> error no_region "expected exception, got trap"
+            | Exhausted _ -> error no_region "expected exception, got exhaustion")
+        | Script.AssertMalformed _
+        | Script.AssertMalformedCustom _
+        | Script.AssertInvalidCustom _
+        | Script.AssertExhaustion _ -> state)
+    | Script.Action act -> (
+        match run_action runtime state act with
+        | Returned { store; _ } -> { state with store }
+        | Trapped _ -> error no_region "unexpected runtime trap"
+        | Thrown _ -> error no_region "unexpected exception"
+        | Exhausted _ -> error no_region "unexpected exhaustion")
+    | Script.Meta _ -> state
+  with Util.Error.InterpError (at, msg) -> context_error at msg
+
+let run_commands runtime state commands =
+  let total = List.length commands in
+  List.fold_left
+    (fun state (index, command) -> run_command runtime ~index ~total state command)
+    state
+    (List.mapi (fun index command -> (index + 1, command)) commands)
