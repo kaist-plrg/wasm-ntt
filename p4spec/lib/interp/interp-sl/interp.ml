@@ -1931,62 +1931,63 @@ module Make (Interface : Run.INTERFACE) (Extern : Run.EXTERN) () :
 
   and invoke_rel ?(internal : bool = true) (ctx : Ctx.t) (id : id)
       (values_input : value list) : value list =
-    let rec loop id values_input =
-      try
-        Hook.on_rel_enter id values_input;
-        let rel = Ctx.find_rel ctx id in
-        let dispatch () =
-          match rel with
-          | Rel.Extern (nottyp, inputs) ->
-              let values_output =
-                invoke_extern_rel ctx nottyp inputs id values_input
-              in
-              Result values_output
-          | Rel.Defined (_, exps_input, block, elseblock_opt) ->
-              invoke_defined_rel ctx id exps_input block elseblock_opt
-                values_input
-        in
-        let result =
-          if !cache_enabled && not (is_extern_rel rel) then
-            let cache_result = CCache.find !rel_cache (id.it, values_input) in
-            match cache_result with
-            | Some values_output -> Result values_output
-            | None -> (
-                let checkpoint_before = Interface.checkpoint () in
-                let extern_checkpoint_before = Extern.checkpoint () in
-                let result = dispatch () in
-                match result with
-                | Result values_output ->
-                    let checkpoint_after = Interface.checkpoint () in
-                    let extern_checkpoint_after = Extern.checkpoint () in
-                    (* Cache if neither the interface nor the extern created a side-effect *)
-                    if
-                      (not (Interface.seff checkpoint_before checkpoint_after))
-                      && not
-                           (Extern.seff extern_checkpoint_before
-                              extern_checkpoint_after)
-                    then
-                      CCache.add !rel_cache (id.it, values_input) values_output;
-                    Result values_output
-                | Tailcall_rel _ -> result)
-          else (
-            if not internal then check_rel_inputs ctx id values_input;
-            dispatch ())
-        in
-        match result with
-        | Result values_output ->
-            Hook.on_rel_exit id;
-            values_output
-        | Tailcall_rel (id_tail, values_tail) ->
-            Hook.on_rel_exit id;
-            loop id_tail values_tail
-      with Backtrace backtrace ->
-        Hook.on_rel_exit id;
-        back_nest id.at
-          (fun () -> F.asprintf "relation %s failed" id.it)
-          backtrace
+    let rec loop history id values_input =
+      let iteration =
+        try
+          Hook.on_rel_enter id values_input;
+          let rel = Ctx.find_rel ctx id in
+          let dispatch () =
+            match rel with
+            | Rel.Extern (nottyp, inputs) ->
+                let values_output =
+                  invoke_extern_rel ctx nottyp inputs id values_input
+                in
+                Result values_output
+            | Rel.Defined (_, exps_input, block, elseblock_opt) ->
+                invoke_defined_rel ctx id exps_input block elseblock_opt
+                  values_input
+          in
+          let result =
+            if !cache_enabled && not (is_extern_rel rel) then
+              let cache_result = CCache.find !rel_cache (id.it, values_input) in
+              match cache_result with
+              | Some values_output -> Result values_output
+              | None -> (
+                  let checkpoint_before = Interface.checkpoint () in
+                  let extern_checkpoint_before = Extern.checkpoint () in
+                  let result = dispatch () in
+                  match result with
+                  | Result values_output ->
+                      let checkpoint_after = Interface.checkpoint () in
+                      let extern_checkpoint_after = Extern.checkpoint () in
+                      (* Cache if neither the interface nor the extern created a side-effect *)
+                      if
+                        (not (Interface.seff checkpoint_before checkpoint_after))
+                        && not
+                             (Extern.seff extern_checkpoint_before
+                                extern_checkpoint_after)
+                      then
+                        CCache.add !rel_cache (id.it, values_input) values_output;
+                      Result values_output
+                  | Tailcall_rel _ -> result)
+            else (
+              if not internal then check_rel_inputs ctx id values_input;
+              dispatch ())
+          in
+          Ok result
+        with Backtrace backtrace -> Error backtrace
+      in
+      Hook.on_rel_exit id;
+      match iteration with
+      | Error backtrace ->
+          raise (Backtrace (Rel_trace.nest history id backtrace))
+      | Ok (Result values_output) -> values_output
+      | Ok (Tailcall_rel (id_tail, values_tail)) ->
+          (loop [@tailcall])
+            (Rel_trace.push id history)
+            id_tail values_tail
     in
-    loop id values_input
+    loop Rel_trace.empty id values_input
 
   and invoke_extern_rel (ctx : Ctx.t) (nottyp : nottyp) (inputs : Hints.Input.t)
       (id : id) (values_input : value list) : value list =
