@@ -1,0 +1,10 @@
+(module
+  (func (export "add-sub") (param v128 v128 v128) (result v128)
+    (i8x16.add (i8x16.sub (local.get 0) (local.get 1))(local.get 2)))
+  (func (export "sub-add") (param v128 v128 v128) (result v128)
+    (i8x16.sub (i8x16.add (local.get 0) (local.get 1))(local.get 2)))
+  (func (export "add-neg") (param v128 v128) (result v128)
+    (i8x16.add (i8x16.neg (local.get 0)) (local.get 1)))
+  (func (export "sub-neg") (param v128 v128) (result v128)
+    (i8x16.sub (i8x16.neg (local.get 0)) (local.get 1)))
+)
