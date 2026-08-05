@@ -283,9 +283,7 @@ def $range_from(base, n) = base :: $range_from(base', n')
   -- if n' = $(n - 1)
 
 dec $limits_min_nat(limits) : nat
-def $limits_min_nat({ MIN i64, MAX _ }) = n
-  -- if $(i64 >= 0)
-  -- if n = $(i64)
+def $limits_min_nat({ MIN u64, MAX _ }) = u64
 
 dec $nat_of_num(num_) : nat
 def $nat_of_num(I32 n) = n

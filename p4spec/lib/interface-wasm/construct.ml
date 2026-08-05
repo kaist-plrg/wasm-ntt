@@ -274,8 +274,14 @@ and il_of_addr_type = function
 
 and il_of_limits limits =
   wrap_struct_v "limits" [
-    (wrap_atom "MIN", with_typ (wrap_var_t "i64") (NumV (`Int (bigint_of_z_int (Z.of_int64_unsigned limits.min)))));
-    (wrap_atom "MAX", Option.map (fun i -> with_typ (wrap_var_t "i64") (NumV (`Int ((bigint_of_z_int (Z.of_int64_unsigned i)))))) limits.max |> wrap_opt_v "i64")
+    (wrap_atom "MIN",
+      with_typ (wrap_var_t "u64") (NumV (`Nat (bigint_of_nat64 limits.min))));
+    (wrap_atom "MAX",
+      Option.map
+        (fun i ->
+          with_typ (wrap_var_t "u64") (NumV (`Nat (bigint_of_nat64 i))))
+        limits.max
+      |> wrap_opt_v "u64")
   ]
 
 and il_of_table_type = function

@@ -81,10 +81,10 @@ dec $match_tabletype(deftype*, tabletype, tabletype) : bool
 dec $match_memtype(deftype*, memtype, memtype) : bool
 dec $match_tagtype(deftype*, tagtype, tagtype) : bool
 
-def $match_limits({ MIN i64_1, MAX _ }, { MIN i64_2, MAX eps }) = true
-  -- if $le_u(i64_2, i64_1)
-def $match_limits({ MIN i64_1, MAX i64_1' }, { MIN i64_2, MAX i64_2' }) = true
-  -- if $le_u(i64_2, i64_1) /\ $le_u(i64_1', i64_2')
+def $match_limits({ MIN u64_1, MAX _ }, { MIN u64_2, MAX eps }) = true
+  -- if $(u64_2 <= u64_1)
+def $match_limits({ MIN u64_1, MAX u64_1' }, { MIN u64_2, MAX u64_2' }) = true
+  -- if $(u64_2 <= u64_1) /\ $(u64_1' <= u64_2')
 def $match_limits(_, _) = false
   -- otherwise
 

@@ -810,7 +810,7 @@ rule Step_plain_instr/memory-size-i64:
 rule Step_plain_instr/memory-grow-i32:
   STO fr ((NumV (I32 n)) :: v*) |- MEMORY.GROW x : (STO', fr, (NumV (I32 pages)) :: v*, eps)
   -- if ma = fr.MODULE.MEMS[x]
-  -- if MemoryT I32AT { MIN i64, MAX eps } = STO.MEMS[ma].TYPE
+  -- if MemoryT I32AT { MIN u64, MAX eps } = STO.MEMS[ma].TYPE
   -- if pages = $(|STO.MEMS[ma].BYTES| / $page_size)
   -- if newsize = $(pages + n)
   -- if $(newsize <= 65536)
@@ -821,7 +821,7 @@ rule Step_plain_instr/memory-grow-i32:
 rule Step_plain_instr/memory-grow-i32-unbounded-fail:
   STO fr ((NumV (I32 n)) :: v*) |- MEMORY.GROW x : (STO, fr, (NumV (I32 4294967295)) :: v*, eps)
   -- if ma = fr.MODULE.MEMS[x]
-  -- if MemoryT I32AT { MIN i64, MAX eps } = STO.MEMS[ma].TYPE
+  -- if MemoryT I32AT { MIN u64, MAX eps } = STO.MEMS[ma].TYPE
   -- if pages = $(|STO.MEMS[ma].BYTES| / $page_size)
   -- if newsize = $(pages + n)
   -- if $(newsize > 65536)
@@ -829,21 +829,21 @@ rule Step_plain_instr/memory-grow-i32-unbounded-fail:
 rule Step_plain_instr/memory-grow-i32-bounded:
   STO fr ((NumV (I32 n)) :: v*) |- MEMORY.GROW x : (STO', fr, (NumV (I32 pages)) :: v*, eps)
   -- if ma = fr.MODULE.MEMS[x]
-  -- if MemoryT I32AT { MIN i64, MAX i64_1 } = STO.MEMS[ma].TYPE
-  -- if max = $(i64_1)
+  -- if MemoryT I32AT { MIN u64, MAX u64_1 } = STO.MEMS[ma].TYPE
+  -- if max = $(u64_1)
   -- if pages = $(|STO.MEMS[ma].BYTES| / $page_size)
   -- if newsize = $(pages + n)
   -- if $(newsize <= 65536)
   -- if $(newsize <= max)
   -- if nbytes = $(n * $page_size)
   -- if STO_1 = STO[ .MEMS[ma].BYTES = STO.MEMS[ma].BYTES ++ $zero_bytes(nbytes) ]
-  -- if STO' = STO_1[ .MEMS[ma].TYPE = MemoryT I32AT { MIN newsize, MAX i64_1 } ]
+  -- if STO' = STO_1[ .MEMS[ma].TYPE = MemoryT I32AT { MIN newsize, MAX u64_1 } ]
 
 rule Step_plain_instr/memory-grow-i32-bounded-max-fail:
   STO fr ((NumV (I32 n)) :: v*) |- MEMORY.GROW x : (STO, fr, (NumV (I32 4294967295)) :: v*, eps)
   -- if ma = fr.MODULE.MEMS[x]
-  -- if MemoryT I32AT { MIN i64, MAX i64_1 } = STO.MEMS[ma].TYPE
-  -- if max = $(i64_1)
+  -- if MemoryT I32AT { MIN u64, MAX u64_1 } = STO.MEMS[ma].TYPE
+  -- if max = $(u64_1)
   -- if pages = $(|STO.MEMS[ma].BYTES| / $page_size)
   -- if newsize = $(pages + n)
   -- if $(newsize > max)
@@ -851,7 +851,7 @@ rule Step_plain_instr/memory-grow-i32-bounded-max-fail:
 rule Step_plain_instr/memory-grow-i32-bounded-size-fail:
   STO fr ((NumV (I32 n)) :: v*) |- MEMORY.GROW x : (STO, fr, (NumV (I32 4294967295)) :: v*, eps)
   -- if ma = fr.MODULE.MEMS[x]
-  -- if MemoryT I32AT { MIN i64, MAX i64_1 } = STO.MEMS[ma].TYPE
+  -- if MemoryT I32AT { MIN u64, MAX u64_1 } = STO.MEMS[ma].TYPE
   -- if pages = $(|STO.MEMS[ma].BYTES| / $page_size)
   -- if newsize = $(pages + n)
   -- if $(newsize > 65536)
@@ -859,7 +859,7 @@ rule Step_plain_instr/memory-grow-i32-bounded-size-fail:
 rule Step_plain_instr/memory-grow-i64:
   STO fr ((NumV (I64 n)) :: v*) |- MEMORY.GROW x : (STO', fr, (NumV (I64 pages)) :: v*, eps)
   -- if ma = fr.MODULE.MEMS[x]
-  -- if MemoryT I64AT { MIN i64, MAX eps } = STO.MEMS[ma].TYPE
+  -- if MemoryT I64AT { MIN u64, MAX eps } = STO.MEMS[ma].TYPE
   -- if pages = $(|STO.MEMS[ma].BYTES| / $page_size)
   -- if nsize = $nat_of_num(I64 n)
   -- if newsize = $(pages + nsize)
@@ -870,21 +870,21 @@ rule Step_plain_instr/memory-grow-i64:
 rule Step_plain_instr/memory-grow-i64-bounded:
   STO fr ((NumV (I64 n)) :: v*) |- MEMORY.GROW x : (STO', fr, (NumV (I64 pages)) :: v*, eps)
   -- if ma = fr.MODULE.MEMS[x]
-  -- if MemoryT I64AT { MIN i64, MAX i64_1 } = STO.MEMS[ma].TYPE
-  -- if max = $(i64_1)
+  -- if MemoryT I64AT { MIN u64, MAX u64_1 } = STO.MEMS[ma].TYPE
+  -- if max = $(u64_1)
   -- if pages = $(|STO.MEMS[ma].BYTES| / $page_size)
   -- if nsize = $nat_of_num(I64 n)
   -- if newsize = $(pages + nsize)
   -- if $(newsize <= max)
   -- if nbytes = $(nsize * $page_size)
   -- if STO_1 = STO[ .MEMS[ma].BYTES = STO.MEMS[ma].BYTES ++ $zero_bytes(nbytes) ]
-  -- if STO' = STO_1[ .MEMS[ma].TYPE = MemoryT I64AT { MIN newsize, MAX i64_1 } ]
+  -- if STO' = STO_1[ .MEMS[ma].TYPE = MemoryT I64AT { MIN newsize, MAX u64_1 } ]
 
 rule Step_plain_instr/memory-grow-i64-bounded-fail:
   STO fr ((NumV (I64 n)) :: v*) |- MEMORY.GROW x : (STO, fr, (NumV (I64 fail64)) :: v*, eps)
   -- if ma = fr.MODULE.MEMS[x]
-  -- if MemoryT I64AT { MIN i64, MAX i64_1 } = STO.MEMS[ma].TYPE
-  -- if max = $(i64_1)
+  -- if MemoryT I64AT { MIN u64, MAX u64_1 } = STO.MEMS[ma].TYPE
+  -- if max = $(u64_1)
   -- if pages = $(|STO.MEMS[ma].BYTES| / $page_size)
   -- if nsize = $nat_of_num(I64 n)
   -- if newsize = $(pages + nsize)
@@ -1046,7 +1046,7 @@ rule Step_plain_instr/table-size-i64:
 rule Step_plain_instr/table-grow-i32-unbounded:
   STO fr ((NumV (I32 n)) :: (RefV r) :: v*) |- TABLE.GROW x : (STO', fr, (NumV (I32 old)) :: v*, eps)
   -- if ta = fr.MODULE.TABLES[x]
-  -- if TableT I32AT { MIN i64, MAX eps } rt = STO.TABLES[ta].TYPE
+  -- if TableT I32AT { MIN u64, MAX eps } rt = STO.TABLES[ta].TYPE
   -- if old = |STO.TABLES[ta].REFS|
   -- if newsize = $(old + n)
   -- if $(newsize <= 4294967295)
@@ -1056,7 +1056,7 @@ rule Step_plain_instr/table-grow-i32-unbounded:
 rule Step_plain_instr/table-grow-i32-unbounded-fail:
   STO fr ((NumV (I32 n)) :: (RefV r) :: v*) |- TABLE.GROW x : (STO, fr, (NumV (I32 4294967295)) :: v*, eps)
   -- if ta = fr.MODULE.TABLES[x]
-  -- if TableT I32AT { MIN i64, MAX eps } rt = STO.TABLES[ta].TYPE
+  -- if TableT I32AT { MIN u64, MAX eps } rt = STO.TABLES[ta].TYPE
   -- if old = |STO.TABLES[ta].REFS|
   -- if newsize = $(old + n)
   -- if $(newsize > 4294967295)
@@ -1064,27 +1064,27 @@ rule Step_plain_instr/table-grow-i32-unbounded-fail:
 rule Step_plain_instr/table-grow-i32-bounded:
   STO fr ((NumV (I32 n)) :: (RefV r) :: v*) |- TABLE.GROW x : (STO', fr, (NumV (I32 old)) :: v*, eps)
   -- if ta = fr.MODULE.TABLES[x]
-  -- if TableT I32AT { MIN i64, MAX i64_1 } rt = STO.TABLES[ta].TYPE
+  -- if TableT I32AT { MIN u64, MAX u64_1 } rt = STO.TABLES[ta].TYPE
   -- if old = |STO.TABLES[ta].REFS|
-  -- if max = $(i64_1)
+  -- if max = $(u64_1)
   -- if newsize = $(old + n)
   -- if $(newsize <= max)
   -- if STO_1 = STO[ .TABLES[ta].REFS = STO.TABLES[ta].REFS ++ $make_<refval>(r, n) ]
-  -- if STO' = STO_1[ .TABLES[ta].TYPE = TableT I32AT { MIN newsize, MAX i64_1 } rt ]
+  -- if STO' = STO_1[ .TABLES[ta].TYPE = TableT I32AT { MIN newsize, MAX u64_1 } rt ]
 
 rule Step_plain_instr/table-grow-i32-fail:
   STO fr ((NumV (I32 n)) :: (RefV r) :: v*) |- TABLE.GROW x : (STO, fr, (NumV (I32 4294967295)) :: v*, eps)
   -- if ta = fr.MODULE.TABLES[x]
-  -- if TableT I32AT { MIN i64, MAX i64_1 } rt = STO.TABLES[ta].TYPE
+  -- if TableT I32AT { MIN u64, MAX u64_1 } rt = STO.TABLES[ta].TYPE
   -- if old = |STO.TABLES[ta].REFS|
-  -- if max = $(i64_1)
+  -- if max = $(u64_1)
   -- if newsize = $(old + n)
   -- if $(newsize > max)
 
 rule Step_plain_instr/table-grow-i64-unbounded:
   STO fr ((NumV (I64 n)) :: (RefV r) :: v*) |- TABLE.GROW x : (STO', fr, (NumV (I64 old)) :: v*, eps)
   -- if ta = fr.MODULE.TABLES[x]
-  -- if TableT I64AT { MIN i64, MAX eps } rt = STO.TABLES[ta].TYPE
+  -- if TableT I64AT { MIN u64, MAX eps } rt = STO.TABLES[ta].TYPE
   -- if old = |STO.TABLES[ta].REFS|
   -- if nsize = $nat_of_num(I64 n)
   -- if newsize = $(old + nsize)
@@ -1094,21 +1094,21 @@ rule Step_plain_instr/table-grow-i64-unbounded:
 rule Step_plain_instr/table-grow-i64-bounded:
   STO fr ((NumV (I64 n)) :: (RefV r) :: v*) |- TABLE.GROW x : (STO', fr, (NumV (I64 old)) :: v*, eps)
   -- if ta = fr.MODULE.TABLES[x]
-  -- if TableT I64AT { MIN i64, MAX i64_1 } rt = STO.TABLES[ta].TYPE
+  -- if TableT I64AT { MIN u64, MAX u64_1 } rt = STO.TABLES[ta].TYPE
   -- if old = |STO.TABLES[ta].REFS|
-  -- if max = $(i64_1)
+  -- if max = $(u64_1)
   -- if nsize = $nat_of_num(I64 n)
   -- if newsize = $(old + nsize)
   -- if $(newsize <= max)
   -- if STO_1 = STO[ .TABLES[ta].REFS = STO.TABLES[ta].REFS ++ $make_<refval>(r, nsize) ]
-  -- if STO' = STO_1[ .TABLES[ta].TYPE = TableT I64AT { MIN newsize, MAX i64_1 } rt ]
+  -- if STO' = STO_1[ .TABLES[ta].TYPE = TableT I64AT { MIN newsize, MAX u64_1 } rt ]
 
 rule Step_plain_instr/table-grow-i64-fail:
   STO fr ((NumV (I64 n)) :: (RefV r) :: v*) |- TABLE.GROW x : (STO, fr, (NumV (I64 fail64)) :: v*, eps)
   -- if ta = fr.MODULE.TABLES[x]
-  -- if TableT I64AT { MIN i64, MAX i64_1 } rt = STO.TABLES[ta].TYPE
+  -- if TableT I64AT { MIN u64, MAX u64_1 } rt = STO.TABLES[ta].TYPE
   -- if old = |STO.TABLES[ta].REFS|
-  -- if max = $(i64_1)
+  -- if max = $(u64_1)
   -- if nsize = $nat_of_num(I64 n)
   -- if newsize = $(old + nsize)
   -- if $(newsize > max)

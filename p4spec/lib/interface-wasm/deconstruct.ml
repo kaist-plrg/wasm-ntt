@@ -65,6 +65,7 @@ let z_to_intN signed unsigned z = if z < Z.zero then signed z else unsigned z
 let sl_to_nat (value: Value.t) : int = sl_to_z_nat value |> Z.to_int
 let sl_to_nat32 (value: Value.t) : I32.t = sl_to_z_nat value |> z_to_intN Z.to_int32 Z.to_int32_unsigned
 let sl_to_nat64 (value: Value.t) : I64.t = sl_to_z_nat value |> z_to_intN Z.to_int64 Z.to_int64_unsigned
+let sl_to_u64 (value: Value.t) : I64.t = sl_to_z_nat value |> Z.to_int64_unsigned
 
 type layout = { width : int; exponent : int; mantissa : int }
 let layout32 = { width = 32; exponent = 8; mantissa = 23 }
@@ -863,7 +864,7 @@ and sl_to_limits (value: Value.t) : Types.limits =
   | StructV valuefields ->
     let _atoms, values = List.split valuefields in
     (match values with
-    | [min; max] -> { min = sl_to_int64 min; max = sl_to_opt sl_to_int64 max }
+    | [min; max] -> { min = sl_to_u64 min; max = sl_to_opt sl_to_u64 max }
     | _ -> failwith "Expect 2 limits fields")
   | _ -> failwith "Expected limits"
 
