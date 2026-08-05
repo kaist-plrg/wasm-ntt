@@ -98,8 +98,10 @@ let rec disjoint_exp_literal (exp_a : exp) (exp_b : exp) : bool =
   | ListE _, ListE _ -> true
   | _ -> false
 
-let complementary_num_cmpop (cmpop_a : cmpop) (cmpop_b : cmpop) : bool =
+let complementary_cmpop (cmpop_a : cmpop) (cmpop_b : cmpop) : bool =
   match (cmpop_a, cmpop_b) with
+  | `EqOp, `NeOp
+  | `NeOp, `EqOp
   | `LeOp, `GtOp
   | `GtOp, `LeOp
   | `LtOp, `GeOp
@@ -124,11 +126,11 @@ let complementary_cmp_exp (exp_a : exp) (exp_b : exp) : bool =
       &&
       ( (eq_exp exp_a_l exp_b_l
          && eq_exp exp_a_r exp_b_r
-         && complementary_num_cmpop cmpop_a cmpop_b)
+         && complementary_cmpop cmpop_a cmpop_b)
         ||
         (eq_exp exp_a_l exp_b_r
          && eq_exp exp_a_r exp_b_l
-         && complementary_num_cmpop
+         && complementary_cmpop
               cmpop_a
               (reverse_cmpop cmpop_b)) )
   | _ -> false
@@ -254,28 +256,11 @@ and overlap_exp (tdenv : TDEnv.t) (exp_a : exp) (exp_b : exp) : overlap =
           ( exp_a_l,
             CmpG (`EqOp, optyp_a, exp_a_r),
             CmpG (`EqOp, optyp_b, exp_b_l) )
-    (* Equals and not equals *)
-    | ( CmpE (`EqOp, optyp_a, exp_a_l, exp_a_r),
-        CmpE (`NeOp, optyp_b, exp_b_l, exp_b_r) )
-      when optyp_a = optyp_b && eq_exp exp_a_l exp_b_l && eq_exp exp_a_r exp_b_r
-      ->
-        Partition
-          ( exp_a_l,
-            CmpG (`EqOp, optyp_a, exp_a_r),
-            CmpG (`NeOp, optyp_b, exp_b_r) )
-    | ( CmpE (`EqOp, optyp_a, exp_a_l, exp_a_r),
-        CmpE (`NeOp, optyp_b, exp_b_l, exp_b_r) )
-      when optyp_a = optyp_b && eq_exp exp_a_l exp_b_r && eq_exp exp_a_r exp_b_l
-      ->
-        Partition
-          ( exp_a_l,
-            CmpG (`EqOp, optyp_a, exp_a_r),
-            CmpG (`NeOp, optyp_b, exp_b_l) )
     (* Other comparisons *)
     | ( CmpE (cmpop_a, optyp_a, exp_a_l, exp_a_r),
         CmpE (cmpop_b, optyp_b, exp_b_l, exp_b_r) )
       when optyp_a = optyp_b && eq_exp exp_a_l exp_b_l && eq_exp exp_a_r exp_b_r
-            && complementary_num_cmpop cmpop_a cmpop_b
+            && complementary_cmpop cmpop_a cmpop_b
       ->
         Partition
           ( exp_a_l,
@@ -284,7 +269,7 @@ and overlap_exp (tdenv : TDEnv.t) (exp_a : exp) (exp_b : exp) : overlap =
     | ( CmpE (cmpop_a, optyp_a, exp_a_l, exp_a_r),
         CmpE (cmpop_b, optyp_b, exp_b_l, exp_b_r) )
       when optyp_a = optyp_b && eq_exp exp_a_l exp_b_r && eq_exp exp_a_r exp_b_l
-            && complementary_num_cmpop cmpop_a (reverse_cmpop cmpop_b)
+            && complementary_cmpop cmpop_a (reverse_cmpop cmpop_b)
       ->
         let cmpop_b = reverse_cmpop cmpop_b in
         Partition
