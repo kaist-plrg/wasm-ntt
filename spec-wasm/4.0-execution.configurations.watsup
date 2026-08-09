@@ -159,19 +159,16 @@ syntax admininstr =
   | ReturningInvoke value* funcaddr
   | Throwing tagaddr value*
   | Trapping
-  | Exhausting
   | Label nat instr* value* admininstr*
-  | Frame nat frame value* admininstr*
+  | Frame nat frame value* admininstr* ;; nat: the number of return values of the function
   | Handler nat catch* value* admininstr*
 
-syntax config = (store, frame, value*, admininstr*, nat)
+syntax config = (store, frame, value*, admininstr*)
 
 syntax execoutcome =
   | ValuesO store value*
   | TrapO store
   | ExceptionO store tagaddr value*
-  | ExhaustionO store
-  | LinkO store
 
 syntax numresult =
   | NumValue num_
@@ -208,7 +205,6 @@ var ni : nat
 var nparam : nat
 var nresult : nat
 var nrest : nat
-var budget : nat
 var nbytes : nat
 var nsize : nat
 var newsize : nat
@@ -244,8 +240,6 @@ var xir : exportinst
 dec $page_size : nat
 def $page_size = 65536
 
-dec $default_call_budget : nat
-def $default_call_budget = 256
 
 dec $empty_store : store
 def $empty_store = {

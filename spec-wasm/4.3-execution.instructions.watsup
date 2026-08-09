@@ -36,119 +36,101 @@ def $apply_numresult(NumTrap, v*) =
 ;; rule; no instruction receives a separate big-step implementation.
 rule Steps/values:
   cf |- ValuesO STO v*
-  -- Steps_until: cf |- (STO, fr, v*, eps, budget)
+  -- Steps_until: cf |- (STO, fr, v*, eps)
 
 rule Steps/trap:
   cf |- TrapO STO
-  -- Steps_until: cf |- (STO, fr, v*, (Trapping) :: adm*, budget)
+  -- Steps_until: cf |- (STO, fr, v*, (Trapping) :: adm*)
 
 rule Steps/exception:
   cf |- ExceptionO STO ja v_throw*
   -- Steps_until:
-      cf |- (STO, fr, v*, (Throwing ja v_throw*) :: adm*, budget)
-
-rule Steps/exhaustion:
-  cf |- ExhaustionO STO
-  -- Steps_until: cf |- (STO, fr, v*, (Exhausting) :: adm*, budget)
+      cf |- (STO, fr, v*, (Throwing ja v_throw*) :: adm*)
 
 rule Steps_until/values:
-  (STO, fr, v*, eps, budget) |- (STO, fr, v*, eps, budget)
+  (STO, fr, v*, eps) |- (STO, fr, v*, eps)
 
 rule Steps_until/break:
-  (STO, fr, v*, (Breaking l v_break*) :: adm*, budget) |-
-    (STO, fr, v*, (Breaking l v_break*) :: adm*, budget)
+  (STO, fr, v*, (Breaking l v_break*) :: adm*) |-
+    (STO, fr, v*, (Breaking l v_break*) :: adm*)
 
 rule Steps_until/return:
-  (STO, fr, v*, (Returning v_return*) :: adm*, budget) |-
-    (STO, fr, v*, (Returning v_return*) :: adm*, budget)
+  (STO, fr, v*, (Returning v_return*) :: adm*) |-
+    (STO, fr, v*, (Returning v_return*) :: adm*)
 
 rule Steps_until/return-invoke:
-  (STO, fr, v*, (ReturningInvoke v_return* fa) :: adm*, budget) |-
-    (STO, fr, v*, (ReturningInvoke v_return* fa) :: adm*, budget)
+  (STO, fr, v*, (ReturningInvoke v_return* fa) :: adm*) |-
+    (STO, fr, v*, (ReturningInvoke v_return* fa) :: adm*)
 
 rule Steps_until/throw:
-  (STO, fr, v*, (Throwing ja v_throw*) :: adm*, budget) |-
-    (STO, fr, v*, (Throwing ja v_throw*) :: adm*, budget)
+  (STO, fr, v*, (Throwing ja v_throw*) :: adm*) |-
+    (STO, fr, v*, (Throwing ja v_throw*) :: adm*)
 
 rule Steps_until/trap:
-  (STO, fr, v*, (Trapping) :: adm*, budget) |-
-    (STO, fr, v*, (Trapping) :: adm*, budget)
-
-rule Steps_until/exhaustion:
-  (STO, fr, v*, (Exhausting) :: adm*, budget) |-
-    (STO, fr, v*, (Exhausting) :: adm*, budget)
+  (STO, fr, v*, (Trapping) :: adm*) |-
+    (STO, fr, v*, (Trapping) :: adm*)
 
 rule Steps_until/plain:
-  (STO, fr, v*, (Plain instr) :: adm*, budget) |- cf_final
+  (STO, fr, v*, (Plain instr) :: adm*) |- cf_final
   -- Step:
-      (STO, fr, v*, (Plain instr) :: adm*, budget) |- cf'
+      (STO, fr, v*, (Plain instr) :: adm*) |- cf'
   -- Steps_until: cf' |- cf_final
 
 rule Steps_until/refer:
-  (STO, fr, v*, (Refer r) :: adm*, budget) |- cf_final
+  (STO, fr, v*, (Refer r) :: adm*) |- cf_final
   -- Step:
-      (STO, fr, v*, (Refer r) :: adm*, budget) |- cf'
+      (STO, fr, v*, (Refer r) :: adm*) |- cf'
   -- Steps_until: cf' |- cf_final
 
 rule Steps_until/invoke:
-  (STO, fr, v*, (Invoke fa) :: adm*, budget) |- cf_final
+  (STO, fr, v*, (Invoke fa) :: adm*) |- cf_final
   -- Step:
-      (STO, fr, v*, (Invoke fa) :: adm*, budget) |- cf'
+      (STO, fr, v*, (Invoke fa) :: adm*) |- cf'
   -- Steps_until: cf' |- cf_final
 
 rule Steps_until/frame:
-  (STO, fr, v*, (Frame n fr_inner v_inner* adm_inner*) :: adm*, budget) |-
+  (STO, fr, v*, (Frame n fr_inner v_inner* adm_inner*) :: adm*) |-
     cf_final
-  -- if $(budget > 0)
-  -- if budget_inner = $(budget - 1)
   -- Steps_until:
-      (STO, fr_inner, v_inner*, adm_inner*, budget_inner) |-
-        (STO_inner, fr_inner', v_inner'*, adm_inner'*, budget_inner)
+      (STO, fr_inner, v_inner*, adm_inner*) |-
+        (STO_inner, fr_inner', v_inner'*, adm_inner'*)
   -- Step:
       (STO_inner, fr, v*,
-        (Frame n fr_inner' v_inner'* adm_inner'*) :: adm*, budget) |-
-        cf'
-  -- Steps_until: cf' |- cf_final
-
-rule Steps_until/frame-zero:
-  (STO, fr, v*, (Frame n fr_inner v_inner* adm_inner*) :: adm*, 0) |-
-    cf_final
-  -- Step:
-      (STO, fr, v*, (Frame n fr_inner v_inner* adm_inner*) :: adm*, 0) |-
+        (Frame n fr_inner' v_inner'* adm_inner'*) :: adm*) |-
         cf'
   -- Steps_until: cf' |- cf_final
 
 rule Steps_until/label:
-  (STO, fr, v*, (Label n instr_0* v_inner* adm_inner*) :: adm*, budget) |-
+  (STO, fr, v*, (Label n instr_0* v_inner* adm_inner*) :: adm*) |-
     cf_final
   -- Steps_until:
-      (STO, fr, v_inner*, adm_inner*, budget) |-
-        (STO_inner, fr_inner', v_inner'*, adm_inner'*, budget)
+      (STO, fr, v_inner*, adm_inner*) |-
+        (STO_inner, fr_inner', v_inner'*, adm_inner'*)
   -- Step:
       (STO_inner, fr_inner', v*,
-        (Label n instr_0* v_inner'* adm_inner'*) :: adm*, budget) |-
+        (Label n instr_0* v_inner'* adm_inner'*) :: adm*) |-
         cf'
   -- Steps_until: cf' |- cf_final
 
 rule Steps_until/handler:
-  (STO, fr, v*, (Handler n catch* v_inner* adm_inner*) :: adm*, budget) |-
+  (STO, fr, v*, (Handler n catch* v_inner* adm_inner*) :: adm*) |-
     cf_final
   -- Steps_until:
-      (STO, fr, v_inner*, adm_inner*, budget) |-
-        (STO_inner, fr_inner', v_inner'*, adm_inner'*, budget)
+      (STO, fr, v_inner*, adm_inner*) |-
+        (STO_inner, fr_inner', v_inner'*, adm_inner'*)
   -- Step:
       (STO_inner, fr_inner', v*,
-        (Handler n catch* v_inner'* adm_inner'*) :: adm*, budget) |-
+        (Handler n catch* v_inner'* adm_inner'*) :: adm*) |-
         cf'
   -- Steps_until: cf' |- cf_final
 
 rule Step/refer:
-  (STO, fr, v*, (Refer r) :: adm*, budget) |-
-    (STO, fr, (RefV r) :: v*, adm*, budget)
+  (STO, fr, v*, (Refer r) :: adm*) |-
+    (STO, fr, (RefV r) :: v*, adm*)
 
 rule Step/plain:
-  (STO, fr, v*, (Plain instr) :: adm*, budget) |-
-    (STO', fr', v'*, adm_all*, budget)
+  (STO, fr, v*, (Plain instr) :: adm*) |-
+    (STO', fr', v'*, adm_all*)
   -- Step_plain_instr:
       STO fr v* |- instr : (STO', fr', v'*, adm_emit*)
   -- if adm_all* = adm_emit* ++ adm*
@@ -158,29 +140,27 @@ rule Step/plain:
 ;;
 
 rule Step/frame-step:
-  (STO, fr, v*, (Frame n fr_inner v_inner* adm_inner*) :: adm*, budget) |-
-  (STO', fr, v*, (Frame n fr_inner' v_inner'* adm_inner'*) :: adm*, budget)
-  -- if $(budget > 0)
-  -- if budget_inner = $(budget - 1)
-  -- Step: (STO, fr_inner, v_inner*, adm_inner*, budget_inner) |-
-      (STO', fr_inner', v_inner'*, adm_inner'*, budget_inner)
+  (STO, fr, v*, (Frame n fr_inner v_inner* adm_inner*) :: adm*) |-
+  (STO', fr, v*, (Frame n fr_inner' v_inner'* adm_inner'*) :: adm*)
+  -- Step: (STO, fr_inner, v_inner*, adm_inner*) |-
+      (STO', fr_inner', v_inner'*, adm_inner'*)
 
 rule Step/frame-values:
-  (STO, fr, v*, (Frame n fr_inner v_inner* eps) :: adm*, budget) |-
-    (STO, fr, v_all*, adm*, budget)
+  (STO, fr, v*, (Frame n fr_inner v_inner* eps) :: adm*) |-
+    (STO, fr, v_all*, adm*)
   -- if v_all* = v_inner* ++ v*
 
 rule Step/frame-return:
   (STO, fr, v*, (Frame n fr_inner v_inner*
-    ((Returning v_return*) :: adm_inner*)) :: adm*, budget) |-
-    (STO, fr, v_all*, adm*, budget)
+    ((Returning v_return*) :: adm_inner*)) :: adm*) |-
+    (STO, fr, v_all*, adm*)
   -- if v_result* = $take_<value>(v_return*, n)
   -- if v_all* = v_result* ++ v*
 
 rule Step/frame-return-invoke:
   (STO, fr, v*, (Frame n fr_inner v_inner*
-    ((ReturningInvoke v_return* fa) :: adm_inner*)) :: adm*, budget) |-
-    (STO, fr, v_all*, (Invoke fa) :: adm*, budget)
+    ((ReturningInvoke v_return* fa) :: adm_inner*)) :: adm*) |-
+    (STO, fr, v_all*, (Invoke fa) :: adm*)
   -- if fi = STO.FUNCS[fa]
   -- if DefFuncT (FuncT t_arg* t_result*) = $expanddt(fi.TYPE)
   -- if v_arg* = $take_<value>(v_return*, |t_arg*|)
@@ -188,76 +168,66 @@ rule Step/frame-return-invoke:
 
 rule Step/frame-break:
   (STO, fr, v*, (Frame n fr_inner v_inner*
-    ((Breaking l v_break*) :: adm_inner*)) :: adm*, budget) |-
-    (STO, fr, v*, (Breaking l v_break*) :: adm*, budget)
+    ((Breaking l v_break*) :: adm_inner*)) :: adm*) |-
+    (STO, fr, v*, (Breaking l v_break*) :: adm*)
 
 rule Step/frame-throw:
   (STO, fr, v*, (Frame n fr_inner v_inner*
-    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*, budget) |-
-    (STO, fr, v*, (Throwing ja v_throw*) :: adm*, budget)
+    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*) |-
+    (STO, fr, v*, (Throwing ja v_throw*) :: adm*)
 
 rule Step/frame-trap:
   (STO, fr, v*, (Frame n fr_inner v_inner*
-    ((Trapping) :: adm_inner*)) :: adm*, budget) |-
-    (STO, fr, v*, (Trapping) :: adm*, budget)
-
-rule Step/frame-exhaustion:
-  (STO, fr, v*, (Frame n fr_inner v_inner*
-    ((Exhausting) :: adm_inner*)) :: adm*, budget) |-
-    (STO, fr, v*, (Exhausting) :: adm*, budget)
+    ((Trapping) :: adm_inner*)) :: adm*) |-
+    (STO, fr, v*, (Trapping) :: adm*)
 
 ;;
 ;; Administrative Label contexts
 ;;
 
 rule Step/label-step:
-  (STO, fr, v*, (Label n instr_0* v_inner* adm_inner*) :: adm*, budget) |-
-    (STO', fr', v*, (Label n instr_0* v_inner'* adm_inner'*) :: adm*, budget)
-  -- Step: (STO, fr, v_inner*, adm_inner*, budget) |-
-      (STO', fr', v_inner'*, adm_inner'*, budget)
+  (STO, fr, v*, (Label n instr_0* v_inner* adm_inner*) :: adm*) |-
+    (STO', fr', v*, (Label n instr_0* v_inner'* adm_inner'*) :: adm*)
+  -- Step: (STO, fr, v_inner*, adm_inner*) |-
+      (STO', fr', v_inner'*, adm_inner'*)
 
 rule Step/label-values:
-  (STO, fr, v*, (Label n instr_0* v_inner* eps) :: adm*, budget) |-
-    (STO, fr, v_all*, adm*, budget)
+  (STO, fr, v*, (Label n instr_0* v_inner* eps) :: adm*) |-
+    (STO, fr, v_all*, adm*)
   -- if v_all* = v_inner* ++ v*
 
 rule Step/label-break-zero:
-  (STO, fr, v*, (Label n instr_0* v_inner* ((Breaking 0 v_break*) :: adm_inner*)) :: adm*, budget) |-
-    (STO, fr, v_all*, adm_all*, budget)
+  (STO, fr, v*, (Label n instr_0* v_inner* ((Breaking 0 v_break*) :: adm_inner*)) :: adm*) |-
+    (STO, fr, v_all*, adm_all*)
   -- if v_take* = $take_<value>(v_break*, n)
   -- if v_all* = v_take* ++ v*
   -- if adm_all* = $plain_instrs(instr_0*) ++ adm*
 
 rule Step/label-break-succ:
-  (STO, fr, v*, (Label n instr_0* v_inner* ((Breaking l v_break*) :: adm_inner*)) :: adm*, budget) |-
-    (STO, fr, v*, (Breaking l' v_break*) :: adm*, budget)
+  (STO, fr, v*, (Label n instr_0* v_inner* ((Breaking l v_break*) :: adm_inner*)) :: adm*) |-
+    (STO, fr, v*, (Breaking l' v_break*) :: adm*)
   -- if $(l > 0)
   -- if l' = $(l - 1)
 
 rule Step/label-return:
   (STO, fr, v*, (Label n instr_0* v_inner*
-    ((Returning v_return*) :: adm_inner*)) :: adm*, budget) |-
-    (STO, fr, v*, (Returning v_return*) :: adm*, budget)
+    ((Returning v_return*) :: adm_inner*)) :: adm*) |-
+    (STO, fr, v*, (Returning v_return*) :: adm*)
 
 rule Step/label-return-invoke:
   (STO, fr, v*, (Label n instr_0* v_inner*
-    ((ReturningInvoke v_return* fa) :: adm_inner*)) :: adm*, budget) |-
-    (STO, fr, v*, (ReturningInvoke v_return* fa) :: adm*, budget)
+    ((ReturningInvoke v_return* fa) :: adm_inner*)) :: adm*) |-
+    (STO, fr, v*, (ReturningInvoke v_return* fa) :: adm*)
 
 rule Step/label-throw:
   (STO, fr, v*, (Label n instr_0* v_inner*
-    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*, budget) |-
-    (STO, fr, v*, (Throwing ja v_throw*) :: adm*, budget)
+    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*) |-
+    (STO, fr, v*, (Throwing ja v_throw*) :: adm*)
 
 rule Step/label-trap:
   (STO, fr, v*, (Label n instr_0* v_inner*
-    ((Trapping) :: adm_inner*)) :: adm*, budget) |-
-    (STO, fr, v*, (Trapping) :: adm*, budget)
-
-rule Step/label-exhaustion:
-  (STO, fr, v*, (Label n instr_0* v_inner*
-    ((Exhausting) :: adm_inner*)) :: adm*, budget) |-
-    (STO, fr, v*, (Exhausting) :: adm*, budget)
+    ((Trapping) :: adm_inner*)) :: adm*) |-
+    (STO, fr, v*, (Trapping) :: adm*)
 
 ;;
 ;; Public constant-expression and invocation compatibility boundaries
@@ -280,7 +250,7 @@ rule Eval_const/exec:
   -- if fr_const = { LOCALS eps, MODULE moduleinst }
   -- if adm_const* = $plain_instrs(const)
   -- Steps:
-      (STO, fr_const, eps, adm_const*, $default_call_budget) |-
+      (STO, fr_const, eps, adm_const*) |-
         ValuesO STO' (v :: eps)
 
 rule Eval_consts/cons:
@@ -599,17 +569,11 @@ rule Step_plain_instr/return-call-indirect:
   -- if fi = STO.FUNCS[fa]
   -- if $match_deftype(eps, fi.TYPE, fr.MODULE.TYPES[y])
 
-rule Step/invoke-exhaustion:
-  (STO, fr, v*, (Invoke fa) :: adm*, 0) |-
-    (STO, fr, v*, (Exhausting) :: adm*, 0)
-
 rule Step/invoke-ast:
-  (STO, fr, v*, (Invoke fa) :: adm*, budget) |-
+  (STO, fr, v*, (Invoke fa) :: adm*) |-
     (STO, fr, v_rest*,
       (Frame m fr_callee eps
-        ((Label m eps eps adm_body*) :: eps)) :: adm*,
-      budget)
-  -- if $(budget > 0)
+        ((Label m eps eps adm_body*) :: eps)) :: adm*)
   -- if fi = STO.FUNCS[fa]
   -- if AstFunc func = fi.CODE
   -- if DefFuncT (FuncT t_arg* t_result*) = $expanddt(fi.TYPE)
@@ -625,9 +589,8 @@ rule Step/invoke-ast:
   -- if adm_body* = $plain_instrs(func.BODY)
 
 rule Step/invoke-host-no-result:
-  (STO, fr, v*, (Invoke fa) :: adm*, budget) |-
-    (STO, fr, v_rest*, adm*, budget)
-  -- if $(budget > 0)
+  (STO, fr, v*, (Invoke fa) :: adm*) |-
+    (STO, fr, v_rest*, adm*)
   -- if fi = STO.FUNCS[fa]
   -- if HostFunc _ = fi.CODE
   -- if DefFuncT (FuncT t_arg* eps) = $expanddt(fi.TYPE)
@@ -674,30 +637,29 @@ rule Step_plain_instr/try-table:
 ;;
 
 rule Step/handler-values:
-  (STO, fr, v*, (Handler n catch* v_inner* eps) :: adm*, budget) |-
-    (STO, fr, v_all*, adm*, budget)
+  (STO, fr, v*, (Handler n catch* v_inner* eps) :: adm*) |-
+    (STO, fr, v_all*, adm*)
   -- if v_all* = v_inner* ++ v*
 
 rule Step/handler-catch:
   (STO, fr, v*, (Handler n ((Catch x y) :: catch*) v_inner*
-    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*, budget) |-
-    (STO, fr, v_all*, (Plain (BR y)) :: adm*, budget)
+    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*) |-
+    (STO, fr, v_all*, (Plain (BR y)) :: adm*)
   -- if ja = fr.MODULE.TAGS[x]
   -- if v_all* = v_throw* ++ v*
 
 rule Step/handler-catch-skip:
   (STO, fr, v*, (Handler n ((Catch x y) :: catch*) v_inner*
-    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*, budget) |-
+    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*) |-
     (STO, fr, v*,
       (Handler n catch* v_inner*
-        ((Throwing ja v_throw*) :: adm_inner*)) :: adm*,
-      budget)
+        ((Throwing ja v_throw*) :: adm_inner*)) :: adm*)
   -- if ~(ja = fr.MODULE.TAGS[x])
 
 rule Step/handler-catch-ref:
   (STO, fr, v*, (Handler n ((CatchRef x y) :: catch*) v_inner*
-    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*, budget) |-
-    (STO', fr, (RefV (ExnRef a)) :: v_all*, (Plain (BR y)) :: adm*, budget)
+    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*) |-
+    (STO', fr, (RefV (ExnRef a)) :: v_all*, (Plain (BR y)) :: adm*)
   -- if ja = fr.MODULE.TAGS[x]
   -- if a = |STO.EXNS|
   -- if STO' = STO[ .EXNS = STO.EXNS ++ [{ TAG ja, FIELDS v_throw* }] ]
@@ -705,67 +667,61 @@ rule Step/handler-catch-ref:
 
 rule Step/handler-catch-ref-skip:
   (STO, fr, v*, (Handler n ((CatchRef x y) :: catch*) v_inner*
-    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*, budget) |-
+    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*) |-
     (STO, fr, v*,
       (Handler n catch* v_inner*
-        ((Throwing ja v_throw*) :: adm_inner*)) :: adm*,
-      budget)
+        ((Throwing ja v_throw*) :: adm_inner*)) :: adm*)
   -- if ~(ja = fr.MODULE.TAGS[x])
 
 rule Step/handler-catch-all:
   (STO, fr, v*, (Handler n ((CatchAll x) :: catch*) v_inner*
-    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*, budget) |-
-    (STO, fr, v*, (Plain (BR x)) :: adm*, budget)
+    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*) |-
+    (STO, fr, v*, (Plain (BR x)) :: adm*)
 
 rule Step/handler-catch-all-ref:
   (STO, fr, v*, (Handler n ((CatchAllRef x) :: catch*) v_inner*
-    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*, budget) |-
-    (STO', fr, (RefV (ExnRef a)) :: v*, (Plain (BR x)) :: adm*, budget)
+    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*) |-
+    (STO', fr, (RefV (ExnRef a)) :: v*, (Plain (BR x)) :: adm*)
   -- if a = |STO.EXNS|
   -- if STO' = STO[ .EXNS = STO.EXNS ++ [{ TAG ja, FIELDS v_throw* }] ]
 
 rule Step/handler-rethrow:
   (STO, fr, v*, (Handler n eps v_inner*
-    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*, budget) |-
-    (STO, fr, v*, (Throwing ja v_throw*) :: adm*, budget)
+    ((Throwing ja v_throw*) :: adm_inner*)) :: adm*) |-
+    (STO, fr, v*, (Throwing ja v_throw*) :: adm*)
 
 rule Step/handler-break:
   (STO, fr, v*, (Handler n catch* v_inner*
-    ((Breaking l v_break*) :: adm_inner*)) :: adm*, budget) |-
-    (STO, fr, v*, (Breaking l v_break*) :: adm*, budget)
+    ((Breaking l v_break*) :: adm_inner*)) :: adm*) |-
+    (STO, fr, v*, (Breaking l v_break*) :: adm*)
 
 rule Step/handler-return:
   (STO, fr, v*, (Handler n catch* v_inner*
-    ((Returning v_return*) :: adm_inner*)) :: adm*, budget) |-
-    (STO, fr, v*, (Returning v_return*) :: adm*, budget)
+    ((Returning v_return*) :: adm_inner*)) :: adm*) |-
+    (STO, fr, v*, (Returning v_return*) :: adm*)
 
 rule Step/handler-return-invoke:
   (STO, fr, v*, (Handler n catch* v_inner*
-    ((ReturningInvoke v_return* fa) :: adm_inner*)) :: adm*, budget) |-
-    (STO, fr, v*, (ReturningInvoke v_return* fa) :: adm*, budget)
+    ((ReturningInvoke v_return* fa) :: adm_inner*)) :: adm*) |-
+    (STO, fr, v*, (ReturningInvoke v_return* fa) :: adm*)
 
 rule Step/handler-trap:
   (STO, fr, v*, (Handler n catch* v_inner*
-    ((Trapping) :: adm_inner*)) :: adm*, budget) |-
-    (STO, fr, v*, (Trapping) :: adm*, budget)
-
-rule Step/handler-exhaustion:
-  (STO, fr, v*, (Handler n catch* v_inner*
-    ((Exhausting) :: adm_inner*)) :: adm*, budget) |-
-    (STO, fr, v*, (Exhausting) :: adm*, budget)
+    ((Trapping) :: adm_inner*)) :: adm*) |-
+    (STO, fr, v*, (Trapping) :: adm*)
 
 rule Step/handler-step:
-  (STO, fr, v*, (Handler n catch* v_inner* adm_inner*) :: adm*, budget) |-
-    (STO', fr', v*, (Handler n catch* v_inner'* adm_inner'*) :: adm*, budget)
-  -- Step: (STO, fr, v_inner*, adm_inner*, budget) |-
-      (STO', fr', v_inner'*, adm_inner'*, budget)
+  (STO, fr, v*, (Handler n catch* v_inner* adm_inner*) :: adm*) |-
+    (STO', fr', v*, (Handler n catch* v_inner'* adm_inner'*) :: adm*)
+  -- Step: (STO, fr, v_inner*, adm_inner*) |-
+      (STO', fr', v_inner'*, adm_inner'*)
 
 rule Invoke:
   STO fa v_arg* |- eo
   -- if v_stack* = $rev_<value>(v_arg*)
   -- if fr_init = { LOCALS eps, MODULE $empty_moduleinst }
   -- Steps:
-      (STO, fr_init, v_stack*, (Invoke fa) :: eps, $default_call_budget) |-
+      (STO, fr_init, v_stack*, (Invoke fa) :: eps) |-
         eo
 
 rule Invoke_ok:
