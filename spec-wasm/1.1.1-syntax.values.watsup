@@ -63,5 +63,6 @@ var xx : externidx
 ;; Names
 
 syntax char = nat
-syntax name = char*
+syntax name hint(concrete "nameConcrete") = char*
+syntax nameConcrete = text
 syntax nameset = set<name>

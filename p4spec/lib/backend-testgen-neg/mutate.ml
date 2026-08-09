@@ -41,7 +41,7 @@ type num_context = {
 
 let one = Bigint.of_int 1
 
-let two_to_32 = Bigint.of_string "4294967296"
+let max_i31 = Bigint.of_string "2147483647"
 
 let dedup_bigints (values : Bigint.t list) : Bigint.t list =
   List.fold_left
@@ -59,10 +59,10 @@ let max_bigint (a : Bigint.t) (b : Bigint.t) : Bigint.t =
   if Bigint.compare a b < 0 then b else a
 
 let default_nat_values : Bigint.t list =
-  [ one; Bigint.of_int 32; Bigint.of_int 65536; two_to_32 ]
+  [ one; Bigint.of_int 32; Bigint.of_int 65536; max_i31 ]
 
 let default_int_values : Bigint.t list =
-  [ Bigint.of_int (-16); Bigint.of_int 0; Bigint.of_int 65536; two_to_32 ]
+  [ Bigint.of_int (-16); Bigint.of_int 0; Bigint.of_int 65536; max_i31 ]
 
 let input_nat_values_of_bounds (bounds : int_bounds option) : Bigint.t list =
   match bounds with
@@ -72,7 +72,7 @@ let input_nat_values_of_bounds (bounds : int_bounds option) : Bigint.t list =
         one;
         Bigint.(min_value - one) |> max_bigint one;
         Bigint.(max_value + one);
-        two_to_32;
+        max_i31;
       ]
       |> dedup_bigints
 
@@ -84,7 +84,7 @@ let input_int_values_of_bounds (bounds : int_bounds option) : Bigint.t list =
         Bigint.(min_value - of_int 1);
         Bigint.of_int 0;
         Bigint.(max_value + of_int 1);
-        two_to_32;
+        max_i31;
       ]
       |> dedup_bigints
 
