@@ -1,0 +1,4 @@
+(assert_invalid
+  (module (memory (import "M" "m") i64 0 0x1_0000_0000_0001))
+  "memory size"
+)
