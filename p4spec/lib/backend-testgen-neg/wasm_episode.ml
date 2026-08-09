@@ -3,25 +3,6 @@ module Source = Wasm_interpreter.Source
 module Harness = Wasm_interface.Script_harness
 module Phase = Wasm_phase
 
-type driver_kind =
-  | PlainInstance
-  | ExplicitInstance
-  | ModuleTrapAssertion
-  | ModuleUnlinkableAssertion
-
-type target_driver = {
-  kind : driver_kind;
-  command : Script.command;
-  instance_var : Script.var option;
-  module_var : Script.var option;
-}
-
-type expected_driver_outcome =
-  | ExpectNormalInstantiation
-  | ExpectTrap
-  | ExpectLink
-  | ExpectRawException
-
 type source_group = {
   ordinal : int;
   region : Source.region;
@@ -29,30 +10,11 @@ type source_group = {
   commands : Script.command list;
 }
 
-type target_layout =
-  | SugaredInOneGroup of {
-      group : source_group;
-      module_command : Script.command;
-      driver : target_driver;
-    }
-  | ExplicitAcrossGroups of {
-      definition_group : source_group;
-      module_command : Script.command;
-      driver_group : source_group;
-      driver : target_driver;
-    }
-
 type t = {
   source_path : string;
   immutable_prefix : source_group list;
-  target_layout : target_layout;
+  target_module_var : Script.var option;
   target_entry : Harness.module_entry;
-  expected_outcome : expected_driver_outcome;
-}
-
-type exception_metadata = {
-  tagaddr : string;
-  values : string list;
 }
 
 type grouped_command = {
@@ -72,137 +34,6 @@ let episode_error region message = Error (Phase.EpisodeError (util_region region
 let file_error filename message =
   Error (Phase.EpisodeError (Util.Source.region_of_file filename, message))
 
-let exception_metadata_path wast_path = wast_path ^ ".meta.json"
-
-let metadata_error wast_path message =
-  file_error wast_path ("exception metadata: " ^ message)
-
-let string_field fields name =
-  match List.assoc_opt name fields with Some (`String value) -> Ok value | _ -> Error name
-
-let bool_field fields name =
-  match List.assoc_opt name fields with Some (`Bool value) -> Ok value | _ -> Error name
-
-let int_field fields name =
-  match List.assoc_opt name fields with Some (`Int value) -> Ok value | _ -> Error name
-
-let string_list_field fields name =
-  match List.assoc_opt name fields with
-  | Some (`List values) ->
-      let rec collect reversed = function
-        | [] -> Ok (List.rev reversed)
-        | `String value :: rest -> collect (value :: reversed) rest
-        | _ -> Error name
-      in
-      collect [] values
-  | _ -> Error name
-
-let decode_exception_metadata wast_path json =
-  let expected_basename = Filename.basename wast_path in
-  match json with
-  | `Assoc fields -> (
-      match
-        ( int_field fields "schema",
-          string_field fields "wast_basename",
-          string_field fields "phase",
-          string_field fields "outcome",
-          string_field fields "relation",
-          string_field fields "oracle",
-          bool_field fields "self_checking_wast",
-          string_field fields "tagaddr",
-          string_list_field fields "values" )
-      with
-      | ( Ok 1,
-          Ok wast_basename,
-          Ok "instantiation",
-          Ok "exception",
-          Ok "Init_with_store_ok",
-          Ok "phase-direct",
-          Ok false,
-          Ok tagaddr,
-          Ok values )
-        when String.equal wast_basename expected_basename -> Ok { tagaddr; values }
-      | Ok _, Ok wast_basename, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _
-        when not (String.equal wast_basename expected_basename) ->
-          metadata_error wast_path "wast_basename does not match its .wast file"
-      | Error field, _, _, _, _, _, _, _, _
-      | _, Error field, _, _, _, _, _, _, _
-      | _, _, Error field, _, _, _, _, _, _
-      | _, _, _, Error field, _, _, _, _, _
-      | _, _, _, _, Error field, _, _, _, _
-      | _, _, _, _, _, Error field, _, _, _
-      | _, _, _, _, _, _, Error field, _, _
-      | _, _, _, _, _, _, _, Error field, _
-      | _, _, _, _, _, _, _, _, Error field ->
-          metadata_error wast_path ("missing or invalid field " ^ field)
-      | _ -> metadata_error wast_path "unsupported schema or exception oracle")
-  | _ -> metadata_error wast_path "expected a JSON object"
-
-let read_exception_metadata_if_present wast_path =
-  let metadata_path = exception_metadata_path wast_path in
-  if not (Sys.file_exists metadata_path) then Ok None
-  else
-    try
-      match Yojson.Safe.from_file metadata_path with
-      | json -> decode_exception_metadata wast_path json |> Result.map Option.some
-    with
-    | Sys_error message -> metadata_error wast_path message
-    | Yojson.Json_error message -> metadata_error wast_path ("malformed JSON: " ^ message)
-
-let read_exception_metadata wast_path =
-  match read_exception_metadata_if_present wast_path with
-  | Ok (Some metadata) -> Ok metadata
-  | Ok None -> metadata_error wast_path "missing .meta.json file"
-  | Error _ as error -> error
-
-let remove_file_if_present path =
-  try if Sys.file_exists path then Sys.remove path with Sys_error _ -> ()
-
-let write_exception_metadata_json wast_path json =
-  let metadata_path = exception_metadata_path wast_path in
-  let temporary = metadata_path ^ ".tmp" in
-  Fun.protect
-    ~finally:(fun () -> remove_file_if_present temporary)
-    (fun () ->
-      try
-        let channel = open_out_bin temporary in
-        Fun.protect ~finally:(fun () -> close_out_noerr channel) (fun () ->
-            output_string channel (Yojson.Safe.pretty_to_string json);
-            output_char channel '\n');
-        Sys.rename temporary metadata_path;
-        Ok ()
-      with Sys_error message -> metadata_error wast_path message)
-
-let write_exception_metadata wast_path ~tagaddr ~values =
-  let json =
-    `Assoc
-      [ ("schema", `Int 1);
-        ("wast_basename", `String (Filename.basename wast_path));
-        ("phase", `String "instantiation");
-        ("outcome", `String "exception");
-        ("relation", `String "Init_with_store_ok");
-        ("oracle", `String "phase-direct");
-        ("self_checking_wast", `Bool false);
-        ("tagaddr", `String (Lang.Il.Print.string_of_value tagaddr));
-        ("values", `List (List.map (fun value -> `String (Lang.Il.Print.string_of_value value)) values)) ]
-  in
-  write_exception_metadata_json wast_path json
-
-let write_exception_metadata_strings wast_path metadata =
-  let json =
-    `Assoc
-      [ ("schema", `Int 1);
-        ("wast_basename", `String (Filename.basename wast_path));
-        ("phase", `String "instantiation");
-        ("outcome", `String "exception");
-        ("relation", `String "Init_with_store_ok");
-        ("oracle", `String "phase-direct");
-        ("self_checking_wast", `Bool false);
-        ("tagaddr", `String metadata.tagaddr);
-        ("values", `List (List.map (fun value -> `String value) metadata.values)) ]
-  in
-  write_exception_metadata_json wast_path json
-
 let copy_file source destination =
   let input_channel = open_in_bin source in
   Fun.protect
@@ -220,54 +51,23 @@ let copy_file source destination =
           in
           loop ()))
 
-let remove_metadata_if_present wast_path =
-  let metadata_path = exception_metadata_path wast_path in
-  if Sys.file_exists metadata_path then Sys.remove metadata_path
-
 let copy_artifact ~src_wast ~dst_wast =
-  match read_exception_metadata_if_present src_wast with
-  | Error _ as error -> error
-  | Ok metadata ->
-      try
-        remove_metadata_if_present dst_wast;
-        copy_file src_wast dst_wast;
-        (match metadata with
-        | None -> Ok ()
-        | Some metadata -> write_exception_metadata_strings dst_wast metadata)
-      with Sys_error message -> file_error src_wast message
+  try
+    copy_file src_wast dst_wast;
+    Ok ()
+  with Sys_error message -> file_error src_wast message
 
 let move_artifact ~src_wast ~dst_wast =
-  match read_exception_metadata_if_present src_wast with
-  | Error _ as error -> error
-  | Ok metadata ->
-      try
-        remove_metadata_if_present dst_wast;
-        Sys.rename src_wast dst_wast;
-        (match metadata with
-        | None -> Ok ()
-        | Some metadata ->
-            match write_exception_metadata_strings dst_wast metadata with
-            | Ok () ->
-                Sys.remove (exception_metadata_path src_wast);
-                Ok ()
-            | Error error ->
-                Sys.rename dst_wast src_wast;
-                Error error)
-      with Sys_error message -> file_error src_wast message
+  try
+    Sys.rename src_wast dst_wast;
+    Ok ()
+  with Sys_error message -> file_error src_wast message
 
 let remove_artifact wast_path =
-  let metadata_path = exception_metadata_path wast_path in
-  let paths = [ metadata_path ^ ".tmp"; metadata_path; wast_path ] in
-  let first_error = ref None in
-  List.iter
-    (fun path ->
-      try if Sys.file_exists path then Sys.remove path
-      with Sys_error message ->
-        if Option.is_none !first_error then first_error := Some message)
-    paths;
-  match !first_error with
-  | None -> Ok ()
-  | Some message -> file_error wast_path message
+  try
+    if Sys.file_exists wast_path then Sys.remove wast_path;
+    Ok ()
+  with Sys_error message -> file_error wast_path message
 
 let syntax_error region message = Error (Phase.SyntaxError (util_region region, message))
 
@@ -380,23 +180,13 @@ let module_var_of_command (command : Script.command) =
 
 let driver_of_command (command : Script.command) =
   match command.it with
-  | Script.Instance (instance_var, module_var) ->
-      Some
-        ({ kind = ExplicitInstance; command; instance_var; module_var },
-         ExpectNormalInstantiation)
+  | Script.Instance (_, module_var) -> Some module_var
   | Script.Assertion assertion -> (
       match assertion.it with
       | Script.AssertUninstantiable (module_var, _) ->
-          Some
-            ({ kind = ModuleTrapAssertion; command; instance_var = None; module_var },
-             ExpectTrap)
+          Some module_var
       | Script.AssertUnlinkable (module_var, _) ->
-          Some
-            ( { kind = ModuleUnlinkableAssertion;
-                command;
-                instance_var = None;
-                module_var },
-              ExpectLink )
+          Some module_var
       | _ -> None)
   | _ -> None
 
@@ -407,6 +197,20 @@ let target_entry_of_command (command : Script.command) =
 
 let decode_target_entry command =
   try target_entry_of_command command with
+  | Wasm_interpreter.Parse.Syntax (region, message) -> syntax_error region message
+  | Wasm_interpreter.Decode.Code (region, message) -> syntax_error region message
+  | Wasm_interpreter.Custom.Syntax (region, message) -> syntax_error region message
+
+let decode_observation_target (command : Script.command) =
+  try
+    match command.it with
+    | Script.Assertion assertion -> (
+        match assertion.it with
+        | Script.AssertInvalid (definition, _) ->
+            Ok (Harness.module_entry_of_definition definition)
+        | _ -> episode_error command.at "final command is not assert_invalid")
+    | _ -> episode_error command.at "final command is not assert_invalid"
+  with
   | Wasm_interpreter.Parse.Syntax (region, message) -> syntax_error region message
   | Wasm_interpreter.Decode.Code (region, message) -> syntax_error region message
   | Wasm_interpreter.Custom.Syntax (region, message) -> syntax_error region message
@@ -426,7 +230,7 @@ let validate_named_module_bindings (modules : grouped_command list) =
   loop [] modules
 
 let select_target (indexed : grouped_command list) (final_group : source_group)
-    (final_command : Script.command) (driver : target_driver) =
+    (final_command : Script.command) (driver_module_var : Script.var option) =
   let modules =
     List.filter (fun candidate -> Option.is_some (module_of_command candidate.command)) indexed
   in
@@ -449,7 +253,7 @@ let select_target (indexed : grouped_command list) (final_group : source_group)
             episode_error final_command.at
               "target source group contains multiple module definitions"
         | [] -> (
-            match driver.module_var with
+            match driver_module_var with
             | Some module_var -> (
                 match
                   List.filter
@@ -475,30 +279,15 @@ let select_target (indexed : grouped_command list) (final_group : source_group)
               episode_error final_command.at
                 "final driver does not resolve to the last module definition"
           | Ok selected ->
-          if selected.group.ordinal = final_group.ordinal then
-            let kind =
-              match driver.kind with ExplicitInstance -> PlainInstance | kind -> kind
-            in
-            let driver = { driver with kind } in
-            Ok
-              ( selected,
-                driver,
-                SugaredInOneGroup
-                  { group = selected.group; module_command = selected.command; driver } )
-          else if selected.group.ordinal + 1 = final_group.ordinal then
-            Ok
-              ( selected,
-                driver,
-                ExplicitAcrossGroups
-                  { definition_group = selected.group;
-                    module_command = selected.command;
-                    driver_group = final_group;
-                    driver } )
-          else
-            episode_error final_command.at
-              "explicit target definition and driver are not adjacent source groups"
+              if
+                selected.group.ordinal = final_group.ordinal
+                || selected.group.ordinal + 1 = final_group.ordinal
+              then Ok selected
+              else
+                episode_error final_command.at
+                  "explicit target definition and driver are not adjacent source groups"
 
-let parse_file filename =
+let parse_groups filename =
   let source =
     try
       let channel = open_in_bin filename in
@@ -515,13 +304,13 @@ let parse_file filename =
         | Wasm_interpreter.Parse.Syntax (region, message) -> syntax_error region message
         | Wasm_interpreter.Custom.Syntax (region, message) -> syntax_error region message
       in
-      (match commands with
-      | Error _ as error -> error
-      | Ok commands ->
-          match groups_of_commands filename source commands with
-          | Error _ as error -> error
-          | Ok groups ->
-              match List.rev groups with
+      Result.bind commands (groups_of_commands filename source)
+
+let parse_file filename =
+  match parse_groups filename with
+  | Error _ as error -> error
+  | Ok groups ->
+      (match List.rev groups with
               | [] -> file_error filename "script contains no commands"
               | final_group :: _ -> (
                   match List.rev final_group.commands with
@@ -531,53 +320,70 @@ let parse_file filename =
                       | None ->
                           episode_error final_command.at
                             "final command is not an instantiation driver"
-                      | Some (driver, expected_outcome) ->
-                          match select_target (indexed_commands groups) final_group final_command driver with
+                      | Some driver_module_var ->
+                          match
+                            select_target (indexed_commands groups) final_group
+                              final_command driver_module_var
+                          with
                           | Error _ as error -> error
-                          | Ok (selected, _, target_layout) -> (
+                          | Ok selected -> (
                               match decode_target_entry selected.command with
                               | Error _ as error -> error
-                              | Ok target_entry -> (
-                                  match read_exception_metadata_if_present filename with
-                                  | Error _ as error -> error
-                                  | Ok (Some _) when expected_outcome <> ExpectNormalInstantiation ->
-                                      episode_error final_command.at
-                                        "exception metadata requires a raw normal instantiation driver"
-                                  | Ok metadata ->
+                              | Ok target_entry ->
                                   let immutable_prefix =
                                     List.filter
                                       (fun group -> group.ordinal < selected.group.ordinal)
                                       groups
                                   in
+                                  let target_module_var =
+                                    match module_var_of_command selected.command with
+                                    | Some module_var -> module_var
+                                    | None -> assert false
+                                  in
                                   Ok
                                     { source_path = filename;
                                       immutable_prefix;
-                                      target_layout;
-                                      target_entry;
-                                      expected_outcome =
-                                        (match metadata with
-                                        | Some _ -> ExpectRawException
-                                        | None -> expected_outcome) })))))
+                                      target_module_var;
+                                      target_entry }))))
+
+let parse_observation_file ~prefix_paths filename =
+  let rec load_prefix reversed = function
+    | [] -> Ok (List.concat (List.rev reversed))
+    | prefix_path :: rest -> (
+        match parse_groups prefix_path with
+        | Error _ as error -> error
+        | Ok groups -> load_prefix (groups :: reversed) rest)
+  in
+  match load_prefix [] prefix_paths with
+  | Error _ as error -> error
+  | Ok prefix_groups -> (
+      match parse_groups filename with
+      | Error _ as error -> error
+      | Ok groups -> (
+          match List.rev groups with
+          | [] -> file_error filename "script contains no commands"
+          | final_group :: _ -> (
+              match List.rev final_group.commands with
+              | [] -> assert false
+              | final_command :: _ -> (
+                  match decode_observation_target final_command with
+                  | Error _ as error -> error
+                  | Ok target_entry ->
+                      let inline_prefix =
+                        List.filter
+                          (fun group -> group.ordinal < final_group.ordinal)
+                          groups
+                      in
+                      Ok
+                        { source_path = filename;
+                          immutable_prefix = prefix_groups @ inline_prefix;
+                          target_module_var = None;
+                          target_entry }))))
 
 let prefix_commands episode =
   List.concat_map (fun group -> group.commands) episode.immutable_prefix
 
-let target_module_var episode =
-  let command =
-    match episode.target_layout with
-    | SugaredInOneGroup { module_command; _ }
-    | ExplicitAcrossGroups { module_command; _ } -> module_command
-  in
-  match command.it with
-  | Script.Module (module_var, _) -> module_var
-  | _ -> assert false
-
-let target_driver episode =
-  match episode.target_layout with
-  | SugaredInOneGroup { driver; _ }
-  | ExplicitAcrossGroups { driver; _ } -> driver
-
-let target_driver_region episode = util_region (target_driver episode).command.at
+let target_module_var episode = episode.target_module_var
 
 let target_value episode = episode.target_entry.value
 

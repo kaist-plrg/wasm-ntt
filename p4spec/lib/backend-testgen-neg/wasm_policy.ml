@@ -4,10 +4,8 @@ module Phase = Wasm_phase
 type output_category =
   | ValidationValid
   | ValidationInvalid
-  | InitSuccess
-  | InitTrap
-  | InitException
-  | InitUnlinkable
+  | InitPass
+  | InitFail
   | CloseMiss
 
 type emission_policy =
@@ -32,15 +30,9 @@ let of_validation_result = function
         emission = MainArtifact ValidationInvalid }
 
 let of_instantiation_result = function
-  | Phase.Instantiated _ ->
-      { coverage = coverage Multi.Exact true; emission = MainArtifact InitSuccess }
-  | Phase.Trapped _ ->
-      { coverage = coverage Multi.Exact true; emission = MainArtifact InitTrap }
-  | Phase.Thrown _ ->
-      { coverage = coverage Multi.Exact true; emission = MainArtifact InitException }
-  | Phase.LinkingRejected (Phase.LinkOutcome _) ->
-      { coverage = coverage Multi.Exact false;
-        emission = MainArtifact InitUnlinkable }
-  | Phase.LinkingRejected (Phase.UnknownImport _)
-  | Phase.TargetValidationRejected _ ->
+  | Phase.Instantiated _ | Phase.Trapped _ | Phase.Thrown _ ->
+      { coverage = coverage Multi.Exact true; emission = MainArtifact InitPass }
+  | Phase.InitRelationFailed _ ->
+      { coverage = coverage Multi.Likely false; emission = MainArtifact InitFail }
+  | Phase.ImportResolutionFailed _ ->
       { coverage = None; emission = DiagnosticOnly }

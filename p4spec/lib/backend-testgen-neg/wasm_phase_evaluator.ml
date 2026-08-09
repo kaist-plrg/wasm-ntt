@@ -54,38 +54,6 @@ let check_validation_expectation expectation result =
            "validation expectation mismatch: expected " ^ expected ^ ", got "
            ^ validation_category result ))
 
-let instantiation_category = function
-  | Phase.Instantiated _ -> "instantiated"
-  | Phase.Trapped _ -> "trapped"
-  | Phase.Thrown _ -> "thrown"
-  | Phase.TargetValidationRejected _ -> "target validation rejected"
-  | Phase.LinkingRejected _ -> "linking rejected"
-
-let check_instantiation_oracle episode result =
-  let expected = episode.Episode.expected_outcome in
-  let matches =
-    match (expected, result) with
-    | Episode.ExpectNormalInstantiation, Phase.Instantiated _
-    | Episode.ExpectTrap, Phase.Trapped _
-    | Episode.ExpectLink, Phase.LinkingRejected _
-    | Episode.ExpectRawException, Phase.Thrown _ -> true
-    | _ -> false
-  in
-  if matches then Ok ()
-  else
-    let expected =
-      match expected with
-      | Episode.ExpectNormalInstantiation -> "instantiated"
-      | Episode.ExpectTrap -> "trapped"
-      | Episode.ExpectLink -> "linking rejected"
-      | Episode.ExpectRawException -> "thrown"
-    in
-    Error
-      (Phase.EpisodeError
-         ( Episode.target_driver_region episode,
-           "instantiation oracle mismatch: expected " ^ expected ^ ", got "
-           ^ instantiation_category result ))
-
 let classify_validation (relation_result : Sim.rel_result) coverage graph =
   match relation_result with
   | Pass _ -> Ok (Phase.ValidationAccepted, coverage, graph)
@@ -129,39 +97,36 @@ let evaluate_instantiation_common ~run_init env episode mutated_target =
     match Episode.prepare env.runtime episode mutated_target with
     | Error _ as error -> error
     | Ok (state, target_entry) ->
-        let module Simulator = (val env.simulator : Sim.SIM) in
-        (match Simulator.Interp.eval_rel "Module_ok" [ target_entry.value ] with
-        | Fail (at, message) ->
-            Ok
-              ( Phase.TargetValidationRejected
-                  { relation = "Module_ok"; at; message },
-                None,
-                None )
-        | Pass _ -> (
-            match Harness.resolve_imports no_region state target_entry.module_ with
-            | Error (Harness.UnknownImport message) ->
-                Ok (Phase.LinkingRejected (Phase.UnknownImport { message }), None, None)
-            | Ok externaddrs ->
-                let inputs =
-                  [ state.Harness.store;
-                    target_entry.Harness.value;
-                    Harness.externaddr_list externaddrs ]
-                in
-                let observation =
-                  run_init ~root:(Episode.mutation_root mutated_target) ~inputs
-                in
-                match observation.relation_result with
-                | Fail (at, message) ->
-                    Error
-                      (Phase.RelationFailure
-                         { relation = "Init_with_store_ok"; at; message })
-                | Pass outputs ->
-                    Result.map
-                      (fun result ->
-                        (result, Some observation.coverage, observation.graph))
-                      (Phase.instantiation_result_of_outputs ~at:no_region outputs)))
+        (match Harness.resolve_imports no_region state target_entry.module_ with
+        | Error (Harness.UnknownImport message) ->
+            Ok (Phase.ImportResolutionFailed { message }, None, None)
+        | Ok externaddrs ->
+            let inputs =
+              [ state.Harness.store;
+                target_entry.Harness.value;
+                Harness.externaddr_list externaddrs ]
+            in
+            let observation =
+              run_init ~root:(Episode.mutation_root mutated_target) ~inputs
+            in
+            match observation.relation_result with
+            | Fail (at, message) ->
+                Ok
+                  ( Phase.InitRelationFailed
+                      { relation = "Init_with_store_ok"; at; message },
+                    Some observation.coverage,
+                    observation.graph )
+            | Pass outputs ->
+                Result.map
+                  (fun result ->
+                    (result, Some observation.coverage, observation.graph))
+                  (Phase.instantiation_result_of_outputs ~at:no_region outputs))
   with
   | InterpError (at, message) -> Error (Phase.HarnessFailure (at, message))
+  | Z.Overflow ->
+      Error
+        (Phase.HarnessFailure
+           (no_region, "integer conversion overflow during Init_with_store_ok"))
 
 let evaluate_instantiation_with_dangling env episode mutated_target =
   let run_init ~root ~inputs =

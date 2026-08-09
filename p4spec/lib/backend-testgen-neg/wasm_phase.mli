@@ -4,10 +4,6 @@ type relation_failure = {
   message : string;
 }
 
-type linking_failure =
-  | UnknownImport of { message : string }
-  | LinkOutcome of { store : Lang.Il.value }
-
 type validation_result =
   | ValidationAccepted
   | ValidationRejected of relation_failure
@@ -27,15 +23,13 @@ type instantiation_result =
       tagaddr : Lang.Il.value;
       values : Lang.Il.value list;
     }
-  | TargetValidationRejected of relation_failure
-  | LinkingRejected of linking_failure
+  | InitRelationFailed of relation_failure
+  | ImportResolutionFailed of { message : string }
 
 type phase_error =
   | SyntaxError of Util.Source.region * string
   | EpisodeError of Util.Source.region * string
-  | RelationFailure of relation_failure
   | HarnessFailure of Util.Source.region * string
-  | UnsupportedOutcome of string
   | CoverageMetadataError of string
 
 type 'a evaluation = ('a, phase_error) result

@@ -33,6 +33,15 @@ type verified = {
   coverage : Single.t option;
 }
 
+type mutation_provenance = {
+  intended_iid : int;
+  source_vid : int;
+  depth : int option;
+  mutation : string;
+  source : string;
+  mutated : string;
+}
+
 val single_module_of_root :
   Lang.Il.value -> (Lang.Il.value, Wasm_phase.phase_error) result
 
@@ -63,11 +72,19 @@ val load_seed_with_vdg :
   string ->
   (seed_load, Wasm_phase.phase_error) result
 
+val decorate_artifact :
+  provenance:mutation_provenance ->
+  selected_hits:Domain.Lib.IIdSet.t ->
+  selected_close_misses:Domain.Lib.IIdSet.t ->
+  string ->
+  (string, Wasm_phase.phase_error) result
+
 val render_and_recheck :
   env:Wasm_phase_evaluator.env ->
   seed:seed ->
   mutated_module:Lang.Il.value ->
   observation:observation ->
+  provenance:mutation_provenance ->
   temporary_path:string ->
   selected_hits:Domain.Lib.IIdSet.t ->
   selected_close_misses:Domain.Lib.IIdSet.t ->

@@ -880,6 +880,9 @@ let wasm_run_testgen_command =
        flag "-seed" (optional int) ~doc:"seed for random number generator"
      and bootdir =
        flag "-boot-dir" (optional string) ~doc:"seed wasm directory for boot"
+     and boot_observe_dirs =
+       flag "-boot-observe-dir" (listed string)
+         ~doc:"DIR observation-only Wasm directory for instantiation cold boot"
      and path_boot =
        flag "-boot-file" (optional string) ~doc:"coverage file for boot"
      and random = flag "-random" no_arg ~doc:"randomize AST selection"
@@ -919,6 +922,17 @@ let wasm_run_testgen_command =
                  (CommandError
                     "Error: should specify either -boot-dir or -boot-file")
          in
+         if boot_observe_dirs <> [] && phase <> Backend_testgen_neg.Config.Instantiation
+         then
+           raise
+             (CommandError
+                "Error: -boot-observe-dir is only valid with -phase instantiation");
+         (match (boot_observe_dirs, bootmode) with
+         | _ :: _, Backend_testgen_neg.Modes.Warm _ ->
+             raise
+               (CommandError
+                  "Error: -boot-observe-dir requires cold boot with -boot-dir")
+         | _ -> ());
          let mutationmode =
            if random then Backend_testgen_neg.Modes.Random
            else if hybrid then Backend_testgen_neg.Modes.Hybrid
@@ -964,7 +978,8 @@ let wasm_run_testgen_command =
                     "Error: should specify either -fuel or -timeout")
          in
          Backend_testgen_neg.Gen.wasm_fuzzer budget spec_sl phase gendir
-           name_campaign randseed logmode bootmode mutationmode covermode focus
+           name_campaign randseed logmode bootmode boot_observe_dirs mutationmode
+           covermode focus
        with
        | CommandError msg -> Format.printf "%s\n" msg
        | ParseError (at, msg)

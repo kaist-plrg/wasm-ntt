@@ -653,7 +653,8 @@ let fuzzer (fuel : int) (spec : spec) (relname : string)
 
 (* Wasm fuzzing pipeline *)
 
-let find_interestingw (config : Config.tw) (cover : DCov_single.t) :
+let find_interestingw ~record_close_misses (config : Config.tw)
+    (cover : DCov_single.t) :
     IIdSet.t * IIdSet.t =
   DCov_multi.Cover.fold
     (fun iid (branch_fuzz : DCov_multi.Branch.t)
@@ -662,7 +663,7 @@ let find_interestingw (config : Config.tw) (cover : DCov_single.t) :
       match (branch_single.status, branch_fuzz.status) with
       | Hit, Miss _ ->
           (IIdSet.add iid iids_hit_new, iids_close_miss_new)
-      | Miss (_ :: _), Miss [] ->
+      | Miss (_ :: _), Miss [] when record_close_misses ->
           (iids_hit_new, IIdSet.add iid iids_close_miss_new)
       | _ -> (iids_hit_new, iids_close_miss_new))
     config.seed.cover
@@ -774,7 +775,8 @@ let update_interestingw (fuel : int) (iid : iid) (idx_seed : int)
     (strategy : string) (idx_method : int) (idx_mutation : int)
     (trials : int ref) (config : Config.tw) (log : Logger.t)
     (path_gen_wasm : string) (kind : Mutate.kind) (seed : Candidate.seed)
-    (mutated_module : value) : unit =
+    (mutated_module : value)
+    (provenance : Candidate.mutation_provenance) : unit =
   let time_start = Unix.gettimeofday () in
   F.asprintf "[F %d] [P %d] [S %d] [%s %d] [M %d] [%d/%d] Evaluating %s" fuel
     iid idx_seed strategy idx_method idx_mutation !trials Config.trials_seed
@@ -811,14 +813,18 @@ let update_interestingw (fuel : int) (iid : iid) (idx_seed : int)
       | Some policy, Policy.MainArtifact category, Some cover, Some category'
         when category = category' ->
           let iids_hit_new, iids_close_miss_new =
-            find_interestingw config cover
+            find_interestingw
+              ~record_close_misses:policy.record_close_misses config cover
           in
           let iids_hit_new =
             Candidate.select_hits ~covermode:config.modes.covermode
               ~intended:iid iids_hit_new
           in
           let iids_close_miss_new =
-            if policy.record_close_misses then iids_close_miss_new
+            if
+              policy.record_close_misses
+              && IIdSet.is_empty iids_hit_new
+            then iids_close_miss_new
             else IIdSet.empty
           in
           if
@@ -832,7 +838,7 @@ let update_interestingw (fuel : int) (iid : iid) (idx_seed : int)
               (fun () ->
                 match
                   Candidate.render_and_recheck ~env ~seed ~mutated_module
-                    ~observation ~temporary_path:path_gen_wasm
+                    ~observation ~provenance ~temporary_path:path_gen_wasm
                     ~selected_hits:iids_hit_new
                     ~selected_close_misses:iids_close_miss_new
                 with
@@ -876,8 +882,8 @@ let classify_mutationw' (fuel : int) (iid : iid) (idx_seed : int)
     (strategy : string) (idx_method : int) (idx_mutation : int)
     (trials : int ref) (config : Config.tw) (log : Logger.t)
     (dirname_gen_tmp : string) (path_wasm : string)
-    (_comment_gen_wasm : string) (kind : Mutate.kind) (_value_source : value)
-    (_value_mutated : value) (seed : Candidate.seed) (mutated_module : value) :
+    (depth : int option) (kind : Mutate.kind) (value_source : value)
+    (value_mutated : value) (seed : Candidate.seed) (mutated_module : value) :
     unit =
   let path_gen_wasm =
     F.asprintf "%s/%s_F%dP%dS%d%s%dM%dT%d.wast" dirname_gen_tmp
@@ -888,14 +894,23 @@ let classify_mutationw' (fuel : int) (iid : iid) (idx_seed : int)
        else "")
       idx_method idx_mutation !trials
   in
+  let provenance =
+    Candidate.
+      { intended_iid = iid;
+        source_vid = value_source.note.vid;
+        depth;
+        mutation = Mutate.string_of_kind kind;
+        source = Sl.Print.string_of_value value_source;
+        mutated = Sl.Print.string_of_value value_mutated }
+  in
   update_interestingw fuel iid idx_seed strategy idx_method idx_mutation trials
-    config log path_gen_wasm kind seed mutated_module
+    config log path_gen_wasm kind seed mutated_module provenance
 
 let classify_mutationw (fuel : int) (iid : iid) (idx_seed : int)
     (strategy : string) (idx_method : int) (idx_mutation : int)
     (trials : int ref) (config : Config.tw) (log : Logger.t)
     (dirname_gen_tmp : string) (path_wasm : string)
-    (comment_gen_wasm : string) (vdg : Dep.Graph.t) (kind : Mutate.kind)
+    (depth : int option) (vdg : Dep.Graph.t) (kind : Mutate.kind)
     (value_source : value) (value_mutated : value) (seed : Candidate.seed) :
     unit =
   let value_program_before =
@@ -913,7 +928,7 @@ let classify_mutationw (fuel : int) (iid : iid) (idx_seed : int)
   | Ok mutated_module ->
     try
       classify_mutationw' fuel iid idx_seed strategy idx_method idx_mutation
-        trials config log dirname_gen_tmp path_wasm comment_gen_wasm kind
+        trials config log dirname_gen_tmp path_wasm depth kind
         value_source value_mutated seed mutated_module
     with err ->
       Logger.warn config.modes.logmode log
@@ -934,7 +949,7 @@ let fuzz_mutationw (fuel : int) (iid : iid) (idx_seed : int)
     (strategy : string) (idx_method : int) (trials : int ref)
     (config : Config.tw) (log : Logger.t) (query : Query.t)
     (dirname_gen_tmp : string) (path_wasm : string)
-    (comment_gen_wasm : string) (vdg : Dep.Graph.t) (seed : Candidate.seed)
+    (depth : int option) (vdg : Dep.Graph.t) (seed : Candidate.seed)
     (vid_source : vid) : unit =
   F.asprintf "[F %d] [P %d] [S %d] [%s %d]\n[File] %s\n" fuel iid idx_seed
     strategy idx_method path_wasm
@@ -969,12 +984,8 @@ let fuzz_mutationw (fuel : int) (iid : iid) (idx_seed : int)
           (Mutate.string_of_kind kind)
           (Sl.Print.string_of_value value_mutated)
         |> Query.answer query;
-        let comment_gen_wasm =
-          F.asprintf "%s\n;; Mutation %s\n" comment_gen_wasm
-            (Mutate.string_of_kind kind)
-        in
         classify_mutationw fuel iid idx_seed strategy idx_method idx_mutation
-          trials config log dirname_gen_tmp path_wasm comment_gen_wasm vdg kind
+          trials config log dirname_gen_tmp path_wasm depth vdg kind
           value_source value_mutated seed))
     mutations
 
@@ -988,12 +999,8 @@ let fuzz_derivationsw (fuel : int) (iid : iid) (idx_seed : int)
       if
         !trials < Config.trials_seed && DCov_multi.is_miss config.seed.cover iid
       then
-        let comment_gen_wasm =
-          F.asprintf ";; Intended iid %d\n;; Source vid %d\n;; Depth %d\n" iid
-            vid_source depth
-        in
         fuzz_mutationw fuel iid idx_seed "Derive" idx_derivation trials config
-          log query dirname_gen_tmp path_wasm comment_gen_wasm vdg seed
+          log query dirname_gen_tmp path_wasm (Some depth) vdg seed
           vid_source)
     derivations_source
 
@@ -1028,11 +1035,8 @@ let fuzz_randomsw (fuel : int) (iid : iid) (idx_seed : int)
       if
         !trials < Config.trials_seed && DCov_multi.is_miss config.seed.cover iid
       then
-        let comment_gen_wasm =
-          F.asprintf ";; Intended iid %d\n;; Source vid %d\n" iid vid_source
-        in
         fuzz_mutationw fuel iid idx_seed "Random" idx_random trials config log
-          query dirname_gen_tmp path_wasm comment_gen_wasm vdg seed vid_source)
+          query dirname_gen_tmp path_wasm None vdg seed vid_source)
     vids_source
 
 let fuzz_randoms_boundedw (fuel : int) (iid : iid) (idx_seed : int)
@@ -1214,14 +1218,15 @@ let fuzz_seedsw ?(deadline : float option) (fuel : int) (iid : iid)
             Unix.alarm 0 |> ignore;
             Sys.set_signal Sys.sigalrm signal_previous)
           (fun () ->
-            Unix.alarm timeout_seed |> ignore;
-            try
-              fuzz_seedw fuel iid idx_seed config log query dirname_gen_tmp
-                path_wasm
-            with Timeout ->
-              F.asprintf "[F %d] [S %d] [P %d] Timeout on %s" fuel iid idx_seed
-                path_wasm
-              |> Logger.warn config.modes.logmode log)))
+            Boot.with_wasm_interrupt (fun () ->
+                Unix.alarm timeout_seed |> ignore;
+                try
+                  fuzz_seedw fuel iid idx_seed config log query dirname_gen_tmp
+                    path_wasm
+                with Timeout ->
+                  F.asprintf "[F %d] [S %d] [P %d] Timeout on %s" fuel iid
+                    idx_seed path_wasm
+                  |> Logger.warn config.modes.logmode log))))
     paths_wasm
 
 let fuzz_danglingw ?(deadline : float option) (fuel : int) (iid : iid)
@@ -1251,6 +1256,7 @@ let fuzz_danglingw ?(deadline : float option) (fuel : int) (iid : iid)
           paths_wasm
       with
       | Focus_timeout as err -> raise err
+      | Sys.Break as err -> raise err
       | err ->
           F.asprintf "[F %d] [P %d] Unexpected error occurred : %s" fuel iid
             (Printexc.to_string err)
@@ -1352,9 +1358,10 @@ let wasm_fuzzer_init (spec : spec) (phase : Config.wasm_phase)
     (dirname_gen : string)
     (name_campaign : string option) (randseed : int option)
     (logmode : Modes.logmode) (bootmode : Modes.bootmode)
+    (boot_observe_dirs : string list)
     (mutationmode : Modes.mutationmode) (covermode : Modes.covermode)
     (focus : Config.wasm_focus option) (budget : Config.wasm_budget) :
-    Config.tw =
+    Config.tw = (* log/, query/, welltyped/, illtyped/, closemiss/ 를 만들고 boot.coverage를 기록 *)
   let name_campaign =
     match name_campaign with
     | Some name_campaign -> name_campaign
@@ -1374,7 +1381,7 @@ let wasm_fuzzer_init (spec : spec) (phase : Config.wasm_phase)
   let logname_init = storage.dirname_log ^ "/init.log" in
   let log_init = Logger.init logname_init in
   F.asprintf
-    "[COMMAND] wasm-testgen -phase %s (coverage relation %s) -gen %s%s%s%s%s%s"
+    "[COMMAND] wasm-testgen -phase %s (coverage relation %s) -gen %s%s%s%s%s%s%s"
     (Config.string_of_wasm_phase phase)
     (Config.coverage_relation phase)
     dirname_gen
@@ -1382,6 +1389,9 @@ let wasm_fuzzer_init (spec : spec) (phase : Config.wasm_phase)
     | Cold (excludes, dirname_seed_wasm) ->
         "-e" ^ String.concat " " excludes ^ "-cold " ^ dirname_seed_wasm
     | Warm path_boot -> " -warm " ^ path_boot)
+    (boot_observe_dirs
+    |> List.map (fun directory -> " -boot-observe-dir " ^ directory)
+    |> String.concat "")
     (match modes.mutationmode with
     | Random -> " -random"
     | Derive -> ""
@@ -1399,6 +1409,35 @@ let wasm_fuzzer_init (spec : spec) (phase : Config.wasm_phase)
   |> Logger.log modes.logmode log_init;
   let specenv = Config.init_wasm_specenv spec phase in
   "Booting initial coverage" |> Logger.log modes.logmode log_init;
+  let log_diagnostics label diagnostics =
+    List.iter
+      (fun (diagnostic : Boot.wasm_boot_diagnostic) ->
+        F.asprintf "[%s DIAGNOSTIC] %s: %s (%s)" label
+          diagnostic.Boot.filename diagnostic.Boot.category
+          diagnostic.Boot.message
+        |> Logger.warn modes.logmode log_init)
+      diagnostics
+  in
+  let fail_boot label failures =
+    List.iter
+      (fun (failure : Boot.wasm_boot_failure) ->
+        F.asprintf "[%s FAILURE] %s: %s" label failure.Boot.filename
+          (Boot.string_of_phase_error failure.Boot.error)
+        |> Logger.warn modes.logmode log_init)
+      failures;
+    Logger.close log_init;
+    failwith (label ^ " failed; see init.log for every seed failure")
+  in
+  let write_coverage path coverage =
+    DCov_multi.log ~path_cov_opt:(Some path) coverage;
+    match Metadata.write ~phase path with
+    | Ok () -> ()
+    | Error error ->
+        Logger.close log_init;
+        failwith
+          ("Wasm cold boot coverage metadata write failed: "
+          ^ Boot.string_of_phase_error error)
+  in
   let cover_seed =
     match modes.bootmode with
     | Cold (_, dirname_seed_wasm) ->
@@ -1407,31 +1446,34 @@ let wasm_fuzzer_init (spec : spec) (phase : Config.wasm_phase)
              dirname_seed_wasm
          with
         | Ok { Boot.coverage = cover_seed; diagnostics } ->
-            List.iter
-              (fun (diagnostic : Boot.wasm_boot_diagnostic) ->
-                F.asprintf "[BOOT DIAGNOSTIC] %s: %s (%s)"
-                  diagnostic.Boot.filename diagnostic.Boot.category
-                  diagnostic.Boot.message
-                |> Logger.warn modes.logmode log_init)
-              diagnostics;
-            let path_cov = dirname_gen ^ "/boot.coverage" in
-            DCov_multi.log ~path_cov_opt:(Some path_cov) cover_seed;
-            (match Metadata.write ~phase path_cov with
-            | Ok () -> cover_seed
-            | Error error ->
-                Logger.close log_init;
-                failwith
-                  ("Wasm cold boot coverage metadata write failed: "
-                  ^ Boot.string_of_phase_error error))
-        | Error failures ->
-            List.iter
-              (fun (failure : Boot.wasm_boot_failure) ->
-                F.asprintf "[BOOT FAILURE] %s: %s" failure.Boot.filename
-                  (Boot.string_of_phase_error failure.Boot.error)
-                |> Logger.warn modes.logmode log_init)
-              failures;
-            Logger.close log_init;
-            failwith "Wasm cold boot failed; see init.log for every seed failure")
+            log_diagnostics "BOOT" diagnostics;
+            if boot_observe_dirs <> [] then (
+              write_coverage (dirname_gen ^ "/boot-primary.coverage") cover_seed;
+              let total, hits, coverage = DCov_multi.measure_coverage cover_seed in
+              F.asprintf "Finished primary boot coverage %d/%d (%.2f%%)" hits
+                total coverage
+              |> Logger.log modes.logmode log_init);
+            List.fold_left
+              (fun coverage directory ->
+                let _, hits_before, _ = DCov_multi.measure_coverage coverage in
+                match
+                  Boot.wasm_boot_observe specenv.simulator specenv.spec
+                    ~coverage directory
+                with
+                | Ok { Boot.coverage; diagnostics } ->
+                    log_diagnostics "BOOT OBSERVE" diagnostics;
+                    let total, hits_after, percent =
+                      DCov_multi.measure_coverage coverage
+                    in
+                    F.asprintf
+                      "Finished observation boot %s: +%d hits, combined %d/%d \
+                       (%.2f%%)"
+                      directory (hits_after - hits_before) hits_after total percent
+                    |> Logger.log modes.logmode log_init;
+                    coverage
+                | Error failures -> fail_boot "Wasm observation boot" failures)
+              cover_seed boot_observe_dirs
+        | Error failures -> fail_boot "Wasm cold boot" failures)
     | Warm path_boot -> (
         match Boot.wasm_boot_warm ~phase path_boot with
         | Ok coverage -> coverage
@@ -1440,6 +1482,9 @@ let wasm_fuzzer_init (spec : spec) (phase : Config.wasm_phase)
             failwith
               ("Wasm warm boot failed: " ^ Boot.string_of_phase_error error))
   in
+  (match modes.bootmode with
+  | Cold _ -> write_coverage (dirname_gen ^ "/boot.coverage") cover_seed
+  | Warm _ -> ());
   let seed = Config.init_seed cover_seed in
   let total, hits, coverage = DCov_multi.measure_coverage cover_seed in
   F.asprintf "Finished booting with initial coverage %d/%d (%.2f%%)" hits total
@@ -1460,11 +1505,12 @@ let wasm_fuzzer (budget : Config.wasm_budget) (spec : spec)
     (phase : Config.wasm_phase)
     (dirname_gen : string) (name_campaign : string option)
     (randseed : int option) (logmode : Modes.logmode)
-    (bootmode : Modes.bootmode) (mutationmode : Modes.mutationmode)
+    (bootmode : Modes.bootmode) (boot_observe_dirs : string list)
+    (mutationmode : Modes.mutationmode)
     (covermode : Modes.covermode) (focus : Config.wasm_focus option) : unit =
   let config =
     wasm_fuzzer_init spec phase dirname_gen name_campaign randseed logmode
-      bootmode mutationmode covermode focus budget
+      bootmode boot_observe_dirs mutationmode covermode focus budget
   in
   let config =
     match budget with

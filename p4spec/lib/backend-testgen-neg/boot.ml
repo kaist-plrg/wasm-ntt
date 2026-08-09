@@ -22,6 +22,51 @@ type wasm_boot_failure = {
   error : Phase.phase_error;
 }
 
+type wasm_seed_limit_failure =
+  | SeedTimedOut
+  | SeedStackOverflow
+  | SeedOutOfMemory
+  | SeedCancelled
+
+exception Wasm_seed_timeout
+
+let with_wasm_interrupt f =
+  let previous_signal =
+    Sys.signal Sys.sigint (Sys.Signal_handle (fun _ -> raise Sys.Break))
+  in
+  Fun.protect
+    ~finally:(fun () -> Sys.set_signal Sys.sigint previous_signal)
+    f
+
+let observe_with_wasm_seed_limit ~seconds f =
+  let previous_signal =
+    Sys.signal Sys.sigalrm
+      (Sys.Signal_handle (fun _ -> raise Wasm_seed_timeout))
+  in
+  let clear_instrumentation () =
+    if Inst.Hook.is_active () then Inst.Hook.register []
+  in
+  Fun.protect
+    ~finally:(fun () ->
+      Unix.alarm 0 |> ignore;
+      Sys.set_signal Sys.sigalrm previous_signal)
+    (fun () ->
+      with_wasm_interrupt (fun () ->
+          if seconds > 0 then Unix.alarm seconds |> ignore;
+          try Ok (f ()) with
+          | Wasm_seed_timeout ->
+              clear_instrumentation ();
+              Error SeedTimedOut
+          | Stack_overflow ->
+              clear_instrumentation ();
+              Error SeedStackOverflow
+          | Out_of_memory ->
+              clear_instrumentation ();
+              Error SeedOutOfMemory
+          | Sys.Break ->
+              clear_instrumentation ();
+              Error SeedCancelled))
+
 (* Measure initial coverage of phantoms *)
 
 (* On cold boot, first measure the coverage of the seed *)
@@ -46,11 +91,39 @@ let init_coverage = function
   | _ -> assert false
 
 let diagnostic_of_instantiation filename = function
-  | Phase.LinkingRejected (Phase.UnknownImport { message }) ->
+  | Phase.ImportResolutionFailed { message } ->
       { filename; category = "unknown import"; message }
-  | Phase.TargetValidationRejected { message; _ } ->
-      { filename; category = "target validation rejected"; message }
   | _ -> assert false
+
+let phase_error_message = function
+  | Phase.SyntaxError (_, message) -> "syntax error: " ^ message
+  | Phase.EpisodeError (_, message) -> "episode error: " ^ message
+  | Phase.HarnessFailure (_, message) -> "harness failure: " ^ message
+  | Phase.CoverageMetadataError message -> "coverage metadata error: " ^ message
+
+let diagnostic_of_phase_error filename error =
+  let category =
+    match error with
+    | Phase.SyntaxError _ -> "syntax error"
+    | Phase.EpisodeError _ -> "episode error"
+    | Phase.HarnessFailure _ -> "harness failure"
+    | Phase.CoverageMetadataError _ -> "coverage metadata error"
+  in
+  { filename; category; message = phase_error_message error }
+
+let diagnostic_of_seed_limit filename = function
+  | SeedTimedOut ->
+      { filename; category = "execution timeout"; message = "seed execution timed out" }
+  | SeedStackOverflow ->
+      { filename;
+        category = "host stack overflow";
+        message = "seed execution exceeded the host stack" }
+  | SeedOutOfMemory ->
+      { filename;
+        category = "host out of memory";
+        message = "seed execution exceeded host memory" }
+  | SeedCancelled ->
+      { filename; category = "cancelled"; message = "seed execution was cancelled" }
 
 let ensure_hooks_inactive filename outcome =
   if Inst.Hook.is_active () then (
@@ -63,7 +136,34 @@ let ensure_hooks_inactive filename outcome =
              "instrumentation handler leaked while evaluating cold boot seed") })
   else outcome
 
-let wasm_boot_cold (simulator : (module Sim.SIM)) (spec : Sim.spec)
+let apply_with_seed_limit ~timeout_seed cover filename apply =
+  match
+    observe_with_wasm_seed_limit ~seconds:timeout_seed (fun () ->
+        apply cover filename)
+  with
+  | Error SeedCancelled -> raise Sys.Break
+  | Error failure ->
+      Ok (cover, Some (diagnostic_of_seed_limit filename failure))
+  | Ok (Error { error; _ }) ->
+      Ok (cover, Some (diagnostic_of_phase_error filename error))
+  | Ok (Ok outcome) -> Ok outcome
+
+let fold_wasm_files ~coverage filenames apply =
+  List.fold_left
+    (fun (cover, diagnostics, failures) filename ->
+      match ensure_hooks_inactive filename (apply cover filename) with
+      | Ok (cover, diagnostic) ->
+          let diagnostics =
+            match diagnostic with
+            | Some item -> item :: diagnostics
+            | None -> diagnostics
+          in
+          (cover, diagnostics, failures)
+      | Error failure -> (cover, diagnostics, failure :: failures))
+    (coverage, [], []) filenames
+
+let wasm_boot_cold ?(timeout_seed = Config.timeout_seed)
+    (simulator : (module Sim.SIM)) (spec : Sim.spec)
     (phase : Config.wasm_phase) (dirname_wasm : string) :
     (wasm_boot_success, wasm_boot_failure list) result =
   let filenames_wasm =
@@ -95,58 +195,94 @@ let wasm_boot_cold (simulator : (module Sim.SIM)) (spec : Sim.spec)
         with
         | Error error -> Error { filename; error }
         | Ok (result, single) -> (
-            match Evaluator.check_instantiation_oracle episode result with
-            | Error error -> Error { filename; error }
-            | Ok () ->
-                let { Policy.coverage = policy; emission } =
-                  Policy.of_instantiation_result result
-                in
-                match (policy, single, emission) with
-                | Some policy, Some single, _ ->
-                    Ok (DCov_multi.extend_with_policy cover filename policy single, None)
-                | None, None, Policy.DiagnosticOnly ->
-                    Ok (cover, Some (diagnostic_of_instantiation filename result))
-                | _ ->
-                    Error
-                      { filename;
-                        error =
-                          Phase.HarnessFailure
-                            (Util.Source.no_region,
-                             "candidate policy and Init coverage disagreed") }))
+            let { Policy.coverage = policy; emission } =
+              Policy.of_instantiation_result result
+            in
+            match (policy, single, emission) with
+            | Some policy, Some single, _ ->
+                Ok (DCov_multi.extend_with_policy cover filename policy single, None)
+            | None, None, Policy.DiagnosticOnly ->
+                Ok (cover, Some (diagnostic_of_instantiation filename result))
+            | _ ->
+                Error
+                  { filename;
+                    error =
+                      Phase.HarnessFailure
+                        (Util.Source.no_region,
+                         "candidate policy and Init coverage disagreed") }))
+  in
+  let apply_file cover filename =
+    match phase with
+    | Config.Validation ->
+        Result.map (fun cover -> (cover, None)) (apply_validation cover filename)
+    | Config.Instantiation ->
+        apply_with_seed_limit ~timeout_seed cover filename apply_instantiation
   in
   let cover, diagnostics, failures =
-    List.fold_left
-      (fun (cover, diagnostics, failures) filename ->
-        let outcome =
-          match phase with
-          | Config.Validation ->
-              Result.map (fun cover -> (cover, None)) (apply_validation cover filename)
-          | Config.Instantiation -> apply_instantiation cover filename
-        in
-        match ensure_hooks_inactive filename outcome with
-        | Ok (cover, diagnostic) ->
-            let diagnostics =
-              match diagnostic with
-              | Some item -> item :: diagnostics
-              | None -> diagnostics
-            in
-            (cover, diagnostics, failures)
-        | Error failure -> (cover, diagnostics, failure :: failures))
-      (init_coverage spec, [], []) filenames_wasm
+    fold_wasm_files ~coverage:(init_coverage spec) filenames_wasm apply_file
   in
   match List.rev failures with
   | [] -> Ok { coverage = cover; diagnostics = List.rev diagnostics }
   | failures -> Error failures
 
-let string_of_phase_error = function
-  | Phase.SyntaxError (_, message) -> "syntax error: " ^ message
-  | Phase.EpisodeError (_, message) -> "episode error: " ^ message
-  | Phase.RelationFailure failure ->
-      Format.sprintf "relation failure in %s: %s" failure.Phase.relation
-        failure.Phase.message
-  | Phase.HarnessFailure (_, message) -> "harness failure: " ^ message
-  | Phase.UnsupportedOutcome outcome -> "unsupported outcome: " ^ outcome
-  | Phase.CoverageMetadataError message -> "coverage metadata error: " ^ message
+let observation_prefix_paths filename =
+  let prefix_path = Filename.chop_suffix filename ".wast" ^ ".prefix.wast.inc" in
+  if Sys.file_exists prefix_path then [ prefix_path ] else []
+
+let observation_coverage_policy =
+  DCov_multi.
+    { merge_hits = true;
+      hit_confidence = Likely;
+      record_close_misses = false }
+
+let wasm_boot_observe ?(timeout_seed = Config.timeout_seed)
+    (simulator : (module Sim.SIM)) (spec : Sim.spec) ~(coverage : DCov_multi.t)
+    (dirname_wasm : string) :
+    (wasm_boot_success, wasm_boot_failure list) result =
+  let filenames_wasm =
+    Util.Filesys.collect_files ~suffix:".wast" dirname_wasm
+    |> List.sort String.compare
+  in
+  let env = Evaluator.make_env ~simulator ~spec in
+  let apply_observation cover filename =
+    match
+      Episode.parse_observation_file
+        ~prefix_paths:(observation_prefix_paths filename)
+        filename
+    with
+    | Error error -> Error { filename; error }
+    | Ok episode -> (
+        match
+          Evaluator.evaluate_instantiation_with_dangling env episode
+            (Episode.target_value episode)
+        with
+        | Error error -> Error { filename; error }
+        | Ok ((Phase.ImportResolutionFailed _) as result, None) ->
+            Ok (cover, Some (diagnostic_of_instantiation filename result))
+        | Ok (_, Some single) ->
+            Ok
+              ( DCov_multi.extend_with_policy cover filename
+                  observation_coverage_policy single,
+                None )
+        | Ok _ ->
+            Error
+              { filename;
+                error =
+                  Phase.HarnessFailure
+                    (Util.Source.no_region,
+                     "observation result and Init coverage disagreed") })
+  in
+  let apply_file cover filename =
+    apply_with_seed_limit ~timeout_seed cover filename apply_observation
+  in
+  let cover, diagnostics, failures =
+    fold_wasm_files ~coverage filenames_wasm apply_file
+  in
+  match List.rev failures with
+  | [] -> Ok { coverage = cover; diagnostics = List.rev diagnostics }
+  | failures -> Error failures
+
+let string_of_phase_error = phase_error_message
 
 (* On warm boot, load the coverage from a file *)
 

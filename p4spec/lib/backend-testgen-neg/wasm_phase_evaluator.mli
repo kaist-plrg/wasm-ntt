@@ -50,8 +50,3 @@ val check_validation_expectation :
   Wasm_interface.Parse.expectation ->
   Wasm_phase.validation_result ->
   (unit, Wasm_phase.phase_error) result
-
-val check_instantiation_oracle :
-  Wasm_episode.t ->
-  Wasm_phase.instantiation_result ->
-  (unit, Wasm_phase.phase_error) result

@@ -78,10 +78,6 @@ type storage = {
   dirname_close_miss_p4 : string;
   dirname_welltyped_p4 : string;
   dirname_illtyped_p4 : string;
-  dirname_instantiated_wasm : string;
-  dirname_trapped_wasm : string;
-  dirname_exception_wasm : string;
-  dirname_unlinkable_wasm : string;
 }
 
 (* Seed for the fuzz campaign *)
@@ -250,14 +246,6 @@ let init_storage (dirname_gen : string) : storage =
   Util.Filesys.mkdir dirname_welltyped_p4;
   let dirname_illtyped_p4 = dirname_gen ^ "/illtyped" in
   Util.Filesys.mkdir dirname_illtyped_p4;
-  let dirname_instantiated_wasm = dirname_gen ^ "/instantiated" in
-  Util.Filesys.mkdir dirname_instantiated_wasm;
-  let dirname_trapped_wasm = dirname_gen ^ "/trapped" in
-  Util.Filesys.mkdir dirname_trapped_wasm;
-  let dirname_exception_wasm = dirname_gen ^ "/exception" in
-  Util.Filesys.mkdir dirname_exception_wasm;
-  let dirname_unlinkable_wasm = dirname_gen ^ "/unlinkable" in
-  Util.Filesys.mkdir dirname_unlinkable_wasm;
   {
     dirname_gen;
     dirname_log;
@@ -265,19 +253,13 @@ let init_storage (dirname_gen : string) : storage =
     dirname_close_miss_p4;
     dirname_welltyped_p4;
     dirname_illtyped_p4;
-    dirname_instantiated_wasm;
-    dirname_trapped_wasm;
-    dirname_exception_wasm;
-    dirname_unlinkable_wasm;
   }
 
 let directory_for_output_category storage = function
   | Wasm_policy.ValidationValid -> storage.dirname_welltyped_p4
   | Wasm_policy.ValidationInvalid -> storage.dirname_illtyped_p4
-  | Wasm_policy.InitSuccess -> storage.dirname_instantiated_wasm
-  | Wasm_policy.InitTrap -> storage.dirname_trapped_wasm
-  | Wasm_policy.InitException -> storage.dirname_exception_wasm
-  | Wasm_policy.InitUnlinkable -> storage.dirname_unlinkable_wasm
+  | Wasm_policy.InitPass -> storage.dirname_welltyped_p4
+  | Wasm_policy.InitFail -> storage.dirname_illtyped_p4
   | Wasm_policy.CloseMiss -> storage.dirname_close_miss_p4
 
 let init_seed (cover : DCov_multi.t) : seed = { cover }

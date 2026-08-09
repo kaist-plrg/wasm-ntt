@@ -42,6 +42,15 @@ type verified = {
   coverage : Single.t option;
 }
 
+type mutation_provenance = {
+  intended_iid : int;
+  source_vid : int;
+  depth : int option;
+  mutation : string;
+  source : string;
+  mutated : string;
+}
+
 let error message = Error (Phase.HarnessFailure (no_region, message))
 
 let single_module_of_root root =
@@ -159,29 +168,21 @@ let load_instantiation_seed ~derive ~env filename =
       with
       | Error _ as failure -> failure
       | Ok (result, coverage, graph) -> (
-          match Evaluator.check_instantiation_oracle episode result with
-          | Error error ->
+          match result, coverage, graph with
+          | (Phase.Instantiated _ | Phase.Trapped _ | Phase.Thrown _),
+            Some coverage,
+            Some graph ->
+              Ok
+                (reusable ~seed:(InstantiationSeed episode) ~target
+                   ~coverage ~graph)
+          | Phase.InitRelationFailed _, Some _, Some graph ->
+              clear_graph graph;
+              Ok (Diagnostic "Init relation failure has no reusable close-miss path")
+          | Phase.ImportResolutionFailed _, None, None ->
+              Ok (Diagnostic "instantiation import resolution failed")
+          | _ ->
               Option.iter clear_graph graph;
-              Error error
-          | Ok () -> (
-              match result, coverage, graph with
-              | (Phase.Instantiated _ | Phase.Trapped _ | Phase.Thrown _),
-                Some coverage,
-                Some graph ->
-                  Ok
-                    (reusable ~seed:(InstantiationSeed episode) ~target
-                       ~coverage ~graph)
-              | Phase.LinkingRejected (Phase.LinkOutcome _), Some _, Some graph ->
-                  clear_graph graph;
-                  Ok (Diagnostic "LinkO has no reusable close-miss path")
-              | ( Phase.LinkingRejected (Phase.UnknownImport _)
-                | Phase.TargetValidationRejected _ ),
-                None,
-                None ->
-                  Ok (Diagnostic "instantiation preflight rejected the seed")
-              | _ ->
-                  Option.iter clear_graph graph;
-                  error "candidate policy and seed VDG disagreed")))
+              error "candidate policy and seed VDG disagreed"))
 
 let load_seed_with_vdg ~derive ~env ~phase filename =
   match phase with
@@ -202,29 +203,19 @@ let render (observation : observation) seed mutated_module =
   | ValidationResult Phase.ValidationAccepted, ValidationSeed _,
     Some Policy.ValidationValid ->
       Renderer.render_validation ~mutated_module ~valid:true
-      |> Result.map (fun text -> (text, None))
   | ValidationResult (Phase.ValidationRejected _), ValidationSeed _,
     Some Policy.ValidationInvalid ->
       Renderer.render_validation ~mutated_module ~valid:false
-      |> Result.map (fun text -> (text, None))
-  | InstantiationResult result, InstantiationSeed episode, Some category ->
-      let rendering =
-        match result, category with
-        | Phase.Instantiated _, Policy.InitSuccess ->
-            Some (Renderer.PlainInstantiation, None)
-        | Phase.Trapped _, Policy.InitTrap ->
-            Some (Renderer.AssertTrap, None)
-        | Phase.Thrown { tagaddr; values; _ }, Policy.InitException ->
-            Some (Renderer.RawException, Some (tagaddr, values))
-        | Phase.LinkingRejected (Phase.LinkOutcome _), Policy.InitUnlinkable ->
-            Some (Renderer.AssertUnlinkable, None)
-        | _ -> None
-      in
-      (match rendering with
-      | None -> error "typed result and output category disagreed"
-      | Some (kind, metadata) ->
-        Renderer.render_instantiation ~episode ~mutated_module ~kind
-        |> Result.map (fun text -> (text, metadata)))
+  | InstantiationResult
+      ( Phase.Instantiated _
+      | Phase.Trapped _
+      | Phase.Thrown _ ),
+    InstantiationSeed episode,
+    Some Policy.InitPass
+  | InstantiationResult (Phase.InitRelationFailed _),
+    InstantiationSeed episode,
+    Some Policy.InitFail ->
+      Renderer.render_instantiation ~episode ~mutated_module
   | _ -> error "diagnostic or unsupported result cannot be rendered"
 
 let category_of_observation (observation : observation) =
@@ -256,13 +247,10 @@ let recheck env path = function
               (Episode.target_value episode)
           with
           | Error _ as failure -> failure
-          | Ok (result, coverage) -> (
-              match Evaluator.check_instantiation_oracle episode result with
-              | Error _ as failure -> failure
-              | Ok () ->
-                  let policy = Policy.of_instantiation_result result in
-                  Ok
-                    (observation (InstantiationResult result) coverage policy))))
+          | Ok (result, coverage) ->
+              let policy = Policy.of_instantiation_result result in
+              Ok
+                (observation (InstantiationResult result) coverage policy)))
 
 let coverage_preserves coverage selected_hits selected_close_misses =
   match coverage with
@@ -271,7 +259,50 @@ let coverage_preserves coverage selected_hits selected_close_misses =
       IIdSet.for_all (Single.is_hit coverage) selected_hits
       && IIdSet.for_all (Single.is_close_miss coverage) selected_close_misses
 
-let render_and_recheck ~env ~seed ~mutated_module ~observation
+let trim_trailing_whitespace text =
+  let rec last_non_whitespace index =
+    if index < 0 then -1
+    else
+      match text.[index] with
+      | ' ' | '\t' | '\n' | '\r' -> last_non_whitespace (index - 1)
+      | _ -> index
+  in
+  let length = last_non_whitespace (String.length text - 1) + 1 in
+  String.sub text 0 length
+
+let decorate_artifact ~provenance ~selected_hits ~selected_close_misses body =
+  let evidence =
+    match
+      ( IIdSet.is_empty selected_hits,
+        IIdSet.is_empty selected_close_misses )
+    with
+    | false, true ->
+        Ok
+          (Format.asprintf ";; Covered iids %s"
+             (IIdSet.to_string selected_hits))
+    | true, false ->
+        Ok
+          (Format.asprintf ";; Close-missed iids %s"
+             (IIdSet.to_string selected_close_misses))
+    | true, true -> error "artifact has no selected coverage evidence"
+    | false, false -> error "artifact has both hit and close-miss evidence"
+  in
+  Result.map
+    (fun evidence ->
+      let body = trim_trailing_whitespace body in
+      let depth =
+        match provenance.depth with
+        | Some depth -> Format.asprintf ";; Depth %d\n" depth
+        | None -> ""
+      in
+      Format.asprintf
+        ";; Intended iid %d\n;; Source vid %d\n%s\n;; Mutation %s\n\n(;\nFrom \
+         %s\nTo %s\n;)\n\n%s\n\n%s\n"
+        provenance.intended_iid provenance.source_vid depth provenance.mutation
+        provenance.source provenance.mutated body evidence)
+    evidence
+
+let render_and_recheck ~env ~seed ~mutated_module ~observation ~provenance
     ~temporary_path ~selected_hits ~selected_close_misses =
   let cleanup () = ignore (Episode.remove_artifact temporary_path) in
   let transferred = ref false in
@@ -286,19 +317,15 @@ let render_and_recheck ~env ~seed ~mutated_module ~observation
           match render observation seed mutated_module with
           | Error error ->
               Error error
-          | Ok (text, metadata) -> (
-              match write_file temporary_path (text ^ "\n") with
+          | Ok text -> (
+              match
+                decorate_artifact ~provenance ~selected_hits
+                  ~selected_close_misses text
+              with
               | Error error ->
                   Error error
-              | Ok () ->
-                  let metadata_result =
-                    match metadata with
-                    | None -> Ok ()
-                    | Some (tagaddr, values) ->
-                        Episode.write_exception_metadata temporary_path
-                          ~tagaddr ~values
-                  in
-                  match metadata_result with
+              | Ok text -> (
+                  match write_file temporary_path text with
                   | Error error ->
                       Error error
                   | Ok () -> (
@@ -308,10 +335,9 @@ let render_and_recheck ~env ~seed ~mutated_module ~observation
                       | Ok replay -> (
                           match category_of_observation replay with
                           | Error error -> Error error
-                          | Ok replay_category
-                            when replay_category <> category ->
+                          | Ok replay_category when replay_category <> category ->
                               error
-                                "rendered candidate changed its typed output category"
+                                "rendered candidate changed its relation-result category"
                           | Ok _
                             when not
                                    (coverage_preserves replay.coverage
@@ -320,4 +346,4 @@ let render_and_recheck ~env ~seed ~mutated_module ~observation
                                 "rendered candidate did not preserve selected coverage"
                           | Ok _ ->
                               transferred := true;
-                              Ok { category; coverage = replay.coverage })))))
+                              Ok { category; coverage = replay.coverage }))))))

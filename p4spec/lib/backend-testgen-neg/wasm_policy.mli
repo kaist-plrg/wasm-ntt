@@ -1,10 +1,8 @@
 type output_category =
   | ValidationValid
   | ValidationInvalid
-  | InitSuccess
-  | InitTrap
-  | InitException
-  | InitUnlinkable
+  | InitPass
+  | InitFail
   | CloseMiss
 
 type emission_policy =
