@@ -216,7 +216,7 @@ let trace_command ~index ~total (cmd : Script.command) =
 
 let field_name (atom : atom) : string option =
   match atom.it with
-  | Atom name | SilentAtom name -> Some name
+  | Keyword name | Tag name -> Some name
   | _ -> None
 
 let same_field actual expected =
@@ -552,8 +552,8 @@ let case_tag value =
       let mixop = Domain.Mixfix.atoms_matrix valuecase in
       let values = Domain.Mixfix.args valuecase in
       match mixop with
-      | ({ it = Atom tag; _ } :: _) :: _ -> Some (tag, values)
-      | ({ it = SilentAtom tag; _ } :: _) :: _ -> Some (tag, values)
+      | (atom :: _) :: _ ->
+          Option.map (fun tag -> (tag, values)) (field_name atom)
       | _ -> None)
   | _ -> None
 

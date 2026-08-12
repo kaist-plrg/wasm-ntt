@@ -11,75 +11,39 @@ let wrap_atom (s : string) : atom =
   | ":>" -> Sup $ no_region
   | "|-" -> Turnstile $ no_region
   | "-|" -> Tilesturn $ no_region
-  | "`" -> Tick $ no_region
-  | "\"" -> DoubleQuote $ no_region
-  | "_" -> Underscore $ no_region
-  | "->" -> Arrow `Plain $ no_region
+  | "->" -> Arrow $ no_region
   | "->_" -> ArrowSub $ no_region
-  | "=>" -> DoubleArrow $ no_region
   | "=>_" -> DoubleArrowSub $ no_region
+  | "==>" -> DoubleArrowLong $ no_region
   | "~>" -> SqArrow $ no_region
   | "~>*" -> SqArrowStar $ no_region
-  | "." -> Dot `Plain $ no_region
-  | ".." -> Dot2 `Plain $ no_region
-  | "..." -> Dot3 `Plain $ no_region
-  | "," -> Comma $ no_region
-  | ";" -> Semicolon `Plain $ no_region
-  | ":" -> Colon `Plain $ no_region
-  | "#" -> Hash $ no_region
-  | "$" -> Dollar $ no_region
-  | "@" -> At $ no_region
-  | "?" -> Quest $ no_region
-  | "!" -> Bang $ no_region
-  | "!=" -> BangEq $ no_region
-  | "~" -> Tilde $ no_region
-  | "~~" -> Tilde2 `Plain $ no_region
-  | "<" -> LAngle `Tick $ no_region
-  | "<<" -> LAngle2 $ no_region
-  | "<=" -> LAngleEq $ no_region
-  | "<<=" -> LAngle2Eq $ no_region
-  | ">" -> RAngle `Plain $ no_region
-  | ">>" -> RAngle2 $ no_region
-  | ">=" -> RAngleEq $ no_region
-  | ">>=" -> RAngle2Eq $ no_region
+  | "." -> Dot $ no_region
+  | ".." -> Dot2 $ no_region
+  | "..." -> Dot3 $ no_region
+  | ";" -> Semicolon $ no_region
+  | ":" -> Colon $ no_region
+  | ":=" -> ColonEq $ no_region
+  | "~~" -> Tilde2 $ no_region
+  | "<" -> LAngle $ no_region
+  | ">" -> RAngle $ no_region
   | "(" -> LParen $ no_region
   | ")" -> RParen $ no_region
-  | "[" -> LBrack `Tick $ no_region
-  | "]" -> RBrack `Plain $ no_region
-  | "{" -> LBrace `Tick $ no_region
-  | "{#}" -> LBraceHashRBrace $ no_region
-  | "}" -> RBrace `Plain $ no_region
-  | "+" -> Plus $ no_region
-  | "++" -> Plus2 $ no_region
-  | "+=" -> PlusEq $ no_region
-  | "-" -> Minus $ no_region
-  | "-=" -> MinusEq $ no_region
-  | "*" -> Star $ no_region
-  | "*=" -> StarEq $ no_region
-  | "/" -> Slash $ no_region
-  | "/=" -> SlashEq $ no_region
+  | "[" -> LBrack $ no_region
+  | "]" -> RBrack $ no_region
+  | "{" -> LBrace $ no_region
+  | "}" -> RBrace $ no_region
   | "\\" -> Backslash $ no_region
-  | "%" -> Percent $ no_region
-  | "%=" -> PercentEq $ no_region
-  | "=" -> Eq $ no_region
-  | "==" -> Eq2 $ no_region
-  | "&" -> Amp $ no_region
-  | "&&" -> Amp2 $ no_region
-  | "&&&" -> Amp3 $ no_region
-  | "&=" -> AmpEq $ no_region
-  | "^" -> Up $ no_region
-  | "^=" -> UpEq $ no_region
-  | "|" -> Bar $ no_region
-  | "||" -> Bar2 $ no_region
-  | "|=" -> BarEq $ no_region
-  | "|+|" -> SPlus $ no_region
-  | "|+|=" -> SPlusEq $ no_region
-  | "|-|" -> SMinus $ no_region
-  | "|-|=" -> SMinusEq $ no_region
-  | s when String.get s 0 = '`' ->
+  | "`" -> Operator "`" $ no_region
+  | s when String.length s > 0 && String.get s 0 = '`' ->
       let s = String.sub s 1 (String.length s - 1) in
-      SilentAtom s $ no_region
-  | _ -> Atom s $ no_region
+      tag s $ no_region
+  | ( "\"" | "_" | "=>" | "," | "#" | "$" | "@" | "?" | "!"
+    | "!=" | "~" | "<<" | "<=" | "<<=" | ">>" | ">=" | ">>=" | "{#}"
+    | "+" | "++" | "+=" | "-" | "-=" | "*" | "*=" | "/" | "/="
+    | "%" | "%=" | "=" | "==" | "&" | "&&" | "&&&" | "&=" | "^"
+    | "^=" | "|" | "||" | "|=" | "|+|" | "|+|=" | "|-|" | "|-|=" ) as op ->
+      Operator op $ no_region
+  | s -> Keyword s $ no_region
 
 (* Type generators *)
 

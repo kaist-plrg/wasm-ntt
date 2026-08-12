@@ -55,12 +55,12 @@ def $add_minus_one(x) = x'
   -- if x' = $(x - 1)
 
 dec $free_idx(idx) : set<idx>
-def $free_idx(x) = `{ [x] }
+def $free_idx(x) = `{ [x] `}
 
 dec $free_shift(set<idx>) : set<idx>
-def $free_shift(`{ x* }) = `{ x''* }
-  -- if `{ x'* } = $diff_set<idx>(`{ x* }, `{ [0] })
-  -- if `{ x''* } = $map_set<idx, idx>(def $add_minus_one, `{ x'* })
+def $free_shift(`{ x* `}) = `{ x''* `}
+  -- if `{ x'* `} = $diff_set<idx>(`{ x* `}, `{ [0] `})
+  -- if `{ x''* `} = $map_set<idx, idx>(def $add_minus_one, `{ x'* `})
 
 dec $free_list<X>(def $free_(X) : free, X*) : free
 def $free_list<X>(def $free_, eps) = $free_empty
@@ -116,16 +116,16 @@ dec $update_datas(set<dataidx>) : free
 dec $update_locals(set<localidx>) : free
 dec $update_labels(set<labelidx>) : free
 
-def $update_types(`{ x* }) = $free_empty[ .TYPES = `{ x* } ]
-def $update_globals(`{ x* }) = $free_empty[ .GLOBALS = `{ x* } ]
-def $update_tables(`{ x* }) = $free_empty[ .TABLES = `{ x* } ]
-def $update_mems(`{ x* }) = $free_empty[ .MEMS = `{ x* } ]
-def $update_tags(`{ x* }) = $free_empty[ .TAGS = `{ x* } ]
-def $update_funcs(`{ x* }) = $free_empty[ .FUNCS = `{ x* } ]
-def $update_elems(`{ x* }) = $free_empty[ .ELEMS = `{ x* } ]
-def $update_datas(`{ x* }) = $free_empty[ .DATAS = `{ x* } ]
-def $update_locals(`{ x* }) = $free_empty[ .LOCALS = `{ x* } ]
-def $update_labels(`{ x* }) = $free_empty[ .LABELS = `{ x* } ]
+def $update_types(`{ x* `}) = $free_empty[ .TYPES = `{ x* `} ]
+def $update_globals(`{ x* `}) = $free_empty[ .GLOBALS = `{ x* `} ]
+def $update_tables(`{ x* `}) = $free_empty[ .TABLES = `{ x* `} ]
+def $update_mems(`{ x* `}) = $free_empty[ .MEMS = `{ x* `} ]
+def $update_tags(`{ x* `}) = $free_empty[ .TAGS = `{ x* `} ]
+def $update_funcs(`{ x* `}) = $free_empty[ .FUNCS = `{ x* `} ]
+def $update_elems(`{ x* `}) = $free_empty[ .ELEMS = `{ x* `} ]
+def $update_datas(`{ x* `}) = $free_empty[ .DATAS = `{ x* `} ]
+def $update_locals(`{ x* `}) = $free_empty[ .LOCALS = `{ x* `} ]
+def $update_labels(`{ x* `}) = $free_empty[ .LABELS = `{ x* `} ]
 
 def $free_catch(Catch x y) = $free_union($update_tags($free_idx(x)), $update_labels($free_idx(y)))
 def $free_catch(CatchRef x y) = $free_union($update_tags($free_idx(x)), $update_labels($free_idx(y)))
@@ -273,18 +273,18 @@ def $free_memtype(MemoryT _ _) = $free_empty
 def $free_mem({MTYPE mt}) = $free_memtype(mt)
 
 def $free_func(func) = free[ .LOCALS = $empty_set<localidx> ]
-  -- if free_1 = $update_types(`{ [func.FTYPE] })
+  -- if free_1 = $update_types(`{ [func.FTYPE] `})
   -- if free_2 = $free_block(func.BODY)
   -- if free = $free_union(free_1, free_2)
 
-def $free_start(start) = $update_funcs(`{ [start.SFUNC] })
+def $free_start(start) = $update_funcs(`{ [start.SFUNC] `})
 
 dec $free_elemmode(def $f(set<tableidx>) : free, elemmode) : free
 def $free_elemmode(def $f, elemmode) = $free_empty
   -- if elemmode = Passive \/ elemmode = Declarative
 def $free_elemmode(def $f, elemmode) = $free_union(free_1, free_2)
   -- if elemmode = Active { INDEX idx, OFFSET instr* }
-  -- if free_1 = $f(`{ [idx] })
+  -- if free_1 = $f(`{ [idx] `})
   -- if free_2 = $free_const(instr*)
 
 dec $free_datamode(def $f(set<memidx>) : free, datamode) : free
@@ -292,7 +292,7 @@ def $free_datamode(def $f, datamode) = $free_empty
   -- if datamode = Passive
 def $free_datamode(def $f, datamode) = $free_union(free_1, free_2)
   -- if datamode = Active { INDEX idx, OFFSET instr* }
-  -- if free_1 = $f(`{ [idx] })
+  -- if free_1 = $f(`{ [idx] `})
   -- if free_2 = $free_const(instr*)
 
 
@@ -335,5 +335,4 @@ def $free_module(module) = free
   -- if free = $free_unions([free_1, free_2, free_3,
                             free_4, free_5, free_6,
                             free_7, free_8, free_9])
-
 

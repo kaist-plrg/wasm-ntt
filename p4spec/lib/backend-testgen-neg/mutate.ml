@@ -545,16 +545,16 @@ let rec choose_one (values : 'a option list) : 'a option =
 (* Wasm table reftype mutation *)
 
 let atom_named (name : string) (atom : atom) : bool =
-  Domain.Atom.eq atom.it (Domain.Atom.Atom name)
+  Domain.Atom.eq atom.it (Domain.Atom.Keyword name)
 
 let wrap_atom_named (name : string) : atom =
-  Domain.Atom.Atom name $ no_region
+  Domain.Atom.Keyword name $ no_region
 
 let wrap_case_named (typ : typ') (mixop_names : string list list)
     (values : value list) : value =
   let mixop =
     mixop_names
-    |> List.map (List.map (fun name -> Domain.Atom.Atom name))
+    |> List.map (List.map (fun name -> Domain.Atom.Keyword name))
     |> Value.Mixops.of_atoms_matrix
   in
   CaseV (Mixfix.fill mixop values) |> wrap_value typ

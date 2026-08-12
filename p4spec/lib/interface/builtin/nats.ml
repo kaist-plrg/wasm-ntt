@@ -25,7 +25,7 @@ open Error
 
 type symbol = NT of value | Term of string
 
-let wrap_atom (s : string) : atom = Atom s $ no_region
+let wrap_atom (s : string) : atom = Keyword s $ no_region
 
 let wrap_var_t (s : string) : typ' = VarT (s $ no_region, [])
 
@@ -278,19 +278,19 @@ let bias layout =
 
 let fmag_bits at layout value =
   match sl_case value with
-  | Some (([{ it = Atom "SUBNORM"; _ }] :: _), [ m ]) -> z_of_value m
-  | Some (([{ it = Atom "NORM"; _ }] :: _), [ m; exp ]) ->
+  | Some (([{ it = Keyword "SUBNORM"; _ }] :: _), [ m ]) -> z_of_value m
+  | Some (([{ it = Keyword "NORM"; _ }] :: _), [ m; exp ]) ->
     Z.(shift_left (z_of_value exp + bias layout) layout.mantissa + z_of_value m)
-  | Some ([[{ it = Atom "INF"; _ }]], []) -> mask_exp layout
-  | Some (([{ it = Atom "NAN"; _ }] :: _), [ m ]) ->
+  | Some ([[{ it = Keyword "INF"; _ }]], []) -> mask_exp layout
+  | Some (([{ it = Keyword "NAN"; _ }] :: _), [ m ]) ->
     Z.(mask_exp layout + z_of_value m)
   | _ -> error at "expected f32mag/f64mag"
 
 let float_bits at layout value =
   match sl_case value with
-  | Some (([{ it = Atom "POS"; _ }] :: _), [ mag ]) ->
+  | Some (([{ it = Keyword "POS"; _ }] :: _), [ mag ]) ->
     fmag_bits at layout mag
-  | Some (([{ it = Atom "NEG"; _ }] :: _), [ mag ]) ->
+  | Some (([{ it = Keyword "NEG"; _ }] :: _), [ mag ]) ->
     Z.(mask_sign layout + fmag_bits at layout mag)
   | _ -> error at "expected f32/f64"
 
