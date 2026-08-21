@@ -17,6 +17,14 @@ type t = {
   target_entry : Harness.module_entry;
 }
 
+type invocation_episode = {
+  invocation_source_path : string;
+  invocation_prefix : source_group list;
+  invocation_target_groups : source_group list;
+  invocation_target_entry : Harness.module_entry;
+  invocation_suffix : source_group list;
+}
+
 type grouped_command = {
   index : int;
   command : Script.command;
@@ -380,12 +388,105 @@ let parse_observation_file ~prefix_paths filename =
                           target_module_var = None;
                           target_entry }))))
 
+let is_invoke_action (action : Script.action) =
+  match action.it with Script.Invoke _ -> true | Script.Get _ -> false
+
+let is_supported_invocation_command (command : Script.command) =
+  match command.it with
+  | Script.Action action -> is_invoke_action action
+  | Script.Assertion assertion -> (
+      match assertion.it with
+      | Script.AssertReturn (action, _)
+      | Script.AssertTrap (action, _)
+      | Script.AssertException action ->
+          is_invoke_action action
+      | _ -> false)
+  | _ -> false
+
+let validate_invocation_suffix groups =
+  let rec loop = function
+    | [] -> Ok ()
+    | group :: rest -> (
+        match group.commands with
+        | [ command ] when is_supported_invocation_command command -> loop rest
+        | _ ->
+            episode_error group.region
+              "unsupported invocation suffix command; expected invoke, assert_return/invoke, assert_trap/invoke, or assert_exception/invoke")
+  in
+  loop groups
+
+let parse_invocation_file filename =
+  match parse_groups filename with
+  | Error _ as error -> error
+  | Ok groups ->
+      let rec find_final_driver = function
+        | [] -> file_error filename "script contains no instantiation driver"
+        | group :: rest -> (
+            match List.rev group.commands with
+            | [] -> assert false
+            | command :: _ -> (
+                match driver_of_command command with
+                | Some module_var -> Ok (group, command, module_var)
+                | None -> find_final_driver rest))
+      in
+      (match find_final_driver (List.rev groups) with
+      | Error _ as error -> error
+      | Ok (driver_group, driver_command, driver_module_var) -> (
+          match
+            select_target (indexed_commands groups) driver_group driver_command
+              driver_module_var
+          with
+          | Error _ as error -> error
+          | Ok selected -> (
+              match decode_target_entry selected.command with
+              | Error _ as error -> error
+              | Ok invocation_target_entry ->
+                  let invocation_prefix =
+                    List.filter
+                      (fun group -> group.ordinal < selected.group.ordinal)
+                      groups
+                  in
+                  let invocation_target_groups =
+                    List.filter
+                      (fun group ->
+                        group.ordinal >= selected.group.ordinal
+                        && group.ordinal <= driver_group.ordinal)
+                      groups
+                  in
+                  let invocation_suffix =
+                    List.filter
+                      (fun group -> group.ordinal > driver_group.ordinal)
+                      groups
+                  in
+                  Result.map
+                    (fun () ->
+                      { invocation_source_path = filename;
+                        invocation_prefix;
+                        invocation_target_groups;
+                        invocation_target_entry;
+                        invocation_suffix })
+                    (validate_invocation_suffix invocation_suffix))))
+
 let prefix_commands episode =
   List.concat_map (fun group -> group.commands) episode.immutable_prefix
 
 let target_module_var episode = episode.target_module_var
 
 let target_value episode = episode.target_entry.value
+
+let commands_of_groups groups =
+  List.concat_map (fun group -> group.commands) groups
+
+let invocation_prefix_commands episode =
+  commands_of_groups episode.invocation_prefix
+
+let invocation_target_commands episode =
+  commands_of_groups episode.invocation_target_groups
+
+let invocation_suffix_commands episode =
+  commands_of_groups episode.invocation_suffix
+
+let invocation_target_value episode = episode.invocation_target_entry.value
 
 let mutation_root mutated_module =
   Wasm_interface.Construct.il_of_list "module" (fun value -> value) [ mutated_module ]

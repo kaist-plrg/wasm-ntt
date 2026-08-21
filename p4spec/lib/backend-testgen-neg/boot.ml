@@ -235,6 +235,12 @@ let observation_coverage_policy =
       hit_confidence = Likely;
       record_close_misses = false }
 
+let invocation_coverage_policy =
+  DCov_multi.
+    { merge_hits = true;
+      hit_confidence = Exact;
+      record_close_misses = false }
+
 let wasm_boot_observe ?(timeout_seed = Config.timeout_seed)
     (simulator : (module Sim.SIM)) (spec : Sim.spec) ~(coverage : DCov_multi.t)
     (dirname_wasm : string) :
@@ -274,6 +280,47 @@ let wasm_boot_observe ?(timeout_seed = Config.timeout_seed)
   in
   let apply_file cover filename =
     apply_with_seed_limit ~timeout_seed cover filename apply_observation
+  in
+  let cover, diagnostics, failures =
+    fold_wasm_files ~coverage filenames_wasm apply_file
+  in
+  match List.rev failures with
+  | [] -> Ok { coverage = cover; diagnostics = List.rev diagnostics }
+  | failures -> Error failures
+
+let wasm_boot_invoke ?(timeout_seed = Config.timeout_seed)
+    (simulator : (module Sim.SIM)) (spec : Sim.spec) ~(coverage : DCov_multi.t)
+    (dirname_wasm : string) :
+    (wasm_boot_success, wasm_boot_failure list) result =
+  let filenames_wasm =
+    Util.Filesys.collect_files ~suffix:".wast" dirname_wasm
+    |> List.sort String.compare
+  in
+  let env = Evaluator.make_env ~simulator ~spec in
+  let apply_file cover filename =
+    let cover_ref = ref cover in
+    let observe () =
+      match Episode.parse_invocation_file filename with
+      | Error error -> Error error
+      | Ok episode ->
+          Evaluator.observe_invocation_with_dangling env episode
+            ~on_observation:(fun
+                (observation : Evaluator.invocation_observation) ->
+              let path =
+                Format.sprintf "%s#command=%d" filename
+                  observation.command_index
+              in
+              cover_ref :=
+                DCov_multi.extend_with_policy !cover_ref path
+                  invocation_coverage_policy observation.coverage)
+    in
+    match observe_with_wasm_seed_limit ~seconds:timeout_seed observe with
+    | Error SeedCancelled -> raise Sys.Break
+    | Error failure ->
+        Ok (!cover_ref, Some (diagnostic_of_seed_limit filename failure))
+    | Ok (Error error) ->
+        Ok (!cover_ref, Some (diagnostic_of_phase_error filename error))
+    | Ok (Ok ()) -> Ok (!cover_ref, None)
   in
   let cover, diagnostics, failures =
     fold_wasm_files ~coverage filenames_wasm apply_file

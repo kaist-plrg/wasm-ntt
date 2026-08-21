@@ -780,19 +780,27 @@ let eval_dynamic_rel runtime relname values_input =
   | Pass values -> values
   | Fail (at, msg) -> error at (relname ^ " failed: " ^ msg)
 
-let eval_init runtime state module_entry =
-  ignore (eval_dynamic_rel runtime "Module_ok" [ module_entry.value ]);
+type relation_evaluator =
+  relname:string -> value list -> value list
+
+let select_relation_evaluator runtime = function
+  | Some eval_relation -> eval_relation
+  | None -> fun ~relname inputs -> eval_dynamic_rel runtime relname inputs
+
+let eval_init ?eval_relation runtime state module_entry =
+  let eval_relation = select_relation_evaluator runtime eval_relation in
+  ignore (eval_relation ~relname:"Module_ok" [ module_entry.value ]);
   match resolve_imports no_region state module_entry.module_ with
   | Error error -> Error error
   | Ok externaddrs ->
       let externaddr_value = externaddr_list externaddrs in
       Ok
-        (eval_dynamic_rel runtime "Init_with_store_ok"
+        (eval_relation ~relname:"Init_with_store_ok"
            [ state.store; module_entry.value; externaddr_value ]
         |> init_outputs no_region)
 
-let instantiate runtime state var_opt module_entry =
-  match eval_init runtime state module_entry with
+let instantiate ?eval_relation runtime state var_opt module_entry =
+  match eval_init ?eval_relation runtime state module_entry with
   | Ok
       (InitExecuted
         {
@@ -810,8 +818,8 @@ let instantiate runtime state var_opt module_entry =
   | Ok (InitExecuted { outcome = Thrown _; _ }) ->
       error no_region "unexpected exception during instantiation"
 
-let expect_uninstantiable runtime state module_entry =
-  match eval_init runtime state module_entry with
+let expect_uninstantiable ?eval_relation runtime state module_entry =
+  match eval_init ?eval_relation runtime state module_entry with
   | Ok (InitExecuted { outcome = Trapped store; _ }) -> { state with store }
   | Error (UnknownImport _) ->
       error no_region "expected instantiation trap, got link error"
@@ -820,13 +828,14 @@ let expect_uninstantiable runtime state module_entry =
   | Ok (InitExecuted { outcome = Thrown _; _ }) ->
       error no_region "expected instantiation trap, got exception"
 
-let run_action runtime state (act : Script.action) =
+let run_action ?eval_relation runtime state (act : Script.action) =
+  let eval_relation = select_relation_evaluator runtime eval_relation in
   match act.it with
   | Script.Invoke (var_opt, name, literals) ->
       let instance = lookup_instance no_region var_opt state in
       let funcaddr = funcaddr_of_export no_region instance.module_inst name in
       let arguments = value_list (List.map value_of_literal literals) in
-      eval_dynamic_rel runtime "Invoke" [ state.store; funcaddr; arguments ]
+      eval_relation ~relname:"Invoke" [ state.store; funcaddr; arguments ]
       |> invoke_outputs no_region
   | Script.Get (var_opt, name) ->
       let instance = lookup_instance no_region var_opt state in
@@ -834,7 +843,8 @@ let run_action runtime state (act : Script.action) =
       let value = global_value no_region state.store globaladdr in
       Returned { store = state.store; values = [ value ] }
 
-let run_command runtime ~index ~total state (cmd : Script.command) =
+let run_command ?eval_relation runtime ~index ~total state
+    (cmd : Script.command) =
   trace_command ~index ~total cmd;
   let context_error at msg =
     error at (debug_error_message ~index ~total cmd msg)
@@ -846,7 +856,7 @@ let run_command runtime ~index ~total state (cmd : Script.command) =
         bind_module no_region var_opt entry state
     | Script.Instance (var_opt, source_var_opt) ->
         let module_entry = lookup_module no_region source_var_opt state in
-        instantiate runtime state var_opt module_entry
+        instantiate ?eval_relation runtime state var_opt module_entry
     | Script.Register (name, var_opt) ->
         let instance = lookup_instance no_region var_opt state in
         bind_registry name instance state
@@ -862,21 +872,21 @@ let run_command runtime ~index ~total state (cmd : Script.command) =
             | Pass _ -> error no_region "expected validation failure")
         | Script.AssertUninstantiable (var_opt, _) ->
             let module_entry = lookup_module no_region var_opt state in
-            expect_uninstantiable runtime state module_entry
+            expect_uninstantiable ?eval_relation runtime state module_entry
         | Script.AssertReturn (act, results) -> (
-            match run_action runtime state act with
+            match run_action ?eval_relation runtime state act with
             | Returned { store; values } ->
                 assert_action_results no_region act values results;
                 { state with store }
             | Trapped _ -> error no_region "expected return, got trap"
             | Thrown _ -> error no_region "expected return, got exception")
         | Script.AssertTrap (act, _) -> (
-            match run_action runtime state act with
+            match run_action ?eval_relation runtime state act with
             | Trapped store -> { state with store }
             | Returned _ -> error no_region "expected runtime trap, got return"
             | Thrown _ -> error no_region "expected runtime trap, got exception")
         | Script.AssertException act -> (
-            match run_action runtime state act with
+            match run_action ?eval_relation runtime state act with
             | Thrown { store; _ } -> { state with store }
             | Returned _ -> error no_region "expected exception, got return"
             | Trapped _ -> error no_region "expected exception, got trap")
@@ -886,16 +896,17 @@ let run_command runtime ~index ~total state (cmd : Script.command) =
         | Script.AssertUnlinkable _
         | Script.AssertExhaustion _ -> state)
     | Script.Action act -> (
-        match run_action runtime state act with
+        match run_action ?eval_relation runtime state act with
         | Returned { store; _ } -> { state with store }
         | Trapped _ -> error no_region "unexpected runtime trap"
         | Thrown _ -> error no_region "unexpected exception")
     | Script.Meta _ -> state
   with Util.Error.InterpError (at, msg) -> context_error at msg
 
-let run_commands runtime state commands =
+let run_commands ?eval_relation runtime state commands =
   let total = List.length commands in
   List.fold_left
-    (fun state (index, command) -> run_command runtime ~index ~total state command)
+    (fun state (index, command) ->
+      run_command ?eval_relation runtime ~index ~total state command)
     state
     (List.mapi (fun index command -> (index + 1, command)) commands)

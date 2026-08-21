@@ -92,6 +92,12 @@ type init_observation = {
   graph : Dep.Graph.t option;
 }
 
+type invocation_observation = {
+  command_index : int;
+  relation : string;
+  coverage : DCov.t;
+}
+
 let evaluate_instantiation_common ~run_init env episode mutated_target =
   try
     match Episode.prepare env.runtime episode mutated_target with
@@ -149,3 +155,59 @@ let evaluate_instantiation_with_dangling_and_vdg ~derive env episode mutated_tar
     { relation_result; coverage; graph = Some graph }
   in
   evaluate_instantiation_common ~run_init env episode mutated_target
+
+let observe_invocation_with_dangling env
+    (episode : Episode.invocation_episode) ~on_observation =
+  if Inst.Hook.is_active () then
+    Error
+      (Phase.HarnessFailure
+         (no_region, "instrumentation handler leaked from an earlier run"))
+  else (
+    Wasm_interface.Builtin_hooks.init ();
+    try
+      let state =
+        Harness.run_commands env.runtime (Harness.initial_state ())
+          (Episode.invocation_prefix_commands episode)
+      in
+      let root =
+        Episode.mutation_root (Episode.invocation_target_value episode)
+      in
+      let run_group state (group : Episode.source_group) =
+        let observations = ref [] in
+        let eval_relation ~relname inputs =
+          if
+            String.equal relname "Init_with_store_ok"
+            || String.equal relname "Invoke"
+          then
+            let relation_result, coverage =
+              Runner.eval_rel_with_dangling ~simulator:env.simulator
+                ~spec:env.spec ~root ~relname ~inputs
+            in
+            match relation_result with
+            | Pass outputs ->
+                observations :=
+                  { command_index = group.ordinal + 1; relation = relname; coverage }
+                  :: !observations;
+                outputs
+            | Fail (at, message) ->
+                error_interp at (relname ^ " failed: " ^ message)
+          else Harness.eval_dynamic_rel env.runtime relname inputs
+        in
+        let state =
+          Harness.run_commands ~eval_relation env.runtime state group.commands
+        in
+        List.rev !observations |> List.iter on_observation;
+        state
+      in
+      let state =
+        List.fold_left run_group state episode.invocation_target_groups
+      in
+      ignore (List.fold_left run_group state episode.invocation_suffix);
+      Ok ()
+    with
+    | InterpError (at, message) ->
+        Error (Phase.HarnessFailure (at, message))
+    | Z.Overflow ->
+        Error
+          (Phase.HarnessFailure
+             (no_region, "integer conversion overflow during invocation boot")))

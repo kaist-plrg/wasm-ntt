@@ -883,6 +883,9 @@ let wasm_run_testgen_command =
      and boot_observe_dirs =
        flag "-boot-observe-dir" (listed string)
          ~doc:"DIR observation-only Wasm directory for instantiation cold boot"
+     and boot_invoke_dirs =
+       flag "-boot-invoke-dir" (listed string)
+         ~doc:"DIR invocation-only Wasm directory for instantiation cold boot"
      and path_boot =
        flag "-boot-file" (optional string) ~doc:"coverage file for boot"
      and random = flag "-random" no_arg ~doc:"randomize AST selection"
@@ -927,11 +930,22 @@ let wasm_run_testgen_command =
            raise
              (CommandError
                 "Error: -boot-observe-dir is only valid with -phase instantiation");
+         if boot_invoke_dirs <> [] && phase <> Backend_testgen_neg.Config.Instantiation
+         then
+           raise
+             (CommandError
+                "Error: -boot-invoke-dir is only valid with -phase instantiation");
          (match (boot_observe_dirs, bootmode) with
          | _ :: _, Backend_testgen_neg.Modes.Warm _ ->
              raise
                (CommandError
                   "Error: -boot-observe-dir requires cold boot with -boot-dir")
+         | _ -> ());
+         (match (boot_invoke_dirs, bootmode) with
+         | _ :: _, Backend_testgen_neg.Modes.Warm _ ->
+             raise
+               (CommandError
+                  "Error: -boot-invoke-dir requires cold boot with -boot-dir")
          | _ -> ());
          let mutationmode =
            if random then Backend_testgen_neg.Modes.Random
@@ -978,8 +992,8 @@ let wasm_run_testgen_command =
                     "Error: should specify either -fuel or -timeout")
          in
          Backend_testgen_neg.Gen.wasm_fuzzer budget spec_sl phase gendir
-           name_campaign randseed logmode bootmode boot_observe_dirs mutationmode
-           covermode focus
+           name_campaign randseed logmode bootmode boot_observe_dirs
+           boot_invoke_dirs mutationmode covermode focus
        with
        | CommandError msg -> Format.printf "%s\n" msg
        | ParseError (at, msg)

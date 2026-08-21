@@ -1359,6 +1359,7 @@ let wasm_fuzzer_init (spec : spec) (phase : Config.wasm_phase)
     (name_campaign : string option) (randseed : int option)
     (logmode : Modes.logmode) (bootmode : Modes.bootmode)
     (boot_observe_dirs : string list)
+    (boot_invoke_dirs : string list)
     (mutationmode : Modes.mutationmode) (covermode : Modes.covermode)
     (focus : Config.wasm_focus option) (budget : Config.wasm_budget) :
     Config.tw = (* log/, query/, welltyped/, illtyped/, closemiss/ 를 만들고 boot.coverage를 기록 *)
@@ -1381,7 +1382,7 @@ let wasm_fuzzer_init (spec : spec) (phase : Config.wasm_phase)
   let logname_init = storage.dirname_log ^ "/init.log" in
   let log_init = Logger.init logname_init in
   F.asprintf
-    "[COMMAND] wasm-testgen -phase %s (coverage relation %s) -gen %s%s%s%s%s%s%s"
+    "[COMMAND] wasm-testgen -phase %s (coverage relation %s) -gen %s%s%s%s%s%s%s%s"
     (Config.string_of_wasm_phase phase)
     (Config.coverage_relation phase)
     dirname_gen
@@ -1391,6 +1392,9 @@ let wasm_fuzzer_init (spec : spec) (phase : Config.wasm_phase)
     | Warm path_boot -> " -warm " ^ path_boot)
     (boot_observe_dirs
     |> List.map (fun directory -> " -boot-observe-dir " ^ directory)
+    |> String.concat "")
+    (boot_invoke_dirs
+    |> List.map (fun directory -> " -boot-invoke-dir " ^ directory)
     |> String.concat "")
     (match modes.mutationmode with
     | Random -> " -random"
@@ -1428,15 +1432,41 @@ let wasm_fuzzer_init (spec : spec) (phase : Config.wasm_phase)
     Logger.close log_init;
     failwith (label ^ " failed; see init.log for every seed failure")
   in
-  let write_coverage path coverage =
+  let coverage_relations =
+    match modes.bootmode with
+    | Cold _ -> (
+        match (phase, boot_invoke_dirs) with
+        | Config.Instantiation, _ :: _ -> [ "Init_with_store_ok"; "Invoke" ]
+        | _ -> [ Config.coverage_relation phase ])
+    | Warm path_boot -> (
+        match Metadata.read ~phase path_boot with
+        | Ok metadata -> metadata.Metadata.coverage_relations
+        | Error error ->
+            failwith
+              ("Wasm warm boot metadata read failed: "
+              ^ Boot.string_of_phase_error error))
+  in
+  let write_coverage ?(relations = coverage_relations) path coverage =
     DCov_multi.log ~path_cov_opt:(Some path) coverage;
-    match Metadata.write ~phase path with
+    match Metadata.write ~phase ~coverage_relations:relations path with
     | Ok () -> ()
     | Error error ->
         Logger.close log_init;
         failwith
           ("Wasm cold boot coverage metadata write failed: "
           ^ Boot.string_of_phase_error error)
+  in
+  let invocation_hit_delta before after =
+    DCov_multi.Cover.mapi
+      (fun iid before_branch ->
+        let after_branch = DCov_multi.Cover.find iid after in
+        match
+          ( before_branch.DCov_multi.Branch.status,
+            after_branch.DCov_multi.Branch.status )
+        with
+        | DCov_multi.Branch.Miss _, DCov_multi.Branch.Hit _ -> after_branch
+        | _ -> { after_branch with status = DCov_multi.Branch.Miss [] })
+      before
   in
   let cover_seed =
     match modes.bootmode with
@@ -1447,32 +1477,73 @@ let wasm_fuzzer_init (spec : spec) (phase : Config.wasm_phase)
          with
         | Ok { Boot.coverage = cover_seed; diagnostics } ->
             log_diagnostics "BOOT" diagnostics;
-            if boot_observe_dirs <> [] then (
-              write_coverage (dirname_gen ^ "/boot-primary.coverage") cover_seed;
+            if boot_observe_dirs <> [] || boot_invoke_dirs <> [] then (
+              write_coverage
+                ~relations:[ Config.coverage_relation phase ]
+                (dirname_gen ^ "/boot-primary.coverage") cover_seed;
               let total, hits, coverage = DCov_multi.measure_coverage cover_seed in
               F.asprintf "Finished primary boot coverage %d/%d (%.2f%%)" hits
                 total coverage
               |> Logger.log modes.logmode log_init);
-            List.fold_left
-              (fun coverage directory ->
-                let _, hits_before, _ = DCov_multi.measure_coverage coverage in
-                match
-                  Boot.wasm_boot_observe specenv.simulator specenv.spec
-                    ~coverage directory
-                with
-                | Ok { Boot.coverage; diagnostics } ->
-                    log_diagnostics "BOOT OBSERVE" diagnostics;
-                    let total, hits_after, percent =
-                      DCov_multi.measure_coverage coverage
-                    in
-                    F.asprintf
-                      "Finished observation boot %s: +%d hits, combined %d/%d \
-                       (%.2f%%)"
-                      directory (hits_after - hits_before) hits_after total percent
-                    |> Logger.log modes.logmode log_init;
-                    coverage
-                | Error failures -> fail_boot "Wasm observation boot" failures)
-              cover_seed boot_observe_dirs
+            let cover_before_invocation =
+              List.fold_left
+                (fun coverage directory ->
+                  let _, hits_before, _ = DCov_multi.measure_coverage coverage in
+                  match
+                    Boot.wasm_boot_observe specenv.simulator specenv.spec
+                      ~coverage directory
+                  with
+                  | Ok { Boot.coverage; diagnostics } ->
+                      log_diagnostics "BOOT OBSERVE" diagnostics;
+                      let total, hits_after, percent =
+                        DCov_multi.measure_coverage coverage
+                      in
+                      F.asprintf
+                        "Finished observation boot %s: +%d hits, combined %d/%d \
+                         (%.2f%%)"
+                        directory (hits_after - hits_before) hits_after total
+                        percent
+                      |> Logger.log modes.logmode log_init;
+                      coverage
+                  | Error failures ->
+                      fail_boot "Wasm observation boot" failures)
+                cover_seed boot_observe_dirs
+            in
+            if boot_invoke_dirs <> [] then
+              write_coverage
+                ~relations:[ Config.coverage_relation phase ]
+                (dirname_gen ^ "/boot-before-invocation.coverage")
+                cover_before_invocation;
+            let cover_after_invocation =
+              List.fold_left
+                (fun coverage directory ->
+                  let _, hits_before, _ = DCov_multi.measure_coverage coverage in
+                  match
+                    Boot.wasm_boot_invoke specenv.simulator specenv.spec
+                      ~coverage directory
+                  with
+                  | Ok { Boot.coverage; diagnostics } ->
+                      log_diagnostics "BOOT INVOKE" diagnostics;
+                      let total, hits_after, percent =
+                        DCov_multi.measure_coverage coverage
+                      in
+                      F.asprintf
+                        "Finished invocation boot %s: +%d hits, combined %d/%d \
+                         (%.2f%%)"
+                        directory (hits_after - hits_before) hits_after total
+                        percent
+                      |> Logger.log modes.logmode log_init;
+                      coverage
+                  | Error failures ->
+                      fail_boot "Wasm invocation boot" failures)
+                cover_before_invocation boot_invoke_dirs
+            in
+            if boot_invoke_dirs <> [] then
+              write_coverage
+                (dirname_gen ^ "/boot-invocation-only.coverage")
+                (invocation_hit_delta cover_before_invocation
+                   cover_after_invocation);
+            cover_after_invocation
         | Error failures -> fail_boot "Wasm cold boot" failures)
     | Warm path_boot -> (
         match Boot.wasm_boot_warm ~phase path_boot with
@@ -1506,11 +1577,13 @@ let wasm_fuzzer (budget : Config.wasm_budget) (spec : spec)
     (dirname_gen : string) (name_campaign : string option)
     (randseed : int option) (logmode : Modes.logmode)
     (bootmode : Modes.bootmode) (boot_observe_dirs : string list)
+    (boot_invoke_dirs : string list)
     (mutationmode : Modes.mutationmode)
     (covermode : Modes.covermode) (focus : Config.wasm_focus option) : unit =
   let config =
     wasm_fuzzer_init spec phase dirname_gen name_campaign randseed logmode
-      bootmode boot_observe_dirs mutationmode covermode focus budget
+      bootmode boot_observe_dirs boot_invoke_dirs mutationmode covermode focus
+      budget
   in
   let config =
     match budget with
@@ -1519,7 +1592,21 @@ let wasm_fuzzer (budget : Config.wasm_budget) (spec : spec)
   in
   let path_cov = config.storage.dirname_gen ^ "/final.coverage" in
   DCov_multi.log ~path_cov_opt:(Some path_cov) config.seed.cover;
-  match Metadata.write ~phase path_cov with
+  let coverage_relations =
+    match bootmode with
+    | Cold _ -> (
+        match (phase, boot_invoke_dirs) with
+        | Config.Instantiation, _ :: _ -> [ "Init_with_store_ok"; "Invoke" ]
+        | _ -> [ Config.coverage_relation phase ])
+    | Warm path_boot -> (
+        match Metadata.read ~phase path_boot with
+        | Ok metadata -> metadata.Metadata.coverage_relations
+        | Error error ->
+            failwith
+              ("Wasm final coverage metadata read failed: "
+              ^ Boot.string_of_phase_error error))
+  in
+  match Metadata.write ~phase ~coverage_relations path_cov with
   | Ok () -> ()
   | Error error ->
       failwith
