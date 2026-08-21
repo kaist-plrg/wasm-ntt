@@ -281,15 +281,12 @@ def $limits_min_nat({ MIN u64, MAX _ }) = u64
 
 dec $nat_of_num(num_) : nat
 def $nat_of_num(I32 n) = n
-def $nat_of_num(I64 i) = n
-  -- if n = $(i)
+def $nat_of_num(I64 i64) = i64
 
-dec $addr_plus_offset(num_, int) : nat
-def $addr_plus_offset(num, int_1) = addrval
+dec $addr_plus_offset(num_, u64) : nat
+def $addr_plus_offset(num, u64) = addrval
   -- if base = $nat_of_num(num)
-  -- if $(int_1 >= 0)
-  -- if offset = $(int_1)
-  -- if addrval = $(base + offset)
+  -- if addrval = $(base + u64)
 
 builtin dec $byte_of_i32(nat) : byte
 builtin dec $i31_of_i32(nat) : nat
@@ -325,6 +322,9 @@ builtin dec $i31_get_s(nat) : nat
 builtin dec $bytes_of_i32(nat) : byte*
 builtin dec $i32_of_bytes(byte*) : nat
 builtin dec $i64_of_bytes(byte*) : nat
+builtin dec $f32_of_bytes(byte*) : f32
+builtin dec $f64_of_bytes(byte*) : f64
+builtin dec $v128_of_bytes(byte*) : v128
 builtin dec $zero_bytes(nat) : byte*
 builtin dec $repeat_byte(byte, nat) : byte*
 builtin dec $slice_bytes(byte*, nat, nat) : byte*

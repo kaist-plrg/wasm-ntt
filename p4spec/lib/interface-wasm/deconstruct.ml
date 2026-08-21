@@ -67,6 +67,11 @@ let sl_to_nat32 (value: Value.t) : I32.t = sl_to_z_nat value |> z_to_intN Z.to_i
 let sl_to_nat64 (value: Value.t) : I64.t = sl_to_z_nat value |> z_to_intN Z.to_int64 Z.to_int64_unsigned
 let sl_to_u64 (value: Value.t) : I64.t = sl_to_z_nat value |> Z.to_int64_unsigned
 
+let sl_to_u32_int (value: Value.t) : int =
+  let z = sl_to_z_nat value in
+  ignore (Z.to_int32_unsigned z);
+  Z.to_int z
+
 type layout = { width : int; exponent : int; mantissa : int }
 let layout32 = { width = 32; exponent = 8; mantissa = 23 }
 let layout64 = { width = 64; exponent = 11; mantissa = 52 }
@@ -241,8 +246,6 @@ and sl_to_rec_type (value: Value.t) : Types.rec_type =
 
 and sl_to_int (value: Value.t) : int = sl_to_z_int value |> Z.to_int
 
-and sl_to_int64 (value: Value.t) : int64 = sl_to_z_int value |> z_to_intN Z.to_int64 Z.to_int64_unsigned
-
 and sl_to_void (value: Value.t) : unit =
   match sl_case value with
   | Some ([[{ it = Keyword "VOID"; _ }]], []) -> ()
@@ -311,7 +314,7 @@ and sl_to_loadop (value: Value.t) : Ast.loadop =
   | StructV valuefields ->
     let _atoms, values = List.split valuefields in
     (match values with
-    | [ty; align; offset; pack] -> { ty = sl_to_num_type ty; align = sl_to_int align; offset = sl_to_int64 offset; pack = sl_to_opt sl_to_pack_type_extension pack }
+    | [ty; align; offset; pack] -> { ty = sl_to_num_type ty; align = sl_to_u32_int align; offset = sl_to_u64 offset; pack = sl_to_opt sl_to_pack_type_extension pack }
     | _ -> failwith "Expected loadop_ with 4 fields")
   | _ -> failwith "Expected loadop_"
 
@@ -320,7 +323,7 @@ and sl_to_storeop (value: Value.t) : Ast.storeop =
   | StructV valuefields ->
     let _atoms, values = List.split valuefields in
     (match values with
-    | [ty; align; offset; pack] -> { ty = sl_to_num_type ty; align = sl_to_int align; offset = sl_to_int64 offset; pack = sl_to_opt sl_to_pack_type pack }
+    | [ty; align; offset; pack] -> { ty = sl_to_num_type ty; align = sl_to_u32_int align; offset = sl_to_u64 offset; pack = sl_to_opt sl_to_pack_type pack }
     | _ -> failwith "Expected storeop_ with 4 fields")
   | _ -> failwith "Expected storeop_"
 
@@ -329,7 +332,7 @@ and sl_to_vec_loadop (value: Value.t) : Ast.vec_loadop =
   | StructV valuefields ->
     let _atoms, values = List.split valuefields in
     (match values with
-    | [ty; align; offset; pack] -> { ty = sl_to_vec_type ty; align = sl_to_int align; offset = sl_to_int64 offset; pack = sl_to_opt sl_to_pack_type_vec_extension pack }
+    | [ty; align; offset; pack] -> { ty = sl_to_vec_type ty; align = sl_to_u32_int align; offset = sl_to_u64 offset; pack = sl_to_opt sl_to_pack_type_vec_extension pack }
     | _ -> failwith "Expected vloadop_ with 4 fields")
   | _ -> failwith "Expected vloadop_"
 
@@ -338,7 +341,7 @@ and sl_to_vec_storeop (value: Value.t) : Ast.vec_storeop =
   | StructV valuefields ->
     let _atoms, values = List.split valuefields in
     (match values with
-    | [ty; align; offset; pack] -> sl_to_void pack; { ty = sl_to_vec_type ty; align = sl_to_int align; offset = sl_to_int64 offset; pack = () }
+    | [ty; align; offset; pack] -> sl_to_void pack; { ty = sl_to_vec_type ty; align = sl_to_u32_int align; offset = sl_to_u64 offset; pack = () }
     | _ -> failwith "Expected vstoreop_ with 4 fields")
   | _ -> failwith "Expected vstoreop_"
 
@@ -347,7 +350,7 @@ and sl_to_vec_laneop (value: Value.t) : Ast.vec_laneop =
   | StructV valuefields ->
     let _atoms, values = List.split valuefields in
     (match values with
-    | [ty; align; offset; pack] -> { ty = sl_to_vec_type ty; align = sl_to_int align; offset = sl_to_int64 offset; pack = sl_to_pack_type pack }
+    | [ty; align; offset; pack] -> { ty = sl_to_vec_type ty; align = sl_to_u32_int align; offset = sl_to_u64 offset; pack = sl_to_pack_type pack }
     | _ -> failwith "Expected vlaneop_ with 4 fields")
   | _ -> failwith "Expected vlaneop_"
 

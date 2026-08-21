@@ -596,8 +596,11 @@ let il_of_vbinop = il_of_vop il_of_int_vbinop il_of_float_vbinop
 let il_of_int i =
   wrap_num_v_int (bigint_of_z_int (Z.of_int i))
 
-let il_of_int64 i64 =
-  wrap_num_v_int (bigint_of_z_int (Z.of_int64_unsigned i64))
+let il_of_u32 i =
+  with_typ (wrap_var_t "u32") (NumV (`Nat (bigint_of_nat i)))
+
+let il_of_u64 i64 =
+  with_typ (wrap_var_t "u64") (NumV (`Nat (bigint_of_nat64 i64)))
 
 let il_of_void () = [ Term "VOID" ] #@ "void"
 
@@ -673,16 +676,16 @@ let il_of_loadop op =
   in
   wrap_struct_v "loadop_" [
     (wrap_atom "TYPE", il_of_num_type op.ty);
-    (wrap_atom "ALIGN", il_of_int op.align);
-    (wrap_atom "OFFSET", il_of_int64 op.offset);
+    (wrap_atom "ALIGN", il_of_u32 op.align);
+    (wrap_atom "OFFSET", il_of_u64 op.offset);
     (wrap_atom "PACK", pack); ]
 
 let il_of_storeop op =
   let pack = il_of_opt "packtype" il_of_pack_type_memop op.pack in
   wrap_struct_v "storeop_" [
     (wrap_atom "TYPE", il_of_num_type op.ty);
-    (wrap_atom "ALIGN", il_of_int op.align);
-    (wrap_atom "OFFSET", il_of_int64 op.offset);
+    (wrap_atom "ALIGN", il_of_u32 op.align);
+    (wrap_atom "OFFSET", il_of_u64 op.offset);
     (wrap_atom "PACK", pack); ]
 
 let il_of_vec_loadop op =
@@ -703,22 +706,22 @@ let il_of_vec_loadop op =
   in
   wrap_struct_v "vloadop_" [
     (wrap_atom "TYPE", il_of_vec_type op.ty);
-    (wrap_atom "ALIGN", il_of_int op.align);
-    (wrap_atom "OFFSET", il_of_int64 op.offset);
+    (wrap_atom "ALIGN", il_of_u32 op.align);
+    (wrap_atom "OFFSET", il_of_u64 op.offset);
     (wrap_atom "PACK", pack); ]
 
 let il_of_vec_storeop op =
   wrap_struct_v "vstoreop_" [
     (wrap_atom "TYPE", il_of_vec_type op.ty);
-    (wrap_atom "ALIGN", il_of_int op.align);
-    (wrap_atom "OFFSET", il_of_int64 op.offset);
+    (wrap_atom "ALIGN", il_of_u32 op.align);
+    (wrap_atom "OFFSET", il_of_u64 op.offset);
     (wrap_atom "PACK", il_of_void ()); ]
 
 let il_of_vec_laneop op =
   wrap_struct_v "vlaneop_" [
     (wrap_atom "TYPE", il_of_vec_type op.ty);
-    (wrap_atom "ALIGN", il_of_int op.align);
-    (wrap_atom "OFFSET", il_of_int64 op.offset);
+    (wrap_atom "ALIGN", il_of_u32 op.align);
+    (wrap_atom "OFFSET", il_of_u64 op.offset);
     (wrap_atom "PACK", il_of_pack_type_memop op.pack); ]
 
 let il_of_int_vternop : V128Op.iternop -> Lang.Il.value = function

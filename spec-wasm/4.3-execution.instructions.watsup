@@ -233,6 +233,8 @@ rule Step/label-trap:
 ;; Public constant-expression and invocation compatibility boundaries
 ;;
 
+;; Note: evaluation of const expressions does not affect the store
+
 relation Eval_const: store moduleinst |- const : (store, value)
   hint(input %0 %1 %2)
 
@@ -323,6 +325,12 @@ def $fieldval_of_storage_bytes(ValStorageT (NumT I32T), b*) =
   FieldValue (NumV (I32 $i32_of_bytes(b*)))
 def $fieldval_of_storage_bytes(ValStorageT (NumT I64T), b*) =
   FieldValue (NumV (I64 $i64_of_bytes(b*)))
+def $fieldval_of_storage_bytes(ValStorageT (NumT F32T), b*) =
+  FieldValue (NumV (F32 $f32_of_bytes(b*)))
+def $fieldval_of_storage_bytes(ValStorageT (NumT F64T), b*) =
+  FieldValue (NumV (F64 $f64_of_bytes(b*)))
+def $fieldval_of_storage_bytes(ValStorageT (VecT V128T), b*) =
+  FieldValue (VecV (V128 $v128_of_bytes(b*)))
 
 def $fieldvals_of_data(zt, b*, offset, n) = eps
   -- if n = 0
@@ -813,23 +821,23 @@ rule Step_plain_instr/memory-grow-i32-bounded-size-fail:
   -- if $(newsize > 65536)
 
 rule Step_plain_instr/memory-grow-i64:
-  STO fr ((NumV (I64 n)) :: v*) |- MEMORY.GROW x : (STO', fr, (NumV (I64 pages)) :: v*, eps)
+  STO fr ((NumV (I64 i64)) :: v*) |- MEMORY.GROW x : (STO', fr, (NumV (I64 pages)) :: v*, eps)
   -- if ma = fr.MODULE.MEMS[x]
   -- if MemoryT I64AT { MIN u64, MAX eps } = STO.MEMS[ma].TYPE
   -- if pages = $(|STO.MEMS[ma].BYTES| / $page_size)
-  -- if nsize = $nat_of_num(I64 n)
+  -- if nsize = $nat_of_num(I64 i64)
   -- if newsize = $(pages + nsize)
   -- if nbytes = $(nsize * $page_size)
   -- if STO_1 = STO[ .MEMS[ma].BYTES = STO.MEMS[ma].BYTES ++ $zero_bytes(nbytes) ]
   -- if STO' = STO_1[ .MEMS[ma].TYPE = MemoryT I64AT { MIN newsize, MAX eps } ]
 
 rule Step_plain_instr/memory-grow-i64-bounded:
-  STO fr ((NumV (I64 n)) :: v*) |- MEMORY.GROW x : (STO', fr, (NumV (I64 pages)) :: v*, eps)
+  STO fr ((NumV (I64 i64)) :: v*) |- MEMORY.GROW x : (STO', fr, (NumV (I64 pages)) :: v*, eps)
   -- if ma = fr.MODULE.MEMS[x]
   -- if MemoryT I64AT { MIN u64, MAX u64_1 } = STO.MEMS[ma].TYPE
   -- if max = $(u64_1)
   -- if pages = $(|STO.MEMS[ma].BYTES| / $page_size)
-  -- if nsize = $nat_of_num(I64 n)
+  -- if nsize = $nat_of_num(I64 i64)
   -- if newsize = $(pages + nsize)
   -- if $(newsize <= max)
   -- if nbytes = $(nsize * $page_size)
@@ -837,15 +845,15 @@ rule Step_plain_instr/memory-grow-i64-bounded:
   -- if STO' = STO_1[ .MEMS[ma].TYPE = MemoryT I64AT { MIN newsize, MAX u64_1 } ]
 
 rule Step_plain_instr/memory-grow-i64-bounded-fail:
-  STO fr ((NumV (I64 n)) :: v*) |- MEMORY.GROW x : (STO, fr, (NumV (I64 fail64)) :: v*, eps)
+  STO fr ((NumV (I64 i64)) :: v*) |- MEMORY.GROW x : (STO, fr, (NumV (I64 fail64)) :: v*, eps)
   -- if ma = fr.MODULE.MEMS[x]
   -- if MemoryT I64AT { MIN u64, MAX u64_1 } = STO.MEMS[ma].TYPE
   -- if max = $(u64_1)
   -- if pages = $(|STO.MEMS[ma].BYTES| / $page_size)
-  -- if nsize = $nat_of_num(I64 n)
+  -- if nsize = $nat_of_num(I64 i64)
   -- if newsize = $(pages + nsize)
   -- if $(newsize > max)
-  -- if fail64 = $(-1)
+  -- if fail64 = 18446744073709551615
 
 ;; 4.6. Instructions (pg. 122)
 
@@ -958,19 +966,19 @@ rule Step_plain_instr/table-get-oob:
   -- if $(i >= |STO.TABLES[ta].REFS|)
 
 rule Step_plain_instr/table-get-i64:
-  STO fr ((NumV (I64 i)) :: v*) |- TABLE.GET x : (STO, fr, (RefV r) :: v*, eps)
+  STO fr ((NumV (I64 i64)) :: v*) |- TABLE.GET x : (STO, fr, (RefV r) :: v*, eps)
   -- if ta = fr.MODULE.TABLES[x]
   -- if TableT I64AT lim rt = STO.TABLES[ta].TYPE
-  -- if offset = $nat_of_num(I64 i)
+  -- if offset = $nat_of_num(I64 i64)
   -- if $(offset < |STO.TABLES[ta].REFS|)
   -- if r = STO.TABLES[ta].REFS[offset]
 
 rule Step_plain_instr/table-get-i64-oob:
-  STO fr ((NumV (I64 i)) :: v*) |- TABLE.GET x :
+  STO fr ((NumV (I64 i64)) :: v*) |- TABLE.GET x :
     (STO, fr, v*, (Trapping) :: eps)
   -- if ta = fr.MODULE.TABLES[x]
   -- if TableT I64AT lim rt = STO.TABLES[ta].TYPE
-  -- if offset = $nat_of_num(I64 i)
+  -- if offset = $nat_of_num(I64 i64)
   -- if $(offset >= |STO.TABLES[ta].REFS|)
 
 rule Step_plain_instr/table-set:
@@ -994,10 +1002,10 @@ rule Step_plain_instr/table-size-i32:
   -- if n = |STO.TABLES[ta].REFS|
 
 rule Step_plain_instr/table-size-i64:
-  STO fr v* |- TABLE.SIZE x : (STO, fr, (NumV (I64 n)) :: v*, eps)
+  STO fr v* |- TABLE.SIZE x : (STO, fr, (NumV (I64 i64)) :: v*, eps)
   -- if ta = fr.MODULE.TABLES[x]
   -- if TableT I64AT lim rt = STO.TABLES[ta].TYPE
-  -- if n = |STO.TABLES[ta].REFS|
+  -- if i64 = |STO.TABLES[ta].REFS|
 
 rule Step_plain_instr/table-grow-i32-unbounded:
   STO fr ((NumV (I32 n)) :: (RefV r) :: v*) |- TABLE.GROW x : (STO', fr, (NumV (I32 old)) :: v*, eps)
@@ -1038,37 +1046,37 @@ rule Step_plain_instr/table-grow-i32-fail:
   -- if $(newsize > max)
 
 rule Step_plain_instr/table-grow-i64-unbounded:
-  STO fr ((NumV (I64 n)) :: (RefV r) :: v*) |- TABLE.GROW x : (STO', fr, (NumV (I64 old)) :: v*, eps)
+  STO fr ((NumV (I64 i64)) :: (RefV r) :: v*) |- TABLE.GROW x : (STO', fr, (NumV (I64 old)) :: v*, eps)
   -- if ta = fr.MODULE.TABLES[x]
   -- if TableT I64AT { MIN u64, MAX eps } rt = STO.TABLES[ta].TYPE
   -- if old = |STO.TABLES[ta].REFS|
-  -- if nsize = $nat_of_num(I64 n)
+  -- if nsize = $nat_of_num(I64 i64)
   -- if newsize = $(old + nsize)
   -- if STO_1 = STO[ .TABLES[ta].REFS = STO.TABLES[ta].REFS ++ $make_<refval>(r, nsize) ]
   -- if STO' = STO_1[ .TABLES[ta].TYPE = TableT I64AT { MIN newsize, MAX eps } rt ]
 
 rule Step_plain_instr/table-grow-i64-bounded:
-  STO fr ((NumV (I64 n)) :: (RefV r) :: v*) |- TABLE.GROW x : (STO', fr, (NumV (I64 old)) :: v*, eps)
+  STO fr ((NumV (I64 i64)) :: (RefV r) :: v*) |- TABLE.GROW x : (STO', fr, (NumV (I64 old)) :: v*, eps)
   -- if ta = fr.MODULE.TABLES[x]
   -- if TableT I64AT { MIN u64, MAX u64_1 } rt = STO.TABLES[ta].TYPE
   -- if old = |STO.TABLES[ta].REFS|
   -- if max = $(u64_1)
-  -- if nsize = $nat_of_num(I64 n)
+  -- if nsize = $nat_of_num(I64 i64)
   -- if newsize = $(old + nsize)
   -- if $(newsize <= max)
   -- if STO_1 = STO[ .TABLES[ta].REFS = STO.TABLES[ta].REFS ++ $make_<refval>(r, nsize) ]
   -- if STO' = STO_1[ .TABLES[ta].TYPE = TableT I64AT { MIN newsize, MAX u64_1 } rt ]
 
 rule Step_plain_instr/table-grow-i64-fail:
-  STO fr ((NumV (I64 n)) :: (RefV r) :: v*) |- TABLE.GROW x : (STO, fr, (NumV (I64 fail64)) :: v*, eps)
+  STO fr ((NumV (I64 i64)) :: (RefV r) :: v*) |- TABLE.GROW x : (STO, fr, (NumV (I64 fail64)) :: v*, eps)
   -- if ta = fr.MODULE.TABLES[x]
   -- if TableT I64AT { MIN u64, MAX u64_1 } rt = STO.TABLES[ta].TYPE
   -- if old = |STO.TABLES[ta].REFS|
   -- if max = $(u64_1)
-  -- if nsize = $nat_of_num(I64 n)
+  -- if nsize = $nat_of_num(I64 i64)
   -- if newsize = $(old + nsize)
   -- if $(newsize > max)
-  -- if fail64 = $(-1)
+  -- if fail64 = 18446744073709551615
 
 rule Step_plain_instr/table-fill:
   STO fr ((NumV num_n) :: (RefV r) :: (NumV num_i) :: v*) |- TABLE.FILL x : (STO', fr, v*, eps)
@@ -1217,16 +1225,16 @@ rule Step_plain_instr/binop-i32-mul:
   -- if n = $i32_mul(i, j)
 
 rule Step_plain_instr/binop-i64-add:
-  STO fr ((NumV (I64 j)) :: (NumV (I64 i)) :: v*) |- BINOP (I64 IAdd) : (STO, fr, (NumV (I64 n)) :: v*, eps)
-  -- if n = $i64_add(i, j)
+  STO fr ((NumV (I64 i64_2)) :: (NumV (I64 i64_1)) :: v*) |- BINOP (I64 IAdd) : (STO, fr, (NumV (I64 i64)) :: v*, eps)
+  -- if i64 = $i64_add(i64_1, i64_2)
 
 rule Step_plain_instr/binop-i64-sub:
-  STO fr ((NumV (I64 j)) :: (NumV (I64 i)) :: v*) |- BINOP (I64 ISub) : (STO, fr, (NumV (I64 n)) :: v*, eps)
-  -- if n = $i64_sub(i, j)
+  STO fr ((NumV (I64 i64_2)) :: (NumV (I64 i64_1)) :: v*) |- BINOP (I64 ISub) : (STO, fr, (NumV (I64 i64)) :: v*, eps)
+  -- if i64 = $i64_sub(i64_1, i64_2)
 
 rule Step_plain_instr/binop-i64-mul:
-  STO fr ((NumV (I64 j)) :: (NumV (I64 i)) :: v*) |- BINOP (I64 IMul) : (STO, fr, (NumV (I64 n)) :: v*, eps)
-  -- if n = $i64_mul(i, j)
+  STO fr ((NumV (I64 i64_2)) :: (NumV (I64 i64_1)) :: v*) |- BINOP (I64 IMul) : (STO, fr, (NumV (I64 i64)) :: v*, eps)
+  -- if i64 = $i64_mul(i64_1, i64_2)
 
 rule Step_plain_instr/binop-f32-add:
   STO fr ((NumV (F32 fpb)) :: (NumV (F32 fpa)) :: v*) |- BINOP (F32 FAdd) : (STO, fr, (NumV (F32 fpc)) :: v*, eps)
@@ -1257,8 +1265,8 @@ rule Step_plain_instr/test-i32-eqz:
   -- if n = $i32_eqz(n_1)
 
 rule Step_plain_instr/test-i64-eqz:
-  STO fr ((NumV (I64 n_1)) :: v*) |- TEST (I64 Eqz) : (STO, fr, (NumV (I32 n)) :: v*, eps)
-  -- if n = $i64_eqz(n_1)
+  STO fr ((NumV (I64 i64)) :: v*) |- TEST (I64 Eqz) : (STO, fr, (NumV (I32 n)) :: v*, eps)
+  -- if n = $i64_eqz(i64)
 
 rule Step_plain_instr/compare-i32-gt-u:
   STO fr ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- COMPARE (I32 GtU) : (STO, fr, (NumV (I32 n)) :: v*, eps)
@@ -1273,8 +1281,8 @@ rule Step_plain_instr/compare-i32-le-u:
   -- if n = $i32_le_u(i, j)
 
 rule Step_plain_instr/compare-i64-le-u:
-  STO fr ((NumV (I64 j)) :: (NumV (I64 i)) :: v*) |- COMPARE (I64 LeU) : (STO, fr, (NumV (I32 n)) :: v*, eps)
-  -- if n = $i64_le_u(i, j)
+  STO fr ((NumV (I64 i64_2)) :: (NumV (I64 i64_1)) :: v*) |- COMPARE (I64 LeU) : (STO, fr, (NumV (I32 n)) :: v*, eps)
+  -- if n = $i64_le_u(i64_1, i64_2)
 
 rule Step_plain_instr/compare-f32-eq:
   STO fr ((NumV (F32 fpb)) :: (NumV (F32 fpa)) :: v*) |- COMPARE (F32 Eq) : (STO, fr, (NumV (I32 n)) :: v*, eps)
@@ -1313,16 +1321,16 @@ rule Step_plain_instr/compare-i32-ne:
   -- if n = $i32_ne(i, j)
 
 rule Step_plain_instr/compare-i64-eq-true:
-  STO fr ((NumV (I64 j)) :: (NumV (I64 i)) :: v*) |- COMPARE (I64 Eq) : (STO, fr, (NumV (I32 1)) :: v*, eps)
-  -- if i = j
+  STO fr ((NumV (I64 i64_2)) :: (NumV (I64 i64_1)) :: v*) |- COMPARE (I64 Eq) : (STO, fr, (NumV (I32 1)) :: v*, eps)
+  -- if i64_1 = i64_2
 
 rule Step_plain_instr/compare-i64-eq-false:
-  STO fr ((NumV (I64 j)) :: (NumV (I64 i)) :: v*) |- COMPARE (I64 Eq) : (STO, fr, (NumV (I32 0)) :: v*, eps)
-  -- if i =/= j
+  STO fr ((NumV (I64 i64_2)) :: (NumV (I64 i64_1)) :: v*) |- COMPARE (I64 Eq) : (STO, fr, (NumV (I32 0)) :: v*, eps)
+  -- if i64_1 =/= i64_2
 
 rule Step_plain_instr/convert-i32-wrap-i64:
-  STO fr ((NumV (I64 j)) :: v*) |- CONVERT (I32 WrapI64) : (STO, fr, (NumV (I32 n)) :: v*, eps)
-  -- if n = $i32_wrap_i64(j)
+  STO fr ((NumV (I64 i64)) :: v*) |- CONVERT (I32 WrapI64) : (STO, fr, (NumV (I32 n)) :: v*, eps)
+  -- if n = $i32_wrap_i64(i64)
 
 rule Step_plain_instr/test-generic:
   STO fr ((NumV num) :: v*) |- TEST top : (STO, fr, (NumV (I32 n)) :: v*, eps)

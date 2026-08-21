@@ -7,7 +7,7 @@
 syntax u32 = nat
 syntax u64 = nat
 syntax i32 = nat
-syntax i64 = int
+syntax i64 = nat
 
 ;; Floating-point
 

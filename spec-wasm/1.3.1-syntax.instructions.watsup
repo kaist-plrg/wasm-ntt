@@ -14,8 +14,8 @@ syntax op<A, B, C, D> =
 
 syntax memop<A,B> = {
   TYPE A,
-  ALIGN int,
-  OFFSET int,
+  ALIGN u32,
+  OFFSET u64,
   PACK B
 }
 

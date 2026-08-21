@@ -45,119 +45,119 @@ rule Vecbinop_ok/else:
 
 relation Loadop_ok: context |- loadop_ : numtype  hint(input %0 %1)
 rule Loadop_ok/some-i32at:
-  C_0 |- { TYPE nt, ALIGN int_1, OFFSET int_2, PACK (packtype, extension) } : nt
+  C_0 |- { TYPE nt, ALIGN u32, OFFSET u64, PACK (packtype, extension) } : nt
   -- Pack_ok: $num_size(nt) |- packtype : OK
   -- if int_3 = $pack_size(packtype)
-  -- if $($lsl_(1, int_1) >= 1) /\ $($lsl_(1, int_1) <= int_3)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
   -- if MemoryT I32AT lim = C_0.MEMS[0]
-  -- if $lt_u(int_2, 4294967296)
+  -- if $(u64 < 4294967296)
 
 rule Loadop_ok/some-i64at:
-  C_0 |- { TYPE nt, ALIGN int_1, OFFSET int_2, PACK (packtype, extension) } : nt
+  C_0 |- { TYPE nt, ALIGN u32, OFFSET u64, PACK (packtype, extension) } : nt
   -- Pack_ok: $num_size(nt) |- packtype : OK
   -- if int_3 = $pack_size(packtype)
-  -- if $($lsl_(1, int_1) >= 1) /\ $($lsl_(1, int_1) <= int_3)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
   -- if MemoryT I64AT lim = C_0.MEMS[0]
 
 rule Loadop_ok/none-i32at:
-  C_0 |- { TYPE nt, ALIGN int_1, OFFSET int_2, PACK eps } : nt
+  C_0 |- { TYPE nt, ALIGN u32, OFFSET u64, PACK eps } : nt
   -- if int_3 = $num_size(nt)
-  -- if $($lsl_(1, int_1) >= 1) /\ $($lsl_(1, int_1) <= int_3)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
   -- if MemoryT I32AT lim = C_0.MEMS[0]
-  -- if $lt_u(int_2, 4294967296)
+  -- if $(u64 < 4294967296)
 
 rule Loadop_ok/none-i64at:
-  C_0 |- { TYPE nt, ALIGN int_1, OFFSET int_2, PACK eps } : nt
+  C_0 |- { TYPE nt, ALIGN u32, OFFSET u64, PACK eps } : nt
   -- if int_3 = $num_size(nt)
-  -- if $($lsl_(1, int_1) >= 1) /\ $($lsl_(1, int_1) <= int_3)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
   -- if MemoryT I64AT lim = C_0.MEMS[0]
 
 relation Storeop_ok: context |- storeop_ : numtype  hint(input %0 %1)
 rule Storeop_ok/some-i32at:
-  C_0 |- { TYPE nt, ALIGN int_1, OFFSET int_2, PACK packtype } : nt
+  C_0 |- { TYPE nt, ALIGN u32, OFFSET u64, PACK packtype } : nt
   -- Pack_ok: $num_size(nt) |- packtype : OK
   -- if int_3 = $pack_size(packtype)
-  -- if $($lsl_(1, int_1) >= 1) /\ $($lsl_(1, int_1) <= int_3)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
   -- if MemoryT I32AT lim = C_0.MEMS[0]
-  -- if $lt_u(int_2, 4294967296)
+  -- if $(u64 < 4294967296)
 
 rule Storeop_ok/some-i64at:
-  C_0 |- { TYPE nt, ALIGN int_1, OFFSET int_2, PACK packtype } : nt
+  C_0 |- { TYPE nt, ALIGN u32, OFFSET u64, PACK packtype } : nt
   -- Pack_ok: $num_size(nt) |- packtype : OK
   -- if int_3 = $pack_size(packtype)
-  -- if $($lsl_(1, int_1) >= 1) /\ $($lsl_(1, int_1) <= int_3)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
   -- if MemoryT I64AT lim = C_0.MEMS[0]
 
 rule Storeop_ok/none-i32at:
-  C_0 |- { TYPE nt, ALIGN int_1, OFFSET int_2, PACK eps } : nt
+  C_0 |- { TYPE nt, ALIGN u32, OFFSET u64, PACK eps } : nt
   -- if int_3 = $num_size(nt)
-  -- if $($lsl_(1, int_1) >= 1) /\ $($lsl_(1, int_1) <= int_3)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
   -- if MemoryT I32AT lim = C_0.MEMS[0]
-  -- if $lt_u(int_2, 4294967296)
+  -- if $(u64 < 4294967296)
 
 rule Storeop_ok/none-i64at:
-  C_0 |- { TYPE nt, ALIGN int_1, OFFSET int_2, PACK eps } : nt
+  C_0 |- { TYPE nt, ALIGN u32, OFFSET u64, PACK eps } : nt
   -- if int_3 = $num_size(nt)
-  -- if $($lsl_(1, int_1) >= 1) /\ $($lsl_(1, int_1) <= int_3)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
   -- if MemoryT I64AT lim = C_0.MEMS[0]
 
 relation Vloadop_ok: context |- vloadop_ : vectype  hint(input %0 %1)
 rule Vloadop_ok/some-i32at:
-  C_0 |- { TYPE vt, ALIGN int_1, OFFSET int_2, PACK (packtype, vextension) } : vt
+  C_0 |- { TYPE vt, ALIGN u32, OFFSET u64, PACK (packtype, vextension) } : vt
   -- Pack_ok: $vec_size(vt) |- packtype : OK
   -- if int_3 = $pack_size(packtype)
-  -- if $($lsl_(1, int_1) >= 1) /\ $($lsl_(1, int_1) <= int_3)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
   -- if MemoryT I32AT lim = C_0.MEMS[0]
-  -- if $lt_u(int_2, 4294967296)
+  -- if $(u64 < 4294967296)
 
 rule Vloadop_ok/some-i64at:
-  C_0 |- { TYPE vt, ALIGN int_1, OFFSET int_2, PACK (packtype, vextension) } : vt
+  C_0 |- { TYPE vt, ALIGN u32, OFFSET u64, PACK (packtype, vextension) } : vt
   -- Pack_ok: $vec_size(vt) |- packtype : OK
   -- if int_3 = $pack_size(packtype)
-  -- if $($lsl_(1, int_1) >= 1) /\ $($lsl_(1, int_1) <= int_3)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
   -- if MemoryT I64AT lim = C_0.MEMS[0]
 
 rule Vloadop_ok/none-i32at:
-  C_0 |- { TYPE vt, ALIGN int_1, OFFSET int_2, PACK eps } : vt
+  C_0 |- { TYPE vt, ALIGN u32, OFFSET u64, PACK eps } : vt
   -- if int_3 = $vec_size(vt)
-  -- if $($lsl_(1, int_1) >= 1) /\ $($lsl_(1, int_1) <= int_3)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
   -- if MemoryT I32AT lim = C_0.MEMS[0]
-  -- if $lt_u(int_2, 4294967296)
+  -- if $(u64 < 4294967296)
 
 rule Vloadop_ok/none-i64at:
-  C_0 |- { TYPE vt, ALIGN int_1, OFFSET int_2, PACK eps } : vt
+  C_0 |- { TYPE vt, ALIGN u32, OFFSET u64, PACK eps } : vt
   -- if int_3 = $vec_size(vt)
-  -- if $($lsl_(1, int_1) >= 1) /\ $($lsl_(1, int_1) <= int_3)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
   -- if MemoryT I64AT lim = C_0.MEMS[0]
 
 relation Vstoreop_ok: context |- vstoreop_ : vectype  hint(input %0 %1)
 rule Vstoreop_ok/none-i32at:
-  C_0 |- { TYPE vt, ALIGN int_1, OFFSET int_2, PACK void } : vt
+  C_0 |- { TYPE vt, ALIGN u32, OFFSET u64, PACK void } : vt
   -- if int_3 = $vec_size(vt)
-  -- if $($lsl_(1, int_1) >= 1) /\ $($lsl_(1, int_1) <= int_3)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
   -- if MemoryT I32AT lim = C_0.MEMS[0]
-  -- if $lt_u(int_2, 4294967296)
+  -- if $(u64 < 4294967296)
 
 rule Vstoreop_ok/none-i64at:
-  C_0 |- { TYPE vt, ALIGN int_1, OFFSET int_2, PACK void } : vt
+  C_0 |- { TYPE vt, ALIGN u32, OFFSET u64, PACK void } : vt
   -- if int_3 = $vec_size(vt)
-  -- if $($lsl_(1, int_1) >= 1) /\ $($lsl_(1, int_1) <= int_3)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
   -- if MemoryT I64AT lim = C_0.MEMS[0]
 
 relation Vlaneop_ok: context |- vlaneop_ : vectype  hint(input %0 %1)
 rule Vlaneop_ok/some-i32at:
-  C_0 |- { TYPE vt, ALIGN int_1, OFFSET int_2, PACK packtype } : vt
+  C_0 |- { TYPE vt, ALIGN u32, OFFSET u64, PACK packtype } : vt
   -- Pack_ok: $vec_size(vt) |- packtype : OK
   -- if int_3 = $pack_size(packtype)
-  -- if $($lsl_(1, int_1) >= 1) /\ $($lsl_(1, int_1) <= int_3)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
   -- if MemoryT I32AT lim = C_0.MEMS[0]
-  -- if $lt_u(int_2, 4294967296)
+  -- if $(u64 < 4294967296)
 
 rule Vlaneop_ok/some-i64at:
-  C_0 |- { TYPE vt, ALIGN int_1, OFFSET int_2, PACK packtype } : vt
+  C_0 |- { TYPE vt, ALIGN u32, OFFSET u64, PACK packtype } : vt
   -- Pack_ok: $vec_size(vt) |- packtype : OK
   -- if int_3 = $pack_size(packtype)
-  -- if $($lsl_(1, int_1) >= 1) /\ $($lsl_(1, int_1) <= int_3)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
   -- if MemoryT I64AT lim = C_0.MEMS[0]
 
 rule Instr_ok/unreachable:

@@ -79,6 +79,9 @@ module Make (Ext : EXT) () = struct
     |> Funcs.add "bytes_of_i32" Nats.bytes_of_i32
     |> Funcs.add "i32_of_bytes" Nats.i32_of_bytes
     |> Funcs.add "i64_of_bytes" Nats.i64_of_bytes
+    |> Funcs.add "f32_of_bytes" Nats.f32_of_bytes
+    |> Funcs.add "f64_of_bytes" Nats.f64_of_bytes
+    |> Funcs.add "v128_of_bytes" Nats.v128_of_bytes
     |> Funcs.add "zero_bytes" Nats.zero_bytes
     |> Funcs.add "repeat_byte" Nats.repeat_byte
     |> Funcs.add "slice_bytes" Nats.slice_bytes

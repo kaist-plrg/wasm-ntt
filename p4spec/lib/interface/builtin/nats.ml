@@ -782,6 +782,42 @@ let bytes_string_of_value value =
          byte |> bigint_of_value |> Bigint.to_int_exn |> Char.chr)
   |> List.to_seq |> String.of_seq
 
+(* dec $f32_of_bytes(list of byte) : f32 *)
+
+let f32_of_bytes (add : value -> unit) (at : region) (targs : targ list)
+    (values_input : value list) : value =
+  Extract.zero at targs;
+  let bytes = Extract.one at values_input |> bytes_string_of_value in
+  match WasmValue.num_of_bits Types.F32T bytes with
+  | WasmValue.F32 f -> f32_value add f
+  | _ -> assert false
+
+(* dec $f64_of_bytes(list of byte) : f64 *)
+
+let f64_of_bytes (add : value -> unit) (at : region) (targs : targ list)
+    (values_input : value list) : value =
+  Extract.zero at targs;
+  let bytes = Extract.one at values_input |> bytes_string_of_value in
+  match WasmValue.num_of_bits Types.F64T bytes with
+  | WasmValue.F64 f -> f64_value add f
+  | _ -> assert false
+
+(* dec $v128_of_bytes(list of byte) : v128 *)
+
+let v128_of_bytes (add : value -> unit) (at : region) (targs : targ list)
+    (values_input : value list) : value =
+  Extract.zero at targs;
+  let bytes = Extract.one at values_input |> bytes_string_of_value in
+  let rec loop index acc =
+    if index = String.length bytes then acc
+    else
+      let byte = Bigint.of_int (Char.code bytes.[index]) in
+      let shift = 8 * index in
+      let factor = Bigint.(one lsl shift) in
+      loop (index + 1) Bigint.(acc + (byte * factor))
+  in
+  value_of_bigint add (loop 0 Bigint.zero)
+
 let bytes_value add bytes =
   let values =
     String.to_seq bytes |> Seq.map Char.code |> Seq.map byte_value |> List.of_seq
