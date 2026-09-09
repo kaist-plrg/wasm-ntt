@@ -66,7 +66,7 @@ rule Import_ok/mem:
 
 rule Import_ok/tag:
   C_0 |- { MODULENAME _, ITEMNAME _, IDESC (TagImport x) } : C_1
-  -- if ft = $func_type(C_0, x)
+  -- Tagtype_ok: C_0 |- TagT (C_0.TYPES[x]) : OK
   -- if C_1 = C_0[ .TAGS = C_0.TAGS ++ [TagT (C_0.TYPES[x])] ]
 
 rule Imports_ok/cons:
@@ -190,7 +190,7 @@ rule Tags_ok/nil:
 
 rule Tag_ok:
   C_0 |- { TGTYPE x } : C_1
-  -- if FuncT _ eps = $func_type(C_0, x)
+  -- Tagtype_ok: C_0 |- TagT (C_0.TYPES[x]) : OK
   -- if C_1 = C_0[ .TAGS = C_0.TAGS ++ [TagT (C_0.TYPES[x])] ]
 
 rule Elems_ok/cons:

@@ -20,6 +20,7 @@ relation Subtype_sub_ok': context typeidx strtype |- heaptype : OK hint(input %0
 relation Rectype_ok: context |- rectype : context           hint(input %0 %1)
 relation Memtype_ok: context |- memtype : OK    hint(input %0 %1)
 relation Globaltype_ok: context |- globaltype : OK  hint(input %0 %1)
+relation Tagtype_ok: context |- tagtype : OK  hint(input %0 %1)
 relation Limits_ok: context range |- limits : OK  hint(input %0 %1 %2)
 relation Tabletype_ok: context |- tabletype : OK  hint(input %0 %1)
 relation Blocktype_ok: context |- blocktype : instrtype hint(input %0 %1)
@@ -67,6 +68,10 @@ rule Functype_ok:
 rule Globaltype_ok:
   C_0 |- GlobalT mut t : OK
   -- Valtype_ok: C_0 |- t : OK
+
+rule Tagtype_ok:
+  C_0 |- TagT dt : OK
+  -- if FuncT _ eps = $functype_of_strtype($expanddt(dt))
 
 rule Limits_ok/without-max:
   C_0 range |- { MIN u64, MAX eps } : OK
