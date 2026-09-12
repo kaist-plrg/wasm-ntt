@@ -1,0 +1,109 @@
+;;
+;; Syntax of Modules
+;;
+
+syntax type = rectype
+
+syntax global = {
+  GTYPE globaltype,
+  GINIT const
+}
+
+syntax local = {
+  LTYPE valtype
+}
+
+syntax table = {
+  TTYPE tabletype,
+  TINIT const
+}
+
+syntax memory = {
+  MTYPE memtype
+}
+
+syntax tag = {
+  TGTYPE typeidx
+}
+
+syntax func = {
+  FTYPE typeidx,
+  LOCALS local*,
+  BODY const
+}
+
+syntax start = {
+  SFUNC funcidx
+}
+
+syntax active = {
+  INDEX idx,
+  OFFSET const
+}
+
+syntax elemmode =
+  | Passive
+  | Active active
+  | Declarative
+
+syntax elem = {
+  ETYPE reftype,
+  EINIT const*,
+  EMODE elemmode
+}
+
+syntax datamode =
+  | Passive
+  | Active active
+
+syntax data = {
+  DINIT text,
+  DMODE datamode
+}
+
+syntax importdesc =
+  | FuncImport typeidx
+  | TableImport tabletype
+  | MemImport memtype
+  | GlobalImport globaltype
+  | TagImport typeidx
+
+syntax exportdesc =
+  | FuncExport funcidx
+  | TableExport tableidx
+  | MemExport memidx
+  | GlobalExport globalidx
+  | TagExport tagidx
+
+syntax import = {
+  MODULENAME name,
+  ITEMNAME name,
+  IDESC importdesc
+}
+
+syntax export = {
+  NAME name,
+  EDESC exportdesc
+}
+
+syntax module = {
+  TYPES type*,
+  GLOBALS global*,
+  TABLES table*,
+  MEMS memory*,
+  TAGS tag*,
+  FUNCS func*,
+  START start?,
+  ELEMS elem*,
+  DATAS data*,
+  IMPORTS import*,
+  EXPORTS export*
+}
+;; Meta variables
+
+var ty : type
+var loc : local
+var glob : global
+var tab : table
+var im : import
+var ex : export

@@ -1,0 +1,139 @@
+;;
+;; Subtyping
+;;
+
+dec $match_null(null, null) : bool
+dec $subst_of(typevar, deftype*) : heaptype
+dec $match_deftype(deftype*, deftype, deftype) : bool
+dec $match_heaptype(deftype*, heaptype, heaptype) : bool
+dec $match_heaptype_exists(deftype*, heaptype*, deftype) : bool
+dec $match_numtype(deftype*, numtype, numtype) : bool
+dec $match_vectype(deftype*, vectype, vectype) : bool
+dec $match_reftype(deftype*, reftype, reftype) : bool
+dec $match_valtype(deftype*, valtype, valtype) : bool
+dec $match_packtype(deftype*, packtype, packtype) : bool
+dec $match_storagetype(deftype*, storagetype, storagetype) : bool
+dec $match_arraytype(deftype*, arraytype, arraytype) : bool
+dec $match_functype(deftype*, functype, functype) : bool
+dec $match_fieldtype(deftype*, fieldtype, fieldtype) : bool
+dec $match_structtype(deftype*, structtype, structtype) : bool
+dec $match_strtype(deftype*, strtype, strtype) : bool
+dec $match_resulttype(deftype*, resulttype, resulttype) : bool
+
+def $match_null(NoNull, Null) = true
+def $match_null(null_1, null_2) = true
+  -- if null_1 = null_2
+def $match_null(null_1, null_2) = false  -- otherwise
+
+
+def $subst_of(StatX x, dt*) = DefHT dt*[x]
+def $subst_of(RecX x, dt*) = VarHT (RecX x)
+
+def $match_deftype(dt*, dt_1, dt_2) = true
+  -- if dt_1 = dt_2
+def $match_deftype(dt*, dt_1, dt_2) = true
+  -- if $subst_deftype<deftype*>(dt*, def $subst_of, dt_1) = $subst_deftype<deftype*>(dt*, def $subst_of, dt_2)
+def $match_deftype(dt*, dt_1, dt_2) = $match_heaptype_exists(dt*, ht*, dt_2)
+  -- if SubT fin ht* strt = $unrolldt(dt_1)
+
+def $match_heaptype(dt*, ht, AnyHT) = true
+  -- if ht = EqHT \/ ht = StructHT \/
+        ht = ArrayHT \/ ht = I31HT
+def $match_heaptype(dt*, ht, EqHT) = true
+  -- if ht = I31HT \/ ht = StructHT \/ ht = ArrayHT
+def $match_heaptype(dt*, NoneHT, ht) = $match_heaptype(dt*, ht, AnyHT)
+def $match_heaptype(dt*, NoFuncHT, ht) = $match_heaptype(dt*, ht, FuncHT)
+def $match_heaptype(dt*, NoExnHT, ht) = $match_heaptype(dt*, ht, ExnHT)
+def $match_heaptype(dt*, NoExternHT, ht) = $match_heaptype(dt*, ht, ExternHT)
+def $match_heaptype(dt*, VarHT (StatX x), ht) = $match_heaptype(dt*, DefHT dt*[x], ht)
+def $match_heaptype(dt*, ht, VarHT (StatX x)) = $match_heaptype(dt*, ht, DefHT dt*[x])
+def $match_heaptype(dt*, DefHT dt_1, DefHT dt_2) = $match_deftype(dt*, dt_1, dt_2)
+def $match_heaptype(dt*, DefHT dt_1, ht) = true
+  -- if DefStructT _ = $expanddt(dt_1)
+  -- if ht = AnyHT \/ ht = EqHT \/ ht = StructHT
+def $match_heaptype(dt*, DefHT dt_1, ht) = true
+  -- if DefArrayT _ = $expanddt(dt_1)
+  -- if ht = AnyHT \/ ht = EqHT \/ ht = ArrayHT
+def $match_heaptype(dt*, DefHT dt_1, FuncHT) = true
+  -- if DefFuncT _ = $expanddt(dt_1)
+def $match_heaptype(dt*, BotHT, _) = true
+def $match_heaptype(dt*, ht_1, ht_2) = true
+  -- if ht_1 = ht_2
+def $match_heaptype(dt*, ht_1, ht_2) = false  -- otherwise
+
+def $match_heaptype_exists(dt*, eps, dt_1) = false
+def $match_heaptype_exists(dt*, ht_h :: ht_t*, dt_1) = true
+  -- if $match_heaptype(dt*, ht_h, DefHT dt_1)
+def $match_heaptype_exists(dt*, ht_h :: ht_t*, dt_1) = $match_heaptype_exists(dt*, ht_t*, dt_1)
+  -- if ~$match_heaptype(dt*, ht_h, DefHT dt_1)
+
+def $match_numtype(dt*, nt_1, nt_2) = true
+  -- if nt_1 = nt_2
+def $match_numtype(dt*, nt_1, nt_2) = false  -- otherwise
+
+def $match_vectype(dt*, vt_1, vt_2) = (vt_1 = vt_2)
+
+def $match_reftype(dt*, null_1 ht_1, null_2 ht_2) = true
+  -- if $match_null(null_1, null_2) /\ $match_heaptype(dt*, ht_1, ht_2)
+def $match_reftype(dt*, _, _) = false -- otherwise
+
+def $match_valtype(dt*, NumT nt_1, NumT nt_2) = $match_numtype(dt*, nt_1, nt_2)
+def $match_valtype(dt*, VecT vt_1, VecT vt_2) = $match_vectype(dt*, vt_1, vt_2)
+def $match_valtype(dt*, RefT rt_1, RefT rt_2) = $match_reftype(dt*, rt_1, rt_2)
+def $match_valtype(dt*, BotT, _) = true
+def $match_valtype(dt*, t_1, t_2) = false  -- otherwise
+
+def $match_packtype(dt*, pt_1, pt_2) = (pt_1 = pt_2)
+
+def $match_storagetype(dt*, ValStorageT t_1, ValStorageT t_2) = $match_valtype(dt*, t_1, t_2)
+def $match_storagetype(dt*, PackStorageT pt_1, PackStorageT pt_2) = $match_packtype(dt*, pt_1, pt_2)
+def $match_storagetype(dt*, _, _) = false -- otherwise
+
+def $match_arraytype(dt*, ArrayT yt_1, ArrayT yt_2) = $match_fieldtype(dt*, yt_1, yt_2)
+
+def $match_functype(dt*, FuncT t_1* t_2*, FuncT t_1'* t_2'*) = $match_resulttype(dt*, t_1'*, t_1*) /\ $match_resulttype(dt*, t_2*, t_2'*)
+
+def $match_resulttype(dt*, t_1* , t_2*) = true
+  -- if |t_1*| = |t_2*|
+  -- (if $match_valtype(dt*, t_1, t_2))*
+def $match_resulttype(dt*, _, _) = false  -- otherwise
+
+def $match_fieldtype(dt*, FieldT mut_1 zt_1, FieldT mut_2 zt_2) = true
+  -- if mut_1 = mut_2 /\ $match_storagetype(dt*, zt_1, zt_2) /\
+        mut_1 = Cons
+def $match_fieldtype(dt*, FieldT mut_1 zt_1, FieldT mut_2 zt_2) = true
+  -- if mut_1 = mut_2 /\ $match_storagetype(dt*, zt_1, zt_2) /\
+        mut_1 = Var /\ $match_storagetype(dt*, zt_2, zt_1)
+def $match_fieldtype(dt*, _, _) = false  -- otherwise
+
+def $match_structtype(dt*, StructT yt_1*, StructT yt_2*) = true
+  -- if $(|yt_1*| >= |yt_2*|)
+  -- if yt_1'* = yt_1*[0:|yt_2*|]
+  -- (if $match_fieldtype(dt*, yt_1', yt_2))*
+def $match_structtype(dt*, _, _) = false  -- otherwise
+
+def $match_strtype(dt*, DefStructT strctt_1, DefStructT strctt_2) = $match_structtype(dt*, strctt_1, strctt_2)
+def $match_strtype(dt*, DefArrayT arrt_1, DefArrayT arrt_2) = $match_arraytype(dt*, arrt_1, arrt_2)
+def $match_strtype(dt*, DefFuncT ft_1, DefFuncT ft_2) = $match_functype(dt*, ft_1, ft_2)
+def $match_strtype(dt*, strt_1, strt_2) = false  -- otherwise
+
+dec $abs_of_str_type(strtype) : heaptype
+dec $top_of_str_type(deftype*, strtype) : heaptype
+dec $top_of_heap_type(deftype*, heaptype) : heaptype
+
+def $abs_of_str_type(DefStructT _) = StructHT
+def $abs_of_str_type(DefArrayT _) = ArrayHT
+def $abs_of_str_type(DefFuncT _) = FuncHT
+
+def $top_of_str_type(dt*, strt) = $top_of_heap_type(dt*, $abs_of_str_type(strt))
+
+def $top_of_heap_type(dt*, ht) = AnyHT
+  -- if ht <- [ AnyHT, NoneHT, EqHT, StructHT, ArrayHT, I31HT ]
+def $top_of_heap_type(dt*, ht) = FuncHT
+  -- if ht <- [ FuncHT, NoFuncHT ]
+def $top_of_heap_type(dt*, ht) = ExnHT
+  -- if ht <- [ ExnHT, NoExnHT ]
+def $top_of_heap_type(dt*, ht) = ExternHT
+  -- if ht <- [ ExternHT, NoExternHT ]
+def $top_of_heap_type(dt*, DefHT dt') = $top_of_str_type(dt*, $expanddt(dt'))
+def $top_of_heap_type(dt*, VarHT (StatX x)) = $top_of_str_type(dt*, $expanddt(dt*[x]))

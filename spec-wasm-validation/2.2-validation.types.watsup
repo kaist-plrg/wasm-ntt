@@ -1,0 +1,205 @@
+;;
+;; Validation of Types
+;;
+
+relation Numtype_ok: context |- numtype : OK    hint(input %0 %1)
+relation Vectype_ok: context |- vectype : OK    hint(input %0 %1)
+relation Heaptype_ok: context |- heaptype : OK  hint(input %0 %1)
+relation Reftype_ok: context |- reftype : OK    hint(input %0 %1)
+relation Valtype_ok: context |- valtype : OK    hint(input %0 %1)
+relation Resulttype_ok: context |- resulttype : OK hint(input %0 %1)
+relation Functype_ok: context |- functype : OK   hint(input %0 %1)
+relation Subtype_ok: context |- subtype : OK                hint(input %0 %1)
+relation Storagetype_ok: context |- storagetype : OK   hint(input %0 %1)
+relation Fieldtype_ok: context |- fieldtype : OK      hint(input %0 %1)
+relation Structtype_ok: context |- structtype : OK        hint(input %0 %1)
+relation Arraytype_ok: context |- arraytype : OK          hint(input %0 %1)
+relation Strtype_ok: context |- strtype : OK                hint(input %0 %1)
+relation Subtype_sub_ok: context typeidx |- subtype : OK    hint(input %0 %1 %2)
+relation Subtype_sub_ok': context typeidx strtype |- heaptype : OK hint(input %0 %1 %2 %3)
+relation Rectype_ok: context |- rectype : context           hint(input %0 %1)
+relation Memtype_ok: context |- memtype : OK    hint(input %0 %1)
+relation Globaltype_ok: context |- globaltype : OK  hint(input %0 %1)
+relation Tagtype_ok: context |- tagtype : OK  hint(input %0 %1)
+relation Limits_ok: context range |- limits : OK  hint(input %0 %1 %2)
+relation Tabletype_ok: context |- tabletype : OK  hint(input %0 %1)
+relation Blocktype_ok: context |- blocktype : instrtype hint(input %0 %1)
+
+rule Numtype_ok:
+  C_0 |- numtype : OK
+
+rule Vectype_ok:
+  C_0 |- vectype : OK
+
+rule Heaptype_ok/abs:
+  C_0 |- ht : OK
+  -- if ht <- [ AnyHT, NoneHT, EqHT, I31HT, StructHT, ArrayHT,
+        FuncHT, NoFuncHT, ExnHT, NoExnHT, ExternHT, NoExternHT, BotHT ]
+
+rule Heaptype_ok/typeuse:
+  C_0 |- VarHT (StatX x) : OK
+  -- if $(x >= 0) /\ $(x < |C_0.TYPES|)
+
+rule Reftype_ok:
+  C_0 |- null ht : OK
+  -- Heaptype_ok: C_0 |- ht : OK
+
+rule Valtype_ok/num:
+  C_0 |- NumT nt : OK
+  -- Numtype_ok: C_0 |- nt : OK
+
+rule Valtype_ok/vec:
+  C_0 |- VecT vt : OK
+  -- Vectype_ok: C_0 |- vt : OK
+
+rule Valtype_ok/ref:
+  C_0 |- RefT (null ht) : OK
+  -- Reftype_ok: C_0 |- null ht : OK
+
+rule Resulttype_ok:
+  C_0 |- t* : OK
+  -- (Valtype_ok: C_0 |- t : OK)*
+
+rule Functype_ok:
+  C_0 |- FuncT t_1* t_2* : OK
+  -- (Resulttype_ok: C_0 |- t_1* : OK)
+  -- (Resulttype_ok: C_0 |- t_2* : OK)
+
+rule Globaltype_ok:
+  C_0 |- GlobalT mut t : OK
+  -- Valtype_ok: C_0 |- t : OK
+
+rule Tagtype_ok:
+  C_0 |- TagT dt : OK
+  -- if FuncT _ eps = $functype_of_strtype($expanddt(dt))
+
+rule Limits_ok/without-max:
+  C_0 range |- { MIN u64, MAX eps } : OK
+  -- if $(u64 <= range)
+
+rule Limits_ok/with-max:
+  C_0 range |- { MIN u64, MAX u64' } : OK
+  -- if $(u64 <= range) /\
+        $(u64' <= range) /\
+        $(u64 <= u64')
+
+rule Tabletype_ok/i32:
+  C_0 |- TableT I32AT lim rt : OK
+  -- Reftype_ok: C_0 |- rt : OK
+  -- Limits_ok: C_0 $(4294967295) |- lim : OK
+
+rule Tabletype_ok/i64:
+  C_0 |- TableT I64AT lim rt : OK
+  -- Reftype_ok: C_0 |- rt : OK
+  -- Limits_ok: C_0 $(18446744073709551615) |- lim : OK
+
+rule Memtype_ok/i32:
+  C_0 |- MemoryT I32AT lim : OK
+  -- Limits_ok: C_0 $(65536) |- lim : OK
+
+rule Memtype_ok/i64:
+  C_0 |- MemoryT I64AT lim : OK
+  -- Limits_ok: C_0 $(281474976710656) |- lim : OK
+
+rule Storagetype_ok/val:
+  C_0 |- ValStorageT t : OK
+  -- Valtype_ok: C_0 |- t : OK
+
+rule Storagetype_ok/pack:
+  C_0 |- PackStorageT pt : OK
+  -- if pt <- [ I8, I16 ]
+
+rule Fieldtype_ok:
+  C_0 |- FieldT mut zt : OK
+  -- Storagetype_ok: C_0 |- zt : OK
+
+rule Structtype_ok:
+  C_0 |- StructT yt* : OK
+  -- (Fieldtype_ok: C_0 |- yt : OK)*
+
+rule Arraytype_ok:
+  C_0 |- ArrayT yt : OK
+  -- Fieldtype_ok: C_0 |- yt : OK
+
+rule Strtype_ok/struct:
+  C_0 |- DefStructT strctt : OK
+  -- Structtype_ok: C_0 |- strctt : OK
+
+rule Strtype_ok/array:
+  C_0 |- DefArrayT arrt : OK
+  -- Arraytype_ok: C_0 |- arrt : OK
+
+rule Strtype_ok/func:
+  C_0 |- DefFuncT ft : OK
+  -- Functype_ok: C_0 |- ft : OK
+
+rule Subtype_ok:
+  C_0 |- subtype : OK
+  -- if SubT fin ht* strt = subtype
+  -- (Heaptype_ok: C_0 |- ht : OK)*
+  -- Strtype_ok: C_0 |- strt : OK
+
+rule Subtype_sub_ok:
+  C_0 x |- subtype : OK
+  -- if SubT fin ht* strt = subtype
+  -- (Subtype_sub_ok': C_0 x strt |- ht : OK)*
+
+rule Subtype_sub_ok':
+  C_0 x strt |- VarHT (StatX x') : OK
+  -- if SubT fin _ strt' = $unrolldt(C_0.TYPES[x'])
+  -- if $(x' < x) /\ (fin = NoFinal) /\ $match_strtype(C_0.TYPES, strt, strt')
+
+rule Rectype_ok:
+  C_0 |- rectype : C_1
+  -- if RecT st* = rectype
+  -- if x = |C_0.TYPES|
+  -- if n* = $range(|st*|)
+  -- if dt* = $rolldt(x, rectype)
+  -- if C_1 = C_0[ .TYPES = C_0.TYPES ++ dt* ]
+  -- (Subtype_ok: C_1 |- st : OK)*
+  -- (Subtype_sub_ok: C_1 $(x+n) |- st : OK)*
+
+dec $array_type(context, typeidx) : arraytype
+def $array_type(C, x) = arrt
+  -- if DefArrayT arrt = $expanddt(C.TYPES[x])
+
+dec $struct_type(context, typeidx) : structtype
+def $struct_type(C, x) = strctt
+  -- if DefStructT strctt = $expanddt(C.TYPES[x])
+
+dec $func_type(context, typeidx) : functype
+def $func_type(C, x) = ft
+  -- if DefFuncT ft = $expanddt(C.TYPES[x])
+
+rule Blocktype_ok/valblocktype.none:
+  C_0 |- ValBlockType eps : InstrT eps eps eps
+
+rule Blocktype_ok/valblocktype.some:
+  C_0 |- ValBlockType t : InstrT eps t eps
+  -- Valtype_ok: C_0 |- t : OK
+
+rule Blocktype_ok/varblocktype:
+  C_0 |- VarBlockType x : InstrT t_1* t_2* eps
+  -- if FuncT t_1* t_2* = $func_type(C_0, x)
+
+relation Catch_ok: context resulttype |- catch : OK   hint(input %0 %1 %2)
+
+rule Catch_ok/catch:
+  C_0 t* |- Catch x y : OK
+  -- if TagT dt = C_0.TAGS[x]
+  -- if FuncT t_1* t_2* = $functype_of_strtype($expanddt(dt))
+  -- if $match_resulttype(C_0.TYPES, t_1*, C_0.LABELS[y])
+
+rule Catch_ok/catch_ref:
+  C_0 t* |- CatchRef x y : OK
+  -- if TagT dt = C_0.TAGS[x]
+  -- if FuncT t_1* t_2* = $functype_of_strtype($expanddt(dt))
+  -- if $match_resulttype(C_0.TYPES, t_1* ++ [RefT (NoNull ExnHT)], C_0.LABELS[y])
+
+rule Catch_ok/catch_all:
+  C_0 t* |- CatchAll x : OK
+  -- if $match_resulttype(C_0.TYPES, eps, C_0.LABELS[x])
+
+rule Catch_ok/catch_all_ref:
+  C_0 t* |- CatchAllRef x : OK
+  -- if $match_resulttype(C_0.TYPES, [RefT (NoNull ExnHT)], C_0.LABELS[x])

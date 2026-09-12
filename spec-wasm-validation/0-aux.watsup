@@ -1,0 +1,62 @@
+;;
+;; Metavariables for nat and int
+;;
+
+syntax N = nat
+syntax M = nat
+syntax n = nat
+syntax m = nat
+syntax i = nat
+syntax j = nat
+
+;;
+;; General Numeric Functions
+;;
+
+dec $min_(nat, nat) : nat
+def $min_(i, j) = i  -- if $(i <= j)
+def $min_(i, j) = j  -- otherwise
+
+dec $lsl_(int, int) : int
+def $lsl_(int_1, int_2) = $lsl_($(int_1 * 2), $(int_2 - 1))
+  -- if $(int_2 > 0)
+def $lsl_(int_1, int_2) = int_1
+  -- otherwise
+
+
+;; list functions
+
+dec $rev_<X>(X*) : X*
+def $rev_<X>(eps) = eps
+def $rev_<X>(X_h :: X_t*) = $rev_<X>(X_t*) ++ [X_h]
+
+dec $make_<X>(X, nat) : X*
+def $make_<X>(X, n) = eps
+  -- if n = 0
+def $make_<X>(X, n) = $make_<X>(X, n') ++ [X]
+  -- if $(n > 0)
+  -- if n' = $(n - 1)
+
+dec $list_exists<X>(def $p(X) : bool, X*) : bool
+def $list_exists<X>(def $p, eps) = false
+def $list_exists<X>(def $p, X_h :: X_t*) = true
+  -- if $p(X_h)
+def $list_exists<X>(def $p, X_h :: X_t*) = $list_exists<X>(def $p, X_t*)
+  -- if ~$p(X_h)
+
+;; set functions
+
+syntax set<K> = `{ K* `}
+
+dec $empty_set<K> : set<K>
+def $empty_set<K> = `{ eps `}
+
+builtin dec $union_set<K>(set<K>, set<K>) : set<K>
+builtin dec $diff_set<K>(set<K>, set<K>) : set<K>
+
+dec $in_set<K>(K, set<K>) : bool
+def $in_set<K>(K, `{ K'* `}) = K <- K'*
+
+dec $map_set<X, Y>(def $f(X) : Y, set<X>) : set<Y>
+def $map_set<X, Y>(def $f, `{ eps `}) = `{ eps `}
+def $map_set<X, Y>(def $f, `{ X_h :: X_t* `}) = $union_set<Y>(`{[$f(X_h)]`}, $map_set<X, Y>(def $f, `{ X_t* `}))

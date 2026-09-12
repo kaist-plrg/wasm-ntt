@@ -1,0 +1,307 @@
+;; Definitions
+
+relation Type_ok: context |- type : context                 hint(input %0 %1)
+relation Types_ok: context |- type* : context               hint(input %0 %1)
+relation Import_ok: context |- import : context             hint(input %0 %1)
+relation Imports_ok: context |- import* : context           hint(input %0 %1)
+relation Func_ok: context |- func : context                 hint(input %0 %1)
+relation Funcbody_ok: context |- func : OK                  hint(input %0 %1)
+relation Funcs_ok: context |- func* : context               hint(input %0 %1)
+relation Table_ok: context |- table : context               hint(input %0 %1)
+relation Tables_ok: context |- table* : context             hint(input %0 %1)
+relation Mem_ok: context |- memory : context                hint(input %0 %1)
+relation Mems_ok: context |- memory* : context              hint(input %0 %1)
+relation Global_ok: context |- global : context             hint(input %0 %1)
+relation Globals_ok: context |- global* : context           hint(input %0 %1)
+relation Tag_ok: context |- tag : context                   hint(input %0 %1)
+relation Tags_ok: context |- tag* : context                 hint(input %0 %1)
+relation Elem_ok: context |- elem : context                 hint(input %0 %1)
+relation Elems_ok: context |- elem* : context               hint(input %0 %1)
+relation Elemmode_ok: context reftype |- elemmode : OK   hint(input %0 %1 %2)
+relation Data_ok: context |- data : context                 hint(input %0 %1)
+relation Datas_ok: context |- data* : context               hint(input %0 %1)
+relation Datamode_ok: context |- datamode : OK           hint(input %0 %1)
+relation Start_ok: context |- start? : OK                   hint(input %0 %1)
+relation Exports_ok: context nameset |- export* : nameset   hint(input %0 %1 %2)
+relation Export_ok: context nameset |- export : nameset     hint(input %0 %1 %2)
+relation Const_ok: context valtype |- const : OK            hint(input %0 %1 %2)
+relation Module_ok: |- module : OK                          hint(input %0)
+relation Modules_ok: |- module* : OK                        hint(input %0)
+
+;; Types
+
+rule Type_ok:
+  C_0 |- type : C_1
+  -- (Rectype_ok: C_0 |- type : C_1)
+
+rule Types_ok/cons:
+  C_0 |- type_1 :: type* : C_2
+  -- Type_ok: C_0 |- type_1 : C_1
+  -- Types_ok: C_1 |- type* : C_2
+
+rule Types_ok/nil:
+  C_0 |- eps : C_0
+
+;; Imports
+
+rule Import_ok/func:
+  C_0 |- { MODULENAME _, ITEMNAME _, IDESC (FuncImport x) } : C_1
+  -- if ft = $func_type(C_0, x)
+  -- if C_1 = C_0[ .FUNCS = C_0.FUNCS ++ C_0.TYPES[x] ]
+
+rule Import_ok/global:
+  C_0 |- { MODULENAME _, ITEMNAME _, IDESC (GlobalImport gt) } : C_1
+  -- Globaltype_ok: C_0 |- gt : OK
+  -- if C_1 = C_0[ .GLOBALS = C_0.GLOBALS ++ [gt] ]
+
+rule Import_ok/table:
+  C_0 |- { MODULENAME _, ITEMNAME _, IDESC (TableImport tt) } : C_1
+  -- Tabletype_ok: C_0 |- tt : OK
+  -- if C_1 = C_0[ .TABLES = C_0.TABLES ++ [tt] ]
+
+rule Import_ok/mem:
+  C_0 |- { MODULENAME _, ITEMNAME _, IDESC (MemImport mt) } : C_1
+  -- Memtype_ok: C_0 |- mt : OK
+  -- if C_1 = C_0[ .MEMS = C_0.MEMS ++ [mt] ]
+
+rule Import_ok/tag:
+  C_0 |- { MODULENAME _, ITEMNAME _, IDESC (TagImport x) } : C_1
+  -- Tagtype_ok: C_0 |- TagT (C_0.TYPES[x]) : OK
+  -- if C_1 = C_0[ .TAGS = C_0.TAGS ++ [TagT (C_0.TYPES[x])] ]
+
+rule Imports_ok/cons:
+  C_0 |- import_1 :: import* : C_2
+  -- Import_ok: C_0 |- import_1 : C_1
+  -- Imports_ok: C_1 |- import* : C_2
+
+rule Imports_ok/nil:
+  C_0 |- eps : C_0
+
+relation Local_ok:
+  context |- local : localtype
+  hint(input %0 %1)
+
+rule Local_ok/set:
+  C |- { LTYPE t } : LocalT Set t
+  -- Valtype_ok: C |- t : OK
+  -- if $defaultable(t) = true
+
+rule Local_ok/unset:
+  C |- { LTYPE t } : LocalT Unset t
+  -- Valtype_ok: C |- t : OK
+  -- if $defaultable(t) = false
+
+rule Funcbody_ok:
+  C_0 |- { FTYPE x, LOCALS local*, BODY instr* } : OK
+  -- if FuncT t_1* t_2* = $func_type(C_0, x)
+  -- (Local_ok: C_0 |- local : localtype)*
+  -- if (localtype' = LocalT Set t_1)*
+  -- if C_1 = C_0[ .LOCALS = localtype'* ++ localtype* ]
+  -- if C_2 = C_1[ .RESULTS = t_2* ]
+  -- if C_3 = C_2[ .LABELS = [t_2*] ]
+  -- Block_ok: C_3 (InstrT eps t_2* eps) |- instr* : OK
+
+rule Funcs_ok/cons:
+  C_0 |- func_1 :: func* : C_2
+  -- Func_ok: C_0 |- func_1 : C_1
+  -- Funcs_ok: C_1 |- func* : C_2
+
+rule Funcs_ok/nil:
+  C_0 |- eps : C_0
+
+rule Func_ok:
+  C_0 |- { FTYPE x, LOCALS local*, BODY instr* } : C_1
+  -- if ft = $func_type(C_0, x)
+  -- if C_1 = C_0[ .FUNCS = C_0.FUNCS ++ [C_0.TYPES[x]] ]
+
+dec $is_const(context, instr) : bool
+def $is_const(C, instr) = true ;; (TODO) complete this function
+  -- if instr <- [BINOP (I32 IAdd), BINOP (I32 ISub), BINOP (I32 IMul),
+                  BINOP (I64 IAdd), BINOP (I64 ISub), BINOP (I64 IMul)]
+def $is_const(C, CONST _) = true
+def $is_const(C, VEC.CONST _) = true
+def $is_const(C, REF.NULL _) = true
+def $is_const(C, REF.FUNC _) = true
+def $is_const(C, REF.I31) = true
+def $is_const(C, STRUCT.NEW _ _) = true
+def $is_const(C, ARRAY.NEW _ _) = true
+def $is_const(C, ARRAY.NEW_FIXED _ _) = true
+def $is_const(C, GLOBAL.GET x) = true
+  -- if GlobalT mut t = C.GLOBALS[x]
+  -- if mut = Cons
+def $is_const(C, instr) = false
+  -- otherwise
+
+rule Const_ok:
+  C_0 t |- instr* : OK
+  -- (if $is_const(C_0, instr))*
+  -- Block_ok: C_0 (InstrT eps ([t]) eps) |- instr* : OK
+
+rule Tables_ok/cons:
+  C_0 |- table_1 :: table* : C_2
+  -- Table_ok: C_0 |- table_1 : C_1
+  -- Tables_ok: C_1 |- table* : C_2
+
+rule Tables_ok/nil:
+  C_0 |- eps : C_0
+
+rule Table_ok:
+  C_0 |- { TTYPE tt, TINIT const } : C_1
+  -- if TableT at lim rt = tt
+  -- Tabletype_ok: C_0 |- tt : OK
+  -- Const_ok: C_0 (RefT rt) |- const : OK
+  -- if C_1 = C_0[ .TABLES = C_0.TABLES ++ [tt] ]
+
+rule Mems_ok/cons:
+  C_0 |- memory_1 :: memory* : C_2
+  -- Mem_ok: C_0 |- memory_1 : C_1
+  -- Mems_ok: C_1 |- memory* : C_2
+
+rule Mems_ok/nil:
+  C_0 |- eps : C_0
+
+rule Mem_ok:
+  C_0 |- { MTYPE mt } : C_1
+  -- Memtype_ok: C_0 |- mt : OK
+  -- if C_1 = C_0[ .MEMS = C_0.MEMS ++ [mt] ]
+
+rule Globals_ok/cons:
+  C_0 |- global_1 :: global* : C_2
+  -- Global_ok: C_0 |- global_1 : C_1
+  -- Globals_ok: C_1 |- global* : C_2
+
+rule Globals_ok/nil:
+  C_0 |- eps : C_0
+
+rule Global_ok:
+  C_0 |- { GTYPE gt, GINIT const } : C_1
+  -- if GlobalT mut t = gt
+  -- Globaltype_ok: C_0 |- gt : OK
+  -- Const_ok: C_0 t |- const : OK
+  -- if C_1 = C_0[ .GLOBALS = C_0.GLOBALS ++ [gt] ]
+
+rule Tags_ok/cons:
+  C_0 |- tag_1 :: tag* : C_2
+  -- Tag_ok: C_0 |- tag_1 : C_1
+  -- Tags_ok: C_1 |- tag* : C_2
+
+rule Tags_ok/nil:
+  C_0 |- eps : C_0
+
+rule Tag_ok:
+  C_0 |- { TGTYPE x } : C_1
+  -- Tagtype_ok: C_0 |- TagT (C_0.TYPES[x]) : OK
+  -- if C_1 = C_0[ .TAGS = C_0.TAGS ++ [TagT (C_0.TYPES[x])] ]
+
+rule Elems_ok/cons:
+  C_0 |- elem_1 :: elem* : C_2
+  -- Elem_ok: C_0 |- elem_1 : C_1
+  -- Elems_ok: C_1 |- elem* : C_2
+
+rule Elems_ok/nil:
+  C_0 |- eps : C_0
+
+rule Elemmode_ok/passive:
+  C_0 rt |- Passive : OK
+
+rule Elemmode_ok/active:
+  C_0 rt |- Active { INDEX x, OFFSET const } : OK
+  -- if TableT at lim rt' = C_0.TABLES[x]
+  -- if $match_reftype(C_0.TYPES, rt, rt')
+  -- Const_ok: C_0 (NumT $numtype_of_addrtype(at)) |- const : OK
+
+rule Elemmode_ok/declarative:
+  C_0 rt |- Declarative : OK
+
+rule Elem_ok:
+  C_0 |- { ETYPE rt, EINIT const*, EMODE elemmode } : C_1
+  -- Reftype_ok: C_0 |- rt : OK
+  -- (Const_ok: C_0 (RefT rt) |- const : OK)*
+  -- Elemmode_ok: C_0 rt |- elemmode : OK
+  -- if C_1 = C_0[ .ELEMS = C_0.ELEMS ++ [rt] ]
+
+rule Datas_ok/cons:
+  C_0 |- data_1 :: data* : C_2
+  -- Data_ok: C_0 |- data_1 : C_1
+  -- Datas_ok: C_1 |- data* : C_2
+
+rule Datas_ok/nil:
+  C_0 |- eps : C_0
+
+rule Datamode_ok/passive:
+  C_0 |- Passive : OK
+
+rule Datamode_ok/active:
+  C_0 |- Active { INDEX x, OFFSET const } : OK
+  -- if MemoryT at _ = C_0.MEMS[x]
+  -- Const_ok: C_0 (NumT $numtype_of_addrtype(at)) |- const : OK
+
+rule Data_ok:
+  C_0 |- { DINIT _, DMODE datamode } : C_1
+  -- Datamode_ok: C_0 |- datamode : OK
+  -- if C_1 = C_0[ .DATAS = C_0.DATAS ++ [OK] ]
+
+rule Start_ok/some:
+  C_0 |- { SFUNC x } : OK
+  -- if FuncT eps eps = $functype_of_strtype($expanddt(C_0.FUNCS[x]))
+
+rule Start_ok/none:
+  C_0 |- eps : OK
+
+rule Export_ok/func:
+  C_0 nameset |- { NAME name, EDESC (FuncExport x) } : $union_set<name>(nameset, `{ [name] `})
+  -- if $(x >= 0) /\ $(x < |C_0.FUNCS|)
+  -- if ~$in_set<name>(name, nameset)
+rule Export_ok/global:
+  C_0 nameset |- { NAME name, EDESC (GlobalExport x) } : $union_set<name>(nameset, `{ [name] `})
+  -- if $(x >= 0) /\ $(x < |C_0.GLOBALS|)
+  -- if ~$in_set<name>(name, nameset)
+rule Export_ok/table:
+  C_0 nameset |- { NAME name, EDESC (TableExport x) } : $union_set<name>(nameset, `{ [name] `})
+  -- if $(x >= 0) /\ $(x < |C_0.TABLES|)
+  -- if ~$in_set<name>(name, nameset)
+rule Export_ok/mem:
+  C_0 nameset |- { NAME name, EDESC (MemExport x) } : $union_set<name>(nameset, `{ [name] `})
+  -- if $(x >= 0) /\ $(x < |C_0.MEMS|)
+  -- if ~$in_set<name>(name, nameset)
+rule Export_ok/tag:
+  C_0 nameset |- { NAME name, EDESC (TagExport x) } : $union_set<name>(nameset, `{ [name] `})
+  -- if $(x >= 0) /\ $(x < |C_0.TAGS|)
+  -- if ~$in_set<name>(name, nameset)
+
+rule Exports_ok/cons:
+  C_0 nameset_0 |- export_1 :: export* : nameset_2
+  -- Export_ok: C_0 nameset_0 |- export_1 : nameset_1
+  -- Exports_ok: C_0 nameset_1 |- export* : nameset_2
+
+rule Exports_ok/nil:
+  C_0 nameset_0 |- eps : nameset_0
+
+rule Module_ok:
+  |- module : OK
+  -- if module' = module[ .FUNCS = [] ][ .START = eps ]
+  -- if free = $free_module(module')
+  -- if C = $empty_context[ .REFS = free ]
+  -- (Types_ok: C |- module.TYPES : C_0)
+  -- (Imports_ok: C_0 |- module.IMPORTS : C_1)
+  ----
+  -- (Funcs_ok: C_1 |- module.FUNCS : C_2)
+  -- (Tables_ok: C_2 |- module.TABLES : C_3)
+  -- (Mems_ok: C_3 |- module.MEMS : C_4)
+  -- (Globals_ok: C_4 |- module.GLOBALS : C_5)
+  ----
+  -- (Tags_ok: C_5 |- module.TAGS : C_6)
+  -- (Elems_ok: C_6 |- module.ELEMS : C_7)
+  -- (Datas_ok: C_7 |- module.DATAS : C_8)
+  ----
+  -- if func* = module.FUNCS
+  -- (Funcbody_ok: C_8 |- func : OK)*
+  -- Start_ok: C_8 |- module.START : OK
+  -- Exports_ok: C_8 `{ eps `} |- module.EXPORTS : nameset
+
+rule Modules_ok/cons:
+  |- module* : OK
+  -- (Module_ok: |- module : OK)*
+
+rule Modules_ok/nil:
+  |- eps : OK

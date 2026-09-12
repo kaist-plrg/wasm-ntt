@@ -1,0 +1,81 @@
+;; helper functions
+
+dec $type_num<A,B,C,D>(op<A,B,C,D>) : numtype
+def $type_num<A,B,C,D>(I32 A) = I32T
+def $type_num<A,B,C,D>(I64 B) = I64T
+def $type_num<A,B,C,D>(F32 C) = F32T
+def $type_num<A,B,C,D>(F64 D) = F64T
+
+dec $type_vecop<A>(vecop<A>) : vectype
+def $type_vecop<A>(V128 _) = V128T
+
+dec $type_cvtop(cvtop_) : (numtype, numtype)
+def $type_cvtop(I32 icvtop) = (I64T, I32T)
+  -- if icvtop <- [ WrapI64 ]
+def $type_cvtop(I32 icvtop) = (F32T, I32T)
+  -- if icvtop <- [ TruncSF32, TruncUF32, TruncSatSF32, TruncSatUF32,
+                    ReinterpretFloat ]
+def $type_cvtop(I32 icvtop) = (F64T, I32T)
+  -- if icvtop <- [ TruncSF64, TruncUF64, TruncSatSF64, TruncSatUF64 ]
+def $type_cvtop(I64 icvtop) = (I32T, I64T)
+  -- if icvtop <- [ ExtendSI32, ExtendUI32 ]
+def $type_cvtop(I64 icvtop) = (F32T, I64T)
+  -- if icvtop <- [ TruncSF32, TruncUF32, TruncSatSF32, TruncSatUF32 ]
+def $type_cvtop(I64 icvtop) = (F64T, I64T)
+  -- if icvtop <- [ TruncSF64, TruncUF64, TruncSatSF64, TruncSatUF64, ReinterpretFloat ]
+def $type_cvtop(F32 fcvtop) = (I32T, F32T)
+  -- if fcvtop <- [ ConvertSI32, ConvertUI32, ReinterpretInt ]
+def $type_cvtop(F32 fcvtop) = (I64T, F32T)
+  -- if fcvtop <- [ ConvertSI64, ConvertUI64 ]
+def $type_cvtop(F32 fcvtop) = (F64T, F32T)
+  -- if fcvtop <- [ DemoteF64 ]
+def $type_cvtop(F64 fcvtop) = (I32T, F64T)
+  -- if fcvtop <- [ ConvertSI32, ConvertUI32 ]
+def $type_cvtop(F64 fcvtop) = (I64T, F64T)
+  -- if fcvtop <- [ ConvertSI64, ConvertUI64, ReinterpretInt ]
+def $type_cvtop(F64 fcvtop) = (F32T, F64T)
+  -- if fcvtop <- [ PromoteF32 ]
+
+dec $type_lane<A,B,C,D,E,F>(laneop<A,B,C,D,E,F>) : numtype
+def $type_lane<A,B,C,D,E,F>(I8x16 _) = I32T
+def $type_lane<A,B,C,D,E,F>(I16x8 _) = I32T
+def $type_lane<A,B,C,D,E,F>(I32x4 _) = I32T
+def $type_lane<A,B,C,D,E,F>(I64x2 _) = I64T
+def $type_lane<A,B,C,D,E,F>(F32x4 _) = F32T
+def $type_lane<A,B,C,D,E,F>(F64x2 _) = F64T
+
+dec $type_vec_lane<A,B,C,D,E,F>(vecop<laneop<A,B,C,D,E,F> >) : numtype
+def $type_vec_lane<A,B,C,D,E,F>(V128 (I8x16 A)) = $type_lane<A,B,C,D,E,F>(I8x16 A)
+def $type_vec_lane<A,B,C,D,E,F>(V128 (I16x8 B)) = $type_lane<A,B,C,D,E,F>(I16x8 B)
+def $type_vec_lane<A,B,C,D,E,F>(V128 (I32x4 C)) = $type_lane<A,B,C,D,E,F>(I32x4 C)
+def $type_vec_lane<A,B,C,D,E,F>(V128 (I64x2 D)) = $type_lane<A,B,C,D,E,F>(I64x2 D)
+def $type_vec_lane<A,B,C,D,E,F>(V128 (F32x4 E)) = $type_lane<A,B,C,D,E,F>(F32x4 E)
+def $type_vec_lane<A,B,C,D,E,F>(V128 (F64x2 F)) = $type_lane<A,B,C,D,E,F>(F64x2 F)
+
+dec $lane_extractop(vecop<laneop<vnextractop<extension>,vnextractop<extension>,vnextractop<void>,vnextractop<void>,vnextractop<void>,vnextractop<void> > >) : int
+def $lane_extractop(V128 (I8x16 (Extract (i, _)))) = i
+def $lane_extractop(V128 (I16x8 (Extract (i, _)))) = i
+def $lane_extractop(V128 (I32x4 (Extract (i, _)))) = i
+def $lane_extractop(V128 (I64x2 (Extract (i, _)))) = i
+def $lane_extractop(V128 (F32x4 (Extract (i, _)))) = i
+def $lane_extractop(V128 (F64x2 (Extract (i, _)))) = i
+
+dec $lane_replaceop(vecop<laneop<vnreplaceop, vnreplaceop, vnreplaceop, vnreplaceop, vnreplaceop, vnreplaceop> >) : int
+def $lane_replaceop(V128 (I8x16 (Replace i))) = i
+def $lane_replaceop(V128 (I16x8 (Replace i))) = i
+def $lane_replaceop(V128 (I32x4 (Replace i))) = i
+def $lane_replaceop(V128 (I64x2 (Replace i))) = i
+def $lane_replaceop(V128 (F32x4 (Replace i))) = i
+def $lane_replaceop(V128 (F64x2 (Replace i))) = i
+
+dec $num_lanes<A,B,C,D,E,F>(vecop<laneop<A,B,C,D,E,F> >) : int
+def $num_lanes<A,B,C,D,E,F>(V128 (I8x16 _)) = 16
+def $num_lanes<A,B,C,D,E,F>(V128 (I16x8 _)) = 8
+def $num_lanes<A,B,C,D,E,F>(V128 (I32x4 _)) = 4
+def $num_lanes<A,B,C,D,E,F>(V128 (I64x2 _)) = 2
+def $num_lanes<A,B,C,D,E,F>(V128 (F32x4 _)) = 4
+def $num_lanes<A,B,C,D,E,F>(V128 (F64x2 _)) = 2
+
+dec $type_externop(externop_) : (heaptype, heaptype)
+def $type_externop(Internalize) = (ExternHT, AnyHT)
+def $type_externop(Externalize) = (AnyHT, ExternHT)

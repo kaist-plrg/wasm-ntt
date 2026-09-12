@@ -1,0 +1,296 @@
+;; Instructions
+
+;; Operators
+
+syntax vecop<A> =
+  | V128 A
+
+syntax laneop<A,B,C,D,E,F> =
+  | I8x16 A | I16x8 B | I32x4 C | I64x2 D
+  | F32x4 E | F64x2 F
+
+syntax op<A, B, C, D> =
+  | I32 A | I64 B | F32 C | F64 D
+
+syntax memop<A,B> = {
+  TYPE A,
+  ALIGN u32,
+  OFFSET u64,
+  PACK B
+}
+
+syntax vec_ = vecop<v128>
+var vec : vec_
+
+syntax iunop =
+  | Clz | Ctz | Popcnt | ExtendS packtype
+syntax funop =
+  | Neg | Abs | Ceil | Floor | Trunc | Nearest | Sqrt
+syntax unop_ = op<iunop, iunop, funop, funop>
+var uop : unop_
+
+syntax ibinop =
+  | IAdd | ISub | IMul | IDivS | IDivU | IRemS | IRemU
+  | IAnd | IOr | IXor | IShl | IShrS | IShrU | IRotl | IRotr
+
+syntax fbinop =
+  | FAdd | FSub | FMul | FDiv | FMin | FMax | FCopysign
+
+syntax binop_ = op<ibinop, ibinop, fbinop, fbinop>
+
+var bop : binop_
+
+syntax irelop =
+  | Eq | Ne | LtS | LtU | GtS | GtU | LeS | LeU | GeS | GeU
+syntax frelop =
+  | Eq | Ne | Lt | Gt | Le | Ge
+syntax relop_ = op<irelop, irelop, frelop, frelop>
+var rop : relop_
+
+syntax num_ = op<i32, i64, f32, f64>
+var num : num_
+
+syntax itestop = | Eqz
+syntax ftestop
+syntax testop_ = op<itestop, itestop, ftestop, ftestop>
+var top : testop_
+
+syntax icvtop =
+  | ExtendSI32 | ExtendUI32 | WrapI64
+  | TruncSF32 | TruncUF32 | TruncSF64 | TruncUF64
+  | TruncSatSF32 | TruncSatUF32 | TruncSatSF64 | TruncSatUF64
+  | ReinterpretFloat
+syntax fcvtop =
+  | ConvertSI32 | ConvertUI32 | ConvertSI64 | ConvertUI64
+  | PromoteF32 | DemoteF64
+  | ReinterpretInt
+syntax cvtop_ = op<icvtop, icvtop, fcvtop, fcvtop>
+var cop : cvtop_
+
+syntax void = VOID
+syntax vitestop = AllTrue
+syntax vtestop = laneop<vitestop, vitestop, vitestop, vitestop, void, void>
+syntax vtestop_ = vecop<vtestop>
+var vtop : vtestop_
+
+syntax viunop =
+  | Abs | Neg | Popcnt
+syntax vfunop =
+  | Abs | Neg | Sqrt | Ceil | Floor | Trunc | Nearest
+syntax vunop = laneop<viunop, viunop, viunop, viunop, vfunop, vfunop>
+syntax vunop_ = vecop<vunop>
+var vuop : vunop_
+
+syntax vibinop =
+  | Add | Sub | Mul | MinS | MinU | MaxS | MaxU | AvgrU
+  | AddSatS | AddSatU | SubSatS | SubSatU | DotS | Q15MulRSatS
+  | ExtMulLowS | ExtMulHighS | ExtMulLowU | ExtMulHighU
+  | Swizzle | Shuffle nat* | NarrowS | NarrowU
+  | RelaxedSwizzle | RelaxedQ15MulRS | RelaxedDot
+syntax vfbinop =
+  | Add | Sub | Mul | Div | Min | Max | Pmin | Pmax
+  | RelaxedMin | RelaxedMax
+syntax vbinop = laneop<vibinop, vibinop, vibinop, vibinop, vfbinop, vfbinop>
+syntax vbinop_ = vecop<vbinop>
+var vbop : vbinop_
+
+syntax viternop =
+  | RelaxedLaneselect | RelaxedDotAdd
+syntax vfternop =
+  | RelaxedMadd | RelaxedNmadd
+syntax vternop = laneop<viternop, viternop, viternop, viternop, vfternop, vfternop>
+syntax vternop_ = vecop<vternop>
+var vterop : vternop_
+
+syntax virelop =
+  | Eq | Ne | LtS | LtU | LeS | LeU | GtS | GtU | GeS | GeU
+syntax vfrelop =
+  | Eq | Ne | Lt | Le | Gt | Ge
+syntax vrelop = laneop<virelop, virelop, virelop, virelop, vfrelop, vfrelop>
+syntax vrelop_ = vecop<vrelop>
+var vrop : vrelop_
+
+syntax vicvtop =
+  | ExtendLowS | ExtendLowU | ExtendHighS | ExtendHighU
+  | ExtAddPairwiseS | ExtAddPairwiseU
+  | TruncSatSF32x4 | TruncSatUF32x4
+  | TruncSatSZeroF64x2 | TruncSatUZeroF64x2
+  | RelaxedTruncSF32x4 | RelaxedTruncUF32x4
+  | RelaxedTruncSZeroF64x2 | RelaxedTruncUZeroF64x2
+syntax vfcvtop =
+  | DemoteZeroF64x2 | PromoteLowF32x4
+  | ConvertSI32x4 | ConvertUI32x4
+syntax vcvtop = laneop<vicvtop, vicvtop, vicvtop, vicvtop, vfcvtop, vfcvtop>
+syntax vcvtop_ = vecop<vcvtop>
+var vcvop : vcvtop_
+
+syntax vishiftop =
+  | Shl | ShrS | ShrU
+syntax vshiftop = laneop<vishiftop, vishiftop, vishiftop, vishiftop, void, void>
+syntax vshiftop_ = vecop<vshiftop>
+var vshop : vshiftop_
+
+syntax vibitmaskop = | Bitmask
+syntax vbitmaskop = laneop<vibitmaskop, vibitmaskop, vibitmaskop, vibitmaskop, void, void>
+syntax vbitmaskop_ = vecop<vbitmaskop>
+var vbitop : vbitmaskop_
+
+syntax vvtestop = AnyTrue
+syntax vvtestop_ = vecop<vvtestop>
+var vvtop : vvtestop_
+
+syntax vvunop = Not
+syntax vvunop_ = vecop<vvunop>
+var vvuop : vvunop_
+
+syntax vvbinop = | And | Or | Xor | AndNot
+syntax vvbinop_ = vecop<vvbinop>
+var vvbop : vvbinop_
+
+syntax vvternop = | Bitselect
+syntax vvternop_ = vecop<vvternop>
+var vvterop : vvternop_
+
+syntax vnsplatop = Splat
+syntax vsplatop = laneop<vnsplatop, vnsplatop, vnsplatop, vnsplatop, vnsplatop, vnsplatop>
+syntax vsplatop_ = vecop<vsplatop>
+var vspop : vsplatop_
+
+syntax vnextractop<X> = Extract (nat, X)
+syntax vextractop = laneop<vnextractop<extension>, vnextractop<extension>, vnextractop<void>, vnextractop<void>, vnextractop<void>, vnextractop<void> >
+syntax vextractop_ = vecop<vextractop>
+var vexop : vextractop_
+
+syntax vnreplaceop = Replace nat
+syntax vreplaceop = laneop<vnreplaceop, vnreplaceop, vnreplaceop, vnreplaceop, vnreplaceop, vnreplaceop>
+syntax vreplaceop_ = vecop<vreplaceop>
+var vrepop : vreplaceop_
+
+syntax externop_ = Internalize | Externalize
+var eop : externop_
+
+;; Array
+syntax initop_ = Explicit | Implicit
+var iop : initop_
+
+;; memory
+syntax loadop_ = memop<numtype, (packtype, extension)?>
+syntax storeop_ = memop<numtype, packtype?>
+syntax vloadop_ = memop<vectype, (packtype, vextension)?>
+syntax vstoreop_ = memop<vectype, void>
+syntax vlaneop_ = memop<vectype, packtype>
+var lop : loadop_
+var sop : storeop_
+var vlop : vloadop_
+var vsop : vstoreop_
+var vlaneop : vlaneop_
+
+syntax blocktype =
+  | VarBlockType typeidx
+  | ValBlockType valtype?
+
+syntax catch =
+  | Catch idx idx
+  | CatchRef idx idx
+  | CatchAll idx
+  | CatchAllRef idx
+
+syntax instr =
+  | UNREACHABLE
+  | NOP
+  | DROP
+  | SELECT (valtype*)?
+  | BLOCK blocktype instr*
+  | LOOP blocktype instr*
+  | IF blocktype instr* ELSE instr*
+  | BR labelidx
+  | BR_IF labelidx
+  | BR_TABLE labelidx* labelidx
+  | BR_ON_NULL labelidx
+  | BR_ON_NON_NULL labelidx
+  | BR_ON_CAST labelidx reftype reftype
+  | BR_ON_CAST_FAIL labelidx reftype reftype
+  | CALL funcidx
+  | CALL_REF funcidx
+  | CALL_INDIRECT tableidx funcidx
+  | RETURN
+  | RETURN_CALL funcidx
+  | RETURN_CALL_REF typeidx
+  | RETURN_CALL_INDIRECT tableidx typeidx
+  | THROW tagidx
+  | THROW_REF
+  | TRY_TABLE blocktype catch* instr*
+  | LOCAL.GET localidx
+  | LOCAL.SET localidx
+  | LOCAL.TEE localidx
+  | GLOBAL.GET globalidx
+  | GLOBAL.SET globalidx
+  | TABLE.GET tableidx
+  | TABLE.SET tableidx
+  | TABLE.SIZE tableidx
+  | TABLE.GROW tableidx
+  | TABLE.FILL tableidx
+  | TABLE.COPY tableidx tableidx
+  | TABLE.INIT tableidx elemidx
+  | ELEM.DROP elemidx
+  | LOAD memidx loadop_
+  | STORE memidx storeop_
+  | VEC.LOAD memidx vloadop_
+  | VEC.STORE memidx vstoreop_
+  | VEC.LOAD_LANE memidx vlaneop_ int
+  | VEC.STORE_LANE memidx vlaneop_ int
+  | MEMORY.SIZE memidx
+  | MEMORY.GROW memidx
+  | MEMORY.FILL memidx
+  | MEMORY.COPY memidx memidx
+  | MEMORY.INIT memidx dataidx
+  | DATA.DROP dataidx
+  | REF.NULL heaptype
+  | REF.FUNC funcidx
+  | REF.IS_NULL
+  | REF.AS_NON_NULL
+  | REF.TEST reftype
+  | REF.CAST reftype
+  | REF.EQ
+  | REF.I31
+  | I31.GET extension
+  | STRUCT.NEW typeidx initop_
+  | STRUCT.GET typeidx typeidx extension?
+  | STRUCT.SET typeidx typeidx
+  | ARRAY.NEW typeidx initop_
+  | ARRAY.NEW_FIXED typeidx u32
+  | ARRAY.NEW_ELEM typeidx elemidx
+  | ARRAY.NEW_DATA typeidx dataidx
+  | ARRAY.GET typeidx extension?
+  | ARRAY.SET typeidx
+  | ARRAY.LEN
+  | ARRAY.COPY typeidx typeidx
+  | ARRAY.FILL typeidx
+  | ARRAY.INIT_DATA typeidx dataidx
+  | ARRAY.INIT_ELEM typeidx elemidx
+  | EXTERN.CONVERT externop_
+  | CONST num_
+  | TEST testop_
+  | COMPARE relop_
+  | UNARY unop_
+  | BINOP binop_
+  | CONVERT cvtop_
+  | VEC.CONST vec_
+  | VEC.TEST vtestop_
+  | VEC.UNARY vunop_
+  | VEC.BINARY vbinop_
+  | VEC.TERNARY vternop_
+  | VEC.COMPARE vrelop_
+  | VEC.CONVERT vcvtop_
+  | VEC.SHIFT vshiftop_
+  | VEC.BITMASK vbitmaskop_
+  | VEC.TESTBITS vvtestop_
+  | VEC.UNARYBITS vvunop_
+  | VEC.BINARYBITS vvbinop_
+  | VEC.TERNARYBITS vvternop_
+  | VEC.SPLAT vsplatop_
+  | VEC.EXTRACT vextractop_
+  | VEC.REPLACE vreplaceop_
+
+
+syntax const = instr*
