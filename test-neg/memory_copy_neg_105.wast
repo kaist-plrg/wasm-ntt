@@ -1,0 +1,6 @@
+(assert_invalid
+  (module
+    (memory i64 1 1)
+    (func (export "testfn")
+      (memory.copy (i64.const 10) (f32.const 20) (f64.const 30))))
+  "type mismatch")
