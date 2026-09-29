@@ -95,6 +95,13 @@ let add_node ~(taint : bool) (graph : t) (value : value) : unit =
 let find_node (graph : t) (vid : vid) : Node.t option =
   G.find_opt graph.nodes vid
 
+(* All value ids actually present in the graph, in ascending order.
+   Use this instead of enumerating 0 .. graph.root: value ids come from a
+   process-global counter that is no longer reset per program, so graph.root
+   is unrelated to the number of nodes in the graph. *)
+let vids (graph : t) : vid list =
+  G.fold (fun vid _ acc -> vid :: acc) graph.nodes [] |> List.sort compare
+
 let source_vids_under_root (graph : t) ~(root : value)
     ~(exclude_root : bool) : VIdSet.t =
   let rec collect (visited : VIdSet.t) (sources : VIdSet.t) (value : value) =

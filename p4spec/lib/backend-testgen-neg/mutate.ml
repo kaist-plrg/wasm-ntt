@@ -223,13 +223,13 @@ let update_int_bounds (bounds : int_bounds option) (value : Bigint.t) :
         { min_value = update_min min_value; max_value = update_max max_value }
 
 let collect_texts (vdg : Dep.Graph.t) : value' list =
-  List.init (vdg.root + 1) Fun.id
+  Dep.Graph.vids vdg
   |> List.filter_map (fun vid ->
          let* mirror, _ = Dep.Graph.find_node vdg vid in
          match mirror.it with TextN text -> Some (TextV text) | _ -> None)
 
 let collect_int_bounds (vdg : Dep.Graph.t) : int_bounds option =
-  List.init (vdg.root + 1) Fun.id
+  Dep.Graph.vids vdg
   |> List.fold_left
        (fun bounds vid ->
          match Dep.Graph.find_node vdg vid with
@@ -241,7 +241,7 @@ let collect_int_bounds (vdg : Dep.Graph.t) : int_bounds option =
        None
 
 let collect_nat_bounds (vdg : Dep.Graph.t) : int_bounds option =
-  List.init (vdg.root + 1) Fun.id
+  Dep.Graph.vids vdg
   |> List.fold_left
        (fun bounds vid ->
          match Dep.Graph.find_node vdg vid with
