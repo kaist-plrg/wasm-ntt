@@ -1113,24 +1113,29 @@ elem :
 table :
   | LPAR TABLE bind_var_opt table_fields RPAR
     { fun c -> let x = $3 c anon_table bind_table @@ $sloc in
-      fun () -> $4 c x $sloc }
+      let tff = $4 c in
+      fun () -> tff x $sloc }
 
+(* Staged like memory_fields, so an implicit elem segment claims its index while
+   module fields are still being read in declaration order. *)
 table_fields :
   | table_type const_expr1
-    { fun c x loc -> [{ttype = $1 c; tinit = $2 c} @@ loc], [], [], [] }
+    { fun c -> fun x loc -> [{ttype = $1 c; tinit = $2 c} @@ loc], [], [], [] }
   | table_type  /* Sugar */
-    { fun c x loc -> let TableT (_, _, (_, ht)) as ttype = $1 c in
+    { fun c -> fun x loc -> let TableT (_, _, (_, ht)) as ttype = $1 c in
       [{ttype; tinit = [RefNull ht @@ loc] @@ loc} @@ loc], [], [], [] }
   | inline_import table_type  /* Sugar */
-    { fun c x loc ->
+    { fun c -> fun x loc ->
       [], [],
       [{ module_name = fst $1; item_name = snd $1;
         idesc = TableImport ($2 c) @@ loc } @@ loc], [] }
   | inline_export table_fields  /* Sugar */
-    { fun c x loc -> let tabs, elems, ims, exs = $2 c x loc in
+    { fun c -> let tff = $2 c in
+      fun x loc -> let tabs, elems, ims, exs = tff x loc in
       tabs, elems, ims, $1 (TableExport x) c :: exs }
   | addr_type ref_type LPAR ELEM elem_expr elem_expr_list RPAR  /* Sugar */
-    { fun c x loc ->
+    { fun c -> ignore (anon_elem c $sloc);
+      fun x loc ->
       let offset = [at_const $1 (0L @@ loc) @@ loc] @@ loc in
       let einit = $5 c :: $6 c in
       let size = Lib.List64.length einit in
@@ -1141,7 +1146,8 @@ table_fields :
       [{etype; einit; emode} @@ loc],
       [], [] }
   | addr_type ref_type LPAR ELEM elem_var_list RPAR  /* Sugar */
-    { fun c x loc ->
+    { fun c -> ignore (anon_elem c $sloc);
+      fun x loc ->
       let (_, ht) as etype = $2 c in
       let tinit = [RefNull ht @@ loc] @@ loc in
       let offset = [at_const $1 (0L @@ loc) @@ loc] @@ loc in
@@ -1168,21 +1174,27 @@ data :
 memory :
   | LPAR MEMORY bind_var_opt memory_fields RPAR
     { fun c -> let x = $3 c anon_memory bind_memory @@ $sloc in
-      fun () -> $4 c x $sloc }
+      let mff = $4 c in
+      fun () -> mff x $sloc }
 
+(* Each alternative is staged as `fun c -> ... fun x loc -> ...`: the first stage
+   runs while module fields are read in declaration order, which is where an
+   implicit data segment has to claim its index. *)
 memory_fields :
   | memory_type
-    { fun c x loc -> [{mtype = $1 c} @@ loc], [], [], [] }
+    { fun c -> fun x loc -> [{mtype = $1 c} @@ loc], [], [], [] }
   | inline_import memory_type  /* Sugar */
-    { fun c x loc ->
+    { fun c -> fun x loc ->
       [], [],
       [{ module_name = fst $1; item_name = snd $1;
          idesc = MemoryImport ($2 c) @@ loc } @@ loc], [] }
   | inline_export memory_fields  /* Sugar */
-    { fun c x loc -> let mems, data, ims, exs = $2 c x loc in
+    { fun c -> let mff = $2 c in
+      fun x loc -> let mems, data, ims, exs = mff x loc in
       mems, data, ims, $1 (MemoryExport x) c :: exs }
   | addr_type LPAR DATA string_list RPAR  /* Sugar */
-    { fun c x loc ->
+    { fun c -> ignore (anon_data c $sloc);
+      fun x loc ->
       let size = Int64.(div (add (of_int (String.length $4)) 65535L) 65536L) in
       let offset = [at_const $1 (0L @@ loc) @@ loc] @@ loc in
       [{mtype = MemoryT ($1, {min = size; max = Some size})} @@ loc],
