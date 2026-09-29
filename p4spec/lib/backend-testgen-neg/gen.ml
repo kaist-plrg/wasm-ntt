@@ -956,7 +956,7 @@ let fuzz_mutationw (fuel : int) (iid : iid) (idx_seed : int)
   |> Query.query query;
   let mutations =
     try
-      Mutate.mutatesw Config.trials_mutation config.specenv.tdenv
+      Mutate.mutatesw config.mutation Config.trials_mutation config.specenv.tdenv
         config.specenv.mixopenv vdg vid_source
     with
     | Z.Overflow ->
@@ -1354,7 +1354,75 @@ let fuzz_loopw_until (timeout : int) (config : Config.tw) : Config.tw =
       |> Logger.log config.modes.logmode log;
       config)
 
-let wasm_fuzzer_init (spec : spec) (phase : Config.wasm_phase)
+(* Splicing harvests declarations from the cold boot seeds; it is skipped
+   when every splice kind is disabled, so such runs stay identical to runs
+   without splicing *)
+let wasm_harvest_fragments (modes : Modes.t) (log : Logger.t)
+    (phase : Config.wasm_phase) (switches : Mutate.switches) : Mutate.fragments
+    =
+  let splicing = List.exists (Mutate.splice_enabled switches) Mutate.components in
+  match modes.bootmode with
+  | _ when not splicing ->
+      "[FRAGMENTS] splicing disabled; no fragments harvested"
+      |> Logger.log modes.logmode log;
+      Mutate.empty_fragments
+  | Warm _ ->
+      "[FRAGMENTS] warm boot has no seed directory to harvest; splicing \
+       disabled"
+      |> Logger.warn modes.logmode log;
+      Mutate.empty_fragments
+  | Cold (_, dirname_seed_wasm) ->
+      let started_at = Unix.gettimeofday () in
+      let harvest = Mutate.create_harvest () in
+      let filenames =
+        Util.Filesys.collect_files ~suffix:".wast" dirname_seed_wasm
+        |> List.sort String.compare
+      in
+      let failures = ref 0 in
+      List.iter
+        (fun filename ->
+          match Candidate.parse_seed_module ~phase filename with
+          | Ok module_ -> Mutate.add_module harvest ~source:filename module_
+          | Error _ -> incr failures
+          | exception Sys.Break -> raise Sys.Break
+          | exception _ -> incr failures)
+        filenames;
+      let fragments = Mutate.freeze_harvest harvest in
+      F.asprintf
+        "[FRAGMENTS] harvested %d seed files from %s in %.2fs (parse \
+         failures %d)"
+        (List.length filenames) dirname_seed_wasm
+        (Unix.gettimeofday () -. started_at)
+        !failures
+      |> Logger.log modes.logmode log;
+      let one_line text =
+        String.split_on_char '\n' text
+        |> List.map String.trim
+        |> List.filter (fun line -> line <> "")
+        |> String.concat " "
+      in
+      List.iter
+        (fun component ->
+          let name = Mutate.string_of_component component in
+          let stats = Mutate.harvest_stats harvest component in
+          let shapes = Mutate.shapes_of fragments component in
+          F.asprintf
+            "[FRAGMENTS] %s seen=%d not_self_contained=%d duplicates=%d \
+             kept=%d shapes=%d"
+            name stats.seen stats.not_self_contained stats.duplicates
+            stats.kept (Array.length shapes)
+          |> Logger.log modes.logmode log;
+          Array.iteri
+            (fun idx (shape : Mutate.shape) ->
+              F.asprintf "[SHAPE] %s #%d members=%d : %s" name idx
+                (Array.length shape.members) (one_line shape.key)
+              |> Logger.log modes.logmode log)
+            shapes)
+        Mutate.components;
+      fragments
+
+let wasm_fuzzer_init ?(switches : Mutate.switches = Mutate.all_on)
+    (spec : spec) (phase : Config.wasm_phase)
     (dirname_gen : string)
     (name_campaign : string option) (randseed : int option)
     (logmode : Modes.logmode) (bootmode : Modes.bootmode)
@@ -1382,7 +1450,7 @@ let wasm_fuzzer_init (spec : spec) (phase : Config.wasm_phase)
   let logname_init = storage.dirname_log ^ "/init.log" in
   let log_init = Logger.init logname_init in
   F.asprintf
-    "[COMMAND] wasm-testgen -phase %s (coverage relation %s) -gen %s%s%s%s%s%s%s%s"
+    "[COMMAND] wasm-testgen -phase %s (coverage relation %s) -gen %s%s%s%s%s%s%s%s%s"
     (Config.string_of_wasm_phase phase)
     (Config.coverage_relation phase)
     dirname_gen
@@ -1408,6 +1476,16 @@ let wasm_fuzzer_init (spec : spec) (phase : Config.wasm_phase)
     (match budget with
     | Config.WasmFuel fuel -> F.asprintf " -fuel %d" fuel
     | Config.WasmTimeout timeout -> F.asprintf " -timeout %d" timeout)
+    (let enabled = Mutate.enabled_kind_names switches in
+     [ "GenFromTyp"; "MutateList"; "MixopGroup"; "MutateTableRefType";
+       "Splicing:memory"; "Splicing:table"; "Splicing:global" ]
+     |> List.filter (fun name -> not (List.mem name enabled))
+     |> List.map (fun name -> " -disable-mutation " ^ name)
+     |> String.concat "")
+  |> Logger.log modes.logmode log_init;
+  F.asprintf "[MUTATION] enabled: %s (splice probability %.2f)"
+    (String.concat " " (Mutate.enabled_kind_names switches))
+    Config.splice_probability
   |> Logger.log modes.logmode log_init;
   "Loading type definitions from the spec file"
   |> Logger.log modes.logmode log_init;
@@ -1569,10 +1647,16 @@ let wasm_fuzzer_init (spec : spec) (phase : Config.wasm_phase)
     Config.samples_derivation_source Config.trials_mutation Config.trials_seed
     Config.timeout_seed
   |> Logger.log modes.logmode log_init;
+  let fragments = wasm_harvest_fragments modes log_init phase switches in
+  let mutation =
+    Mutate.
+      { switches; fragments; splice_probability = Config.splice_probability }
+  in
   Logger.close log_init;
-  Config.initw ~focus randseed modes specenv storage seed
+  Config.initw ~focus ~mutation randseed modes specenv storage seed
 
-let wasm_fuzzer (budget : Config.wasm_budget) (spec : spec)
+let wasm_fuzzer ?(switches : Mutate.switches = Mutate.all_on)
+    (budget : Config.wasm_budget) (spec : spec)
     (phase : Config.wasm_phase)
     (dirname_gen : string) (name_campaign : string option)
     (randseed : int option) (logmode : Modes.logmode)
@@ -1581,7 +1665,7 @@ let wasm_fuzzer (budget : Config.wasm_budget) (spec : spec)
     (mutationmode : Modes.mutationmode)
     (covermode : Modes.covermode) (focus : Config.wasm_focus option) : unit =
   let config =
-    wasm_fuzzer_init spec phase dirname_gen name_campaign randseed logmode
+    wasm_fuzzer_init ~switches spec phase dirname_gen name_campaign randseed logmode
       bootmode boot_observe_dirs boot_invoke_dirs mutationmode covermode focus
       budget
   in

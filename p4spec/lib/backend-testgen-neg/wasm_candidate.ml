@@ -218,6 +218,20 @@ let load_invocation_seed ~derive ~env filename =
                    "invocation seed did not return values and has no reusable \
                     close-miss path")))
 
+(* The target module of a seed, parsed but not evaluated. Splicing harvests
+   declarations from it. *)
+let parse_seed_module ~phase filename =
+  match phase with
+  | Config.Validation -> (
+      match Evaluator.parse_validation_file filename with
+      | Error _ as failure -> failure
+      | Ok (root, _) -> single_module_of_root root)
+  | Config.Instantiation ->
+      Episode.parse_file filename |> Result.map Episode.target_value
+  | Config.Invocation ->
+      Episode.parse_invocation_file filename
+      |> Result.map Episode.invocation_target_value
+
 let load_seed_with_vdg ~derive ~env ~phase filename =
   match phase with
   | Config.Validation -> load_validation_seed ~derive ~env filename

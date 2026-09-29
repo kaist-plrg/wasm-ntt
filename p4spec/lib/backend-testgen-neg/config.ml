@@ -49,6 +49,9 @@ let samples_derivation_source = 10
 (* Max number of mutation trials per close-AST *)
 let trials_mutation = 10
 
+(* Probability of stacking a declaration splice on a primary Wasm mutation *)
+let splice_probability = 0.5
+
 (* Trials per seed *)
 let trials_seed = 50
 
@@ -112,6 +115,7 @@ type tw = {
   storage : storage;
   seed : seed;
   focus : wasm_focus option;
+  mutation : Mutate.options;
 }
 
 (* Load mixop groups into the environment *)
@@ -281,12 +285,13 @@ let init (randseed : int option) (modes : Modes.t) (specenv : specenv)
   Random.init rand;
   { rand; modes; specenv; storage; seed }
 
-let initw ?(focus : wasm_focus option = None) (randseed : int option)
-    (modes : Modes.t) (specenv : wasm_specenv) (storage : storage)
-    (seed : seed) : tw =
+let initw ?(focus : wasm_focus option = None)
+    ?(mutation : Mutate.options = Mutate.default_options)
+    (randseed : int option) (modes : Modes.t) (specenv : wasm_specenv)
+    (storage : storage) (seed : seed) : tw =
   let rand = Option.value ~default:2026 randseed in
   Random.init rand;
-  { rand; modes; specenv; storage; seed; focus }
+  { rand; modes; specenv; storage; seed; focus; mutation }
 
 (* Seed updater *)
 

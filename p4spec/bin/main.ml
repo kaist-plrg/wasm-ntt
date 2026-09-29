@@ -903,9 +903,22 @@ let wasm_run_testgen_command =
      and focus =
        flag "-focus" no_arg
          ~doc:"focus on one dangling id and its close-missing Wasm program"
+     and disabled_mutations =
+       flag "-disable-mutation" (listed string)
+         ~doc:
+           ("KIND turn off one mutation kind (repeatable): "
+           ^ String.concat ", " Backend_testgen_neg.Mutate.mutation_kind_names
+           )
      in
      fun () ->
        try
+         let switches =
+           match
+             Backend_testgen_neg.Mutate.switches_of_disabled disabled_mutations
+           with
+           | Ok switches -> switches
+           | Error message -> raise (CommandError ("Error: " ^ message))
+         in
          let spec_sl = Pass.structure ~final:true paths_spec in
          let logmode =
            if silent then Backend_testgen_neg.Modes.Silent
@@ -991,7 +1004,7 @@ let wasm_run_testgen_command =
                  (CommandError
                     "Error: should specify either -fuel or -timeout")
          in
-         Backend_testgen_neg.Gen.wasm_fuzzer budget spec_sl phase gendir
+         Backend_testgen_neg.Gen.wasm_fuzzer ~switches budget spec_sl phase gendir
            name_campaign randseed logmode bootmode boot_observe_dirs
            boot_invoke_dirs mutationmode covermode focus
        with

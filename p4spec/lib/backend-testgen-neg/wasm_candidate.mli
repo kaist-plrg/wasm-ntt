@@ -67,6 +67,11 @@ val evaluate :
   Lang.Il.value ->
   (observation, Wasm_phase.phase_error) result
 
+val parse_seed_module :
+  phase:Config.wasm_phase ->
+  string ->
+  (Lang.Il.value, Wasm_phase.phase_error) result
+
 val load_seed_with_vdg :
   derive:bool ->
   env:Wasm_phase_evaluator.env ->

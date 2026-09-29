@@ -11,13 +11,111 @@ module Mixop = Domain.Mixop
 
 (* Kinds of mutations *)
 
-type kind = GenFromTyp | MutateList | MixopGroup | MutateTableRefType
+(* Module-level declaration kinds that splicing can replace *)
+type component = Memory | Table | Global
 
-let string_of_kind = function
+type kind =
+  | GenFromTyp
+  | MutateList
+  | MixopGroup
+  | MutateTableRefType
+  (* A primary mutation with one declaration splice stacked on top *)
+  | Splicing of kind * component
+
+let components = [ Memory; Table; Global ]
+
+let string_of_component = function
+  | Memory -> "memory"
+  | Table -> "table"
+  | Global -> "global"
+
+let rec string_of_kind = function
   | GenFromTyp -> "GenFromTyp"
   | MutateList -> "MutateList"
   | MixopGroup -> "MixopGroup"
   | MutateTableRefType -> "MutateTableRefType"
+  | Splicing (primary, component) ->
+      string_of_kind primary ^ "+Splicing:" ^ string_of_component component
+
+(* Switches for turning mutation kinds on and off *)
+
+type switches = {
+  gen_from_typ : bool;
+  mutate_list : bool;
+  mixop_group : bool;
+  table_reftype : bool;
+  splice_memory : bool;
+  splice_table : bool;
+  splice_global : bool;
+}
+
+let all_on =
+  {
+    gen_from_typ = true;
+    mutate_list = true;
+    mixop_group = true;
+    table_reftype = true;
+    splice_memory = true;
+    splice_table = true;
+    splice_global = true;
+  }
+
+let splice_enabled (switches : switches) = function
+  | Memory -> switches.splice_memory
+  | Table -> switches.splice_table
+  | Global -> switches.splice_global
+
+let mutation_kind_names =
+  [
+    "GenFromTyp";
+    "MutateList";
+    "MixopGroup";
+    "MutateTableRefType";
+    "Splicing";
+    "Splicing:memory";
+    "Splicing:table";
+    "Splicing:global";
+  ]
+
+let disable_mutation (switches : switches) (name : string) :
+    (switches, string) result =
+  match name with
+  | "GenFromTyp" -> Ok { switches with gen_from_typ = false }
+  | "MutateList" -> Ok { switches with mutate_list = false }
+  | "MixopGroup" -> Ok { switches with mixop_group = false }
+  | "MutateTableRefType" -> Ok { switches with table_reftype = false }
+  | "Splicing" ->
+      Ok
+        {
+          switches with
+          splice_memory = false;
+          splice_table = false;
+          splice_global = false;
+        }
+  | "Splicing:memory" -> Ok { switches with splice_memory = false }
+  | "Splicing:table" -> Ok { switches with splice_table = false }
+  | "Splicing:global" -> Ok { switches with splice_global = false }
+  | _ ->
+      Error
+        (Format.asprintf "unknown mutation kind %S (expected one of %s)" name
+           (String.concat ", " mutation_kind_names))
+
+let switches_of_disabled (names : string list) : (switches, string) result =
+  List.fold_left
+    (fun switches name -> Result.bind switches (fun s -> disable_mutation s name))
+    (Ok all_on) names
+
+let enabled_kind_names (switches : switches) : string list =
+  [
+    (switches.gen_from_typ, "GenFromTyp");
+    (switches.mutate_list, "MutateList");
+    (switches.mixop_group, "MixopGroup");
+    (switches.table_reftype, "MutateTableRefType");
+    (switches.splice_memory, "Splicing:memory");
+    (switches.splice_table, "Splicing:table");
+    (switches.splice_global, "Splicing:global");
+  ]
+  |> List.filter_map (fun (on, name) -> if on then Some name else None)
 
 (* Option monad *)
 
@@ -418,31 +516,39 @@ let mutate_list (value : value) : (kind * value) option =
   let* mutation = Rand.random_select mutations_list in
   mutation ()
 
-let mutate_node (tdenv : TDEnv.t) (mixopenv : MixopEnv.t) (texts : value' list)
-    (nums : num_context) (value : value) : (kind * value) option =
+let mutate_node (switches : switches) (tdenv : TDEnv.t) (mixopenv : MixopEnv.t)
+    (texts : value' list) (nums : num_context) (value : value) :
+    (kind * value) option =
+  (* Disabled kinds are dropped before the random choice, so with every kind
+     enabled the candidate list, and hence the random draw, is unchanged. *)
+  let choose candidates =
+    let* mutation =
+      candidates
+      |> List.filter_map (fun (enabled, mutation) ->
+             if enabled then Some mutation else None)
+      |> Rand.random_select
+    in
+    mutation ()
+  in
+  let type_driven () = mutate_type_driven tdenv texts nums value in
   match value.it with
   | ListV _ ->
-      let* mutation =
+      choose
         [
-          (fun () -> mutate_list value);
-          (fun () -> mutate_type_driven tdenv texts nums value);
+          (switches.mutate_list, fun () -> mutate_list value);
+          (switches.gen_from_typ, type_driven);
         ]
-        |> Rand.random_select
-      in
-      mutation ()
   | CaseV _ ->
-      let* mutation =
+      choose
         [
-          (fun () -> mutate_mixop mixopenv value);
-          (fun () -> mutate_type_driven tdenv texts nums value);
+          (switches.mixop_group, fun () -> mutate_mixop mixopenv value);
+          (switches.gen_from_typ, type_driven);
         ]
-        |> Rand.random_select
-      in
-      mutation ()
-  | _ -> mutate_type_driven tdenv texts nums value
+  | _ -> if switches.gen_from_typ then type_driven () else None
 
-let mutate_walk (tdenv : TDEnv.t) (mixopenv : MixopEnv.t) (texts : value' list)
-    (nums : num_context) (value : value) : (kind * value) option =
+let mutate_walk (switches : switches) (tdenv : TDEnv.t) (mixopenv : MixopEnv.t)
+    (texts : value' list) (nums : num_context) (value : value) :
+    (kind * value) option =
   (* Compute the best path to a leaf node in the value subtree *)
   let key_max = ref min_float in
   let path_best = ref [] in
@@ -481,7 +587,7 @@ let mutate_walk (tdenv : TDEnv.t) (mixopenv : MixopEnv.t) (texts : value' list)
     let typ = value.note.typ in
     match (path, value) with
     | [], value ->
-        let* kind, value = mutate_node tdenv mixopenv texts nums value in
+        let* kind, value = mutate_node switches tdenv mixopenv texts nums value in
         kind_found := kind |> Option.some;
         value |> Option.some
     | idx :: path, value -> (
@@ -1069,6 +1175,378 @@ let patch_program (tdenv : TDEnv.t) (value_to_mutate : value)
   | Some value_to_mutate -> value_to_mutate
   | None -> failwith "patch_program: pick returned None"
 
+(* Wasm declaration splicing
+
+   A primary mutation may get one extra edit stacked on top of it: a
+   memory, table, or global declaration of the mutated module is replaced by
+   a declaration harvested from another seed. Harvested fragments must not
+   refer to anything by index, are deduplicated by structure, and are grouped
+   by shape (the fragment with its literal values erased) so that fragments
+   differing only in numbers do not crowd out structurally different ones. *)
+
+let field_of_component = function
+  | Memory -> "MEMS"
+  | Table -> "TABLES"
+  | Global -> "GLOBALS"
+
+(* Index positions are annotated with these type names by the Wasm value
+   construction; a fragment holding any of them points outside itself *)
+let index_type_names =
+  [
+    "typeidx";
+    "funcidx";
+    "globalidx";
+    "tableidx";
+    "memidx";
+    "tagidx";
+    "elemidx";
+    "dataidx";
+    "labelidx";
+    "localidx";
+    "fieldidx";
+  ]
+
+let rec is_self_contained (value : value) : bool =
+  (match value.note.typ with
+  | VarT (id, _) when List.mem id.it index_type_names -> false
+  | _ -> true)
+  &&
+  match value.it with
+  | BoolV _ | NumV _ | TextV _ -> true
+  | FuncV _ | ExternV _ -> false
+  | StructV valuefields ->
+      List.for_all (fun (_, value) -> is_self_contained value) valuefields
+  | CaseV valuecase -> List.for_all is_self_contained (Mixfix.args valuecase)
+  | TupleV values -> List.for_all is_self_contained values
+  | OptV None -> true
+  | OptV (Some value) -> is_self_contained value
+  | ListV values -> Value_array.for_all is_self_contained values
+
+let rec erase_literals (value : value) : value =
+  let it =
+    match value.it with
+    | NumV _ | TextV _ -> TextV "_"
+    | BoolV _ | FuncV _ | ExternV _ -> value.it
+    | StructV valuefields ->
+        StructV
+          (List.map (fun (atom, value) -> (atom, erase_literals value)) valuefields)
+    | CaseV valuecase -> CaseV (Mixfix.map erase_literals valuecase)
+    | TupleV values -> TupleV (List.map erase_literals values)
+    | OptV value_opt -> OptV (Option.map erase_literals value_opt)
+    | ListV values -> ListV (Value_array.map erase_literals values)
+  in
+  { value with it }
+
+let shape_key (value : value) : string =
+  Lang.Il.Print.string_of_value (erase_literals value)
+
+type fragment = {
+  value : value;
+  source : string; (* first seed the fragment was found in *)
+  mutable count : int; (* occurrences over the harvested seeds *)
+}
+
+type shape = { key : string; members : fragment array }
+
+type fragments = {
+  memory : shape array;
+  table : shape array;
+  global : shape array;
+}
+
+let empty_fragments = { memory = [||]; table = [||]; global = [||] }
+
+let shapes_of (fragments : fragments) = function
+  | Memory -> fragments.memory
+  | Table -> fragments.table
+  | Global -> fragments.global
+
+type harvest_stats = {
+  mutable seen : int;
+  mutable not_self_contained : int;
+  mutable duplicates : int;
+  mutable kept : int;
+}
+
+type harvest_component = {
+  by_hash : (int, fragment list) Hashtbl.t;
+  mutable kept_rev : fragment list; (* kept fragments, newest first *)
+  stats : harvest_stats;
+}
+
+type harvest = {
+  harvest_memory : harvest_component;
+  harvest_table : harvest_component;
+  harvest_global : harvest_component;
+}
+
+let create_harvest_component () =
+  {
+    by_hash = Hashtbl.create 64;
+    kept_rev = [];
+    stats = { seen = 0; not_self_contained = 0; duplicates = 0; kept = 0 };
+  }
+
+let create_harvest () =
+  {
+    harvest_memory = create_harvest_component ();
+    harvest_table = create_harvest_component ();
+    harvest_global = create_harvest_component ();
+  }
+
+let harvest_component_of (harvest : harvest) = function
+  | Memory -> harvest.harvest_memory
+  | Table -> harvest.harvest_table
+  | Global -> harvest.harvest_global
+
+let harvest_stats (harvest : harvest) (component : component) : harvest_stats =
+  (harvest_component_of harvest component).stats
+
+(* Deduplication buckets by the structural hash every value already carries,
+   then compares structure exactly. Runtime.Value.eq is not used: it treats
+   equal vids as equal values, and generated values all have vid -1. *)
+let add_fragment (harvest : harvest_component) ~(source : string)
+    (value : value) : unit =
+  let stats = harvest.stats in
+  stats.seen <- stats.seen + 1;
+  if not (is_self_contained value) then
+    stats.not_self_contained <- stats.not_self_contained + 1
+  else
+    let bucket =
+      Hashtbl.find_opt harvest.by_hash value.note.vhash
+      |> Option.value ~default:[]
+    in
+    match
+      List.find_opt
+        (fun fragment -> Lang.Il.Eq.eq_value fragment.value value)
+        bucket
+    with
+    | Some fragment ->
+        fragment.count <- fragment.count + 1;
+        stats.duplicates <- stats.duplicates + 1
+    | None ->
+        let fragment = { value; source; count = 1 } in
+        Hashtbl.replace harvest.by_hash value.note.vhash (fragment :: bucket);
+        harvest.kept_rev <- fragment :: harvest.kept_rev;
+        stats.kept <- stats.kept + 1
+
+let add_module (harvest : harvest) ~(source : string) (module_ : value) : unit
+    =
+  match module_valuefields module_ with
+  | None -> ()
+  | Some valuefields ->
+      List.iter
+        (fun component ->
+          match
+            Option.bind
+              (find_valuefield (field_of_component component) valuefields)
+              list_items
+          with
+          | Some declarations ->
+              List.iter
+                (add_fragment (harvest_component_of harvest component) ~source)
+                declarations
+          | None -> ())
+        components
+
+(* Groups kept fragments by shape, both in first-seen order *)
+let freeze_component (harvest : harvest_component) : shape array =
+  let members = Hashtbl.create 16 in
+  let keys_rev = ref [] in
+  List.rev harvest.kept_rev
+  |> List.iter (fun fragment ->
+         let key = shape_key fragment.value in
+         match Hashtbl.find_opt members key with
+         | Some fragments -> Hashtbl.replace members key (fragment :: fragments)
+         | None ->
+             Hashtbl.replace members key [ fragment ];
+             keys_rev := key :: !keys_rev);
+  List.rev !keys_rev
+  |> List.map (fun key ->
+         {
+           key;
+           members = Hashtbl.find members key |> List.rev |> Array.of_list;
+         })
+  |> Array.of_list
+
+let freeze_harvest (harvest : harvest) : fragments =
+  {
+    memory = freeze_component harvest.harvest_memory;
+    table = freeze_component harvest.harvest_table;
+    global = freeze_component harvest.harvest_global;
+  }
+
+type options = {
+  switches : switches;
+  fragments : fragments;
+  splice_probability : float;
+}
+
+(* Options that never splice: every kind is enabled but no fragment exists *)
+let default_options =
+  { switches = all_on; fragments = empty_fragments; splice_probability = 0.0 }
+
+let splice_active (options : options) : bool =
+  List.exists
+    (fun component ->
+      splice_enabled options.switches component
+      && Array.length (shapes_of options.fragments component) > 0)
+    components
+
+(* Members of each shape that differ from the declaration being replaced;
+   shapes with no such member drop out *)
+let usable_shapes (shapes : shape array) (current : value) : fragment list list
+    =
+  Array.to_list shapes
+  |> List.filter_map (fun shape ->
+         match
+           Array.to_list shape.members
+           |> List.filter (fun fragment ->
+                  not (Lang.Il.Eq.eq_value fragment.value current))
+         with
+         | [] -> None
+         | fragments -> Some fragments)
+
+(* Shape first, then a member of it, both uniformly *)
+let pick_fragment (shapes : shape array) (current : value) : fragment option =
+  let* fragments = Rand.random_select (usable_shapes shapes current) in
+  Rand.random_select fragments
+
+(* Positions of each component that may be spliced. The declaration holding
+   the primary mutation is skipped so the splice cannot overwrite it; if the
+   primary mutation touched a whole declaration list (or the module), that
+   list may have been reordered or resized, so the component is skipped. *)
+let splice_candidates (options : options) (vid_primary : vid)
+    (module_before : value) : (component * int list) list =
+  match module_valuefields module_before with
+  | None -> []
+  | Some valuefields ->
+      components
+      |> List.filter_map (fun component ->
+             let shapes = shapes_of options.fragments component in
+             if
+               (not (splice_enabled options.switches component))
+               || Array.length shapes = 0
+               || module_before.note.vid = vid_primary
+             then None
+             else
+               let* declarations_value =
+                 find_valuefield (field_of_component component) valuefields
+               in
+               if declarations_value.note.vid = vid_primary then None
+               else
+                 let* declarations = list_items declarations_value in
+                 let positions =
+                   declarations
+                   |> List.mapi (fun position declaration ->
+                          if
+                            value_contains_vid vid_primary declaration
+                            || usable_shapes shapes declaration = []
+                          then None
+                          else Some position)
+                   |> List.filter_map Fun.id
+                 in
+                 match positions with
+                 | [] -> None
+                 | _ :: _ -> Some (component, positions))
+
+(* Replace the node carrying [vid_target] and rebuild its ancestors *)
+let rec replace_vid (vid_target : vid) (replacement : value) (value : value) :
+    value option =
+  if value.note.vid = vid_target then Some replacement
+  else
+    let typ = value.note.typ in
+    let replace_first (values : value list) : value list option =
+      let rec go values_rev = function
+        | [] -> None
+        | value :: values -> (
+            match replace_vid vid_target replacement value with
+            | Some value -> Some (List.rev_append values_rev (value :: values))
+            | None -> go (value :: values_rev) values)
+      in
+      go [] values
+    in
+    match value.it with
+    | BoolV _ | NumV _ | TextV _ | FuncV _ | ExternV _ | OptV None -> None
+    | StructV valuefields ->
+        let atoms, values = List.split valuefields in
+        let* values = replace_first values in
+        StructV (List.combine atoms values) |> wrap_value typ |> Option.some
+    | CaseV valuecase ->
+        let mixop, values = Mixfix.split valuecase in
+        let* values = replace_first values in
+        CaseV (Mixfix.fill mixop values) |> wrap_value typ |> Option.some
+    | TupleV values ->
+        let* values = replace_first values in
+        TupleV values |> wrap_value typ |> Option.some
+    | OptV (Some value) ->
+        let* value = replace_vid vid_target replacement value in
+        OptV (Some value) |> wrap_value typ |> Option.some
+    | ListV values ->
+        let* values = replace_first (Value_array.to_list values) in
+        ListV (Value_array.of_list values) |> wrap_value typ |> Option.some
+
+let find_module_containing_vid (vid_target : vid) (value : value) :
+    value option =
+  let rec walk (value : value) : value option =
+    match module_valuefields value with
+    | Some _ -> if value_contains_vid vid_target value then Some value else None
+    | None -> (
+        match value.it with
+        | BoolV _ | NumV _ | TextV _ | FuncV _ | ExternV _ | OptV None -> None
+        | StructV valuefields ->
+            valuefields |> List.map (fun (_, value) -> walk value) |> choose_one
+        | CaseV valuecase -> valuecase |> Mixfix.args |> List.map walk |> choose_one
+        | TupleV values -> values |> List.map walk |> choose_one
+        | ListV values ->
+            values |> Value_array.to_list |> List.map walk |> choose_one
+        | OptV (Some value) -> walk value)
+  in
+  walk value
+
+(* Component, then position, then fragment: each uniformly *)
+let splice_module (options : options) (vid_primary : vid)
+    ~(module_before : value) ~(module_after : value) :
+    (component * value) option =
+  let* component, positions =
+    splice_candidates options vid_primary module_before |> Rand.random_select
+  in
+  let* position = Rand.random_select positions in
+  let field = field_of_component component in
+  let* valuefields_before = module_valuefields module_before in
+  let* declarations_before =
+    Option.bind (find_valuefield field valuefields_before) list_items
+  in
+  let current = List.nth declarations_before position in
+  let* fragment = pick_fragment (shapes_of options.fragments component) current in
+  let* valuefields_after = module_valuefields module_after in
+  let* declarations_value = find_valuefield field valuefields_after in
+  let* declarations = list_items declarations_value in
+  let* declarations =
+    replace_list_item position (fun _ -> Some fragment.value) declarations
+  in
+  valuefields_after
+  |> update_valuefield field (list_with_items declarations_value declarations)
+  |> fun valuefields ->
+  StructV valuefields |> wrap_value module_after.note.typ |> fun module_ ->
+  Some (component, module_)
+
+(* Stack one splice on the primary mutation's module. The result replaces the
+   whole module, as MutateTableRefType already does. *)
+let stack_splice (options : options) (tdenv : TDEnv.t) (value_program : value)
+    (vid_primary : vid) ((kind, value_source, value_mutated) : kind * value * value)
+    : (kind * value * value) option =
+  let* module_ = find_module_containing_vid vid_primary value_program in
+  let module_before = patch_program tdenv module_ value_program in
+  let* module_after =
+    if value_source.note.vid = module_before.note.vid then Some value_mutated
+    else replace_vid value_source.note.vid value_mutated module_before
+  in
+  let* component, module_final =
+    splice_module options vid_primary ~module_before ~module_after
+  in
+  Some (Splicing (kind, component), module_before, module_final)
+
 (* Entry point for mutation *)
 
 let mutate (tdenv : TDEnv.t) (mixopenv : MixopEnv.t) (texts : value' list)
@@ -1091,13 +1569,13 @@ let mutate (tdenv : TDEnv.t) (mixopenv : MixopEnv.t) (texts : value' list)
   in
   (* Mutate the node *)
   let* kind, value_mutated =
-    mutate_walk tdenv mixopenv texts nums value_to_mutate
+    mutate_walk all_on tdenv mixopenv texts nums value_to_mutate
   in
   (kind, value_to_mutate, value_mutated) |> Option.some
 
-let mutatew (tdenv : TDEnv.t) (mixopenv : MixopEnv.t) (texts : value' list)
-    (nums : num_context) (vdg : Dep.Graph.t) (vid_source : vid) :
-    (kind * value * value) option =
+let mutatew (options : options) (tdenv : TDEnv.t) (mixopenv : MixopEnv.t)
+    (texts : value' list) (nums : num_context) (vdg : Dep.Graph.t)
+    (vid_source : vid) : (kind * value * value) option =
   let vid_to_mutate = vid_source in
   let value_to_mutate =
     Dep.Graph.reassemble_graph vdg VIdMap.empty vid_to_mutate
@@ -1110,21 +1588,39 @@ let mutatew (tdenv : TDEnv.t) (mixopenv : MixopEnv.t) (texts : value' list)
       patch_program tdenv value_to_mutate value_program
     in
     let* kind, value_mutated =
-      mutate_walk tdenv mixopenv texts nums value_to_mutate_concrete
+      mutate_walk options.switches tdenv mixopenv texts nums
+        value_to_mutate_concrete
     in
     Some (kind, value_to_mutate_concrete, value_mutated)
   in
-  match find_module_containing_table_reftype vid_to_mutate value_program with
-  | Some module_ -> (
-      let module_concrete = patch_program tdenv module_ value_program in
-      match
-        mutate_module_table_reftype tdenv texts nums vid_to_mutate
-          module_concrete
-      with
-      | Some module_mutated ->
-          Some (MutateTableRefType, module_concrete, module_mutated)
-      | None -> None)
-  | None -> mutate_generic ()
+  let module_table_reftype =
+    if options.switches.table_reftype then
+      find_module_containing_table_reftype vid_to_mutate value_program
+    else None
+  in
+  let* primary =
+    match module_table_reftype with
+    | Some module_ -> (
+        let module_concrete = patch_program tdenv module_ value_program in
+        match
+          mutate_module_table_reftype tdenv texts nums vid_to_mutate
+            module_concrete
+        with
+        | Some module_mutated ->
+            Some (MutateTableRefType, module_concrete, module_mutated)
+        | None -> None)
+    | None -> mutate_generic ()
+  in
+  (* With splicing inactive no random number is drawn here, so the primary
+     mutations follow the same random stream as without this feature *)
+  if
+    (not (splice_active options))
+    || Random.float 1.0 >= options.splice_probability
+  then Some primary
+  else
+    match stack_splice options tdenv value_program vid_to_mutate primary with
+    | Some stacked -> Some stacked
+    | None -> Some primary
 
 let mutates (fuel_mutate : int) (tdenv : TDEnv.t) (mixopenv : MixopEnv.t)
     (vdg : Dep.Graph.t) (vid_source : vid) : (kind * value * value) list =
@@ -1137,11 +1633,12 @@ let mutates (fuel_mutate : int) (tdenv : TDEnv.t) (mixopenv : MixopEnv.t)
       mutate tdenv mixopenv texts nums vdg vid_source)
   |> List.filter_map Fun.id
 
-let mutatesw (fuel_mutate : int) (tdenv : TDEnv.t) (mixopenv : MixopEnv.t)
-    (vdg : Dep.Graph.t) (vid_source : vid) : (kind * value * value) list =
+let mutatesw (options : options) (fuel_mutate : int) (tdenv : TDEnv.t)
+    (mixopenv : MixopEnv.t) (vdg : Dep.Graph.t) (vid_source : vid) :
+    (kind * value * value) list =
   let texts = collect_texts vdg in
   let texts = texts @ [ TextV "lazy"; TextV "fox" ] in
   let nums = collect_num_context vdg in
   List.init fuel_mutate (fun _ ->
-      mutatew tdenv mixopenv texts nums vdg vid_source)
+      mutatew options tdenv mixopenv texts nums vdg vid_source)
   |> List.filter_map Fun.id
