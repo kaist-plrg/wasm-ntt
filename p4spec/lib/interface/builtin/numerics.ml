@@ -51,6 +51,36 @@ let shl (add : value -> unit) (at : region) (targs : targ list)
   if Bigint.(offset > max_bit_width) then error at "shift amount too large";
   shl' base offset |> value_of_bigint add
 
+(* builtin dec $lsl_(int, int) : int *)
+
+(* Logical shift left, used by the Wasm spec for the memarg alignment check
+   "1 <= 2^align <= int_3", where int_3 is $pack_size / $num_size / $vec_size
+   and is therefore at most 16.  The negative test generator happily mutates the
+   align field to 65536 or 2^31-1, so the exponent must never be materialised
+   verbatim.  Above [lsl_exp_limit] the result is saturated instead: any value
+   that large compares the same way against every int_3 the spec can produce.
+
+   Do NOT raise here.  eval_if_instr evaluates the condition before calling
+   Hook.on_instr_dangling, so an exception would skip the coverage hook and the
+   dangling target would be recorded as neither hit nor miss. *)
+
+let lsl_exp_limit : int = 4096
+
+let lsl_' (v : Bigint.t) (o : Bigint.t) : Bigint.t =
+  if Bigint.(o <= zero) then v
+  else
+    match Bigint.to_int o with
+    | Some n when n <= lsl_exp_limit -> Bigint.shift_left v n
+    | _ -> Bigint.shift_left v lsl_exp_limit
+
+let lsl_ (add : value -> unit) (at : region) (targs : targ list)
+    (values_input : value list) : value =
+  Extract.zero at targs;
+  let value_base, value_offset = Extract.two at values_input in
+  let base = bigint_of_value value_base in
+  let offset = bigint_of_value value_offset in
+  lsl_' base offset |> value_of_bigint add
+
 (* dec $shr(int, int) : int *)
 
 let rec shr' (v : Bigint.t) (o : Bigint.t) : Bigint.t =

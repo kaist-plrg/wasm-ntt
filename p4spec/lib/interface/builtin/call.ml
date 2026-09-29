@@ -154,6 +154,7 @@ module Make (Ext : EXT) () = struct
     |> Funcs.add "fresh_typeId" (Fresh_.fresh_typeId ctr)
     (* Numerics *)
     |> Funcs.add "shl" Numerics.shl
+    |> Funcs.add "lsl_" Numerics.lsl_
     |> Funcs.add "shr" Numerics.shr
     |> Funcs.add "shr_arith" Numerics.shr_arith
     |> Funcs.add "pow2" Numerics.pow2
