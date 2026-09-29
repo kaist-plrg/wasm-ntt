@@ -156,6 +156,99 @@ let evaluate_instantiation_with_dangling_and_vdg ~derive env episode mutated_tar
   in
   evaluate_instantiation_common ~run_init env episode mutated_target
 
+(* Coverage and the dependency graph have different boundaries here. Only the
+   observed invocation is measured, but the graph must span instantiation and
+   every replayed invocation: a close miss in the observed one backtracks to the
+   module through state an earlier invocation changed. *)
+let evaluate_invocation_with_dangling_and_vdg ?(vdg = true) ~derive env
+    (episode : Episode.invocation_episode) mutated_target =
+  try
+    match Episode.prepare_invocation env.runtime episode mutated_target with
+    | Error _ as error -> error
+    | Ok (state, target_entry) -> (
+        let root = Episode.mutation_root mutated_target in
+        let outcome =
+          Runner.with_vdg_session ~vdg ~derive ~simulator:env.simulator
+            ~spec:env.spec ~root (fun session ->
+              let stuck = ref None in
+              let observed = ref None in
+              let eval_relation ~relname inputs =
+                if
+                  String.equal relname "Init_with_store_ok"
+                  || String.equal relname "Invoke"
+                then
+                  match session.Runner.step ~relname ~inputs with
+                  | Pass outputs ->
+                      if String.equal relname "Invoke" then
+                        observed := Some outputs;
+                      outputs
+                  | Fail (at, message) ->
+                      stuck := Some { Phase.relation = relname; at; message };
+                      error_interp at (relname ^ " has no applicable rule")
+                else Harness.eval_dynamic_rel env.runtime relname inputs
+              in
+              let run state commands =
+                Harness.run_commands ~eval_relation env.runtime state commands
+              in
+              let result =
+                try
+                  session.Runner.set_coverage_enabled false;
+                  let state =
+                    run state (Episode.invocation_driver_commands episode)
+                  in
+                  let state =
+                    run state (Episode.invocation_replayed_commands episode)
+                  in
+                  session.Runner.set_coverage_enabled true;
+                  ignore
+                    (run state (Episode.invocation_observed_commands episode));
+                  match !observed with
+                  | Some outputs -> Phase.invocation_result_of_outputs outputs
+                  | None ->
+                      Ok
+                        (Phase.NotInvoked
+                           (Phase.InitRelationFailed
+                              { relation = "Invoke";
+                                at = no_region;
+                                message = "no invocation was observed" }))
+                with
+                | InterpError (at, message) -> (
+                    match !stuck with
+                    | Some failure -> Ok (Phase.InvokeStuck failure)
+                    | None -> Error (Phase.HarnessFailure (at, message)))
+              in
+              Result.map
+                (fun result ->
+                  (result, Some (session.Runner.read_coverage ()),
+                   session.Runner.graph))
+                result)
+        in
+        (* The validation gate runs only for a stuck invocation. It is a whole
+           extra pass over the module, and almost no candidate gets stuck, so
+           asking first would dominate the campaign. *)
+        match outcome with
+        | Ok (Phase.InvokeStuck _, _, _) -> (
+            let validation, _ =
+              Runner.eval_rel_with_dangling ~simulator:env.simulator
+                ~spec:env.spec ~root:target_entry.Harness.value
+                ~relname:"Module_ok" ~inputs:[ target_entry.Harness.value ]
+            in
+            match validation with
+            | Fail (at, message) ->
+                Ok
+                  ( Phase.TargetRejected
+                      { relation = "Module_ok"; at; message },
+                    None,
+                    None )
+            | Pass _ -> outcome)
+        | _ -> outcome)
+  with
+  | InterpError (at, message) -> Error (Phase.HarnessFailure (at, message))
+  | Z.Overflow ->
+      Error
+        (Phase.HarnessFailure
+           (no_region, "integer conversion overflow during invocation"))
+
 let observe_invocation_with_dangling env
     (episode : Episode.invocation_episode) ~on_observation =
   if Inst.Hook.is_active () then

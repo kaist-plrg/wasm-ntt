@@ -1,0 +1,381 @@
+;;
+;; Execution of Modules
+;;
+
+builtin dec $bytes_of_text(text) : byte*
+
+;; Allocation helpers
+
+dec $alloctypes(type*) : deftype*
+dec $alloctypes_from(deftype*, type*) : deftype*
+
+def $alloctypes(type*) = $alloctypes_from(eps, type*)
+
+def $alloctypes_from(dt*, eps) = dt*
+def $alloctypes_from(dt*, type_1 :: type*) =
+  $alloctypes_from(dt_all*, type*)
+  -- if x = |dt*|
+  -- if dt_rolled* = $rolldt(x, type_1)
+  -- if dt_new* = ($subst_deftype<deftype*>(dt*, def $subst_of, dt_rolled))*
+  -- if dt_all* = dt* ++ dt_new*
+
+relation Alloc_funcs: store moduleinst deftype* |- func* : store
+  hint(input %0 %1 %2 %3)
+
+rule Alloc_funcs/cons:
+  STO moduleinst dt* |- func_1 :: func* : STO_2
+  -- if x = func_1.FTYPE
+  -- if dtf = $deftype_at(dt*, x)
+  -- if fi = { TYPE dtf, MODULE moduleinst, CODE (AstFunc func_1) }
+  -- if STO_1 = STO[ .FUNCS = STO.FUNCS ++ [fi] ]
+  -- Alloc_funcs: STO_1 moduleinst dt* |- func* : STO_2
+
+rule Alloc_funcs/nil:
+  STO moduleinst dt* |- eps : STO
+
+relation Alloc_globals: store moduleinst |- global* : store
+  hint(input %0 %1 %2)
+
+rule Alloc_globals/cons:
+  STO moduleinst |- global_1 :: global* : STO_2
+  -- if gt = $inst_globaltype(moduleinst, global_1.GTYPE) ;; module-local type index 를 alloctypes 가 만든 runtime defined type 로 변환
+  -- if GlobalT mut t = gt
+  ----
+  -- Eval_const: STO moduleinst |- global_1.GINIT : (STO_eval, v) ;; global initializer expression 를 실행해서 값을 얻음
+  ----
+  -- Val_ok: STO_eval |- v : tactual
+  -- if $match_valtype(moduleinst.TYPES, tactual, t) ;; global initializer expression 를 실행한 값이 expected type 과 일치하는지 확인
+  ----
+  -- if gi = { TYPE gt, VALUE v }
+  -- if STO_1 = STO_eval[ .GLOBALS = STO_eval.GLOBALS ++ [gi] ] ;; global instance 를 store 에 추가
+  ----
+  -- Alloc_globals: STO_1 moduleinst |- global* : STO_2
+
+rule Alloc_globals/nil:
+  STO moduleinst |- eps : STO
+
+relation Alloc_tables: store moduleinst |- table* : store
+  hint(input %0 %1 %2)
+
+rule Alloc_tables/cons:
+  STO moduleinst |- table_1 :: table* : STO_2
+  -- if tt = $inst_tabletype(moduleinst, table_1.TTYPE)
+  -- if TableT at lim rt = tt
+  -- Eval_const: STO moduleinst |- table_1.TINIT : (STO_eval, RefV r)
+  -- Ref_ok: STO_eval |- r : rtactual
+  -- if $match_reftype(moduleinst.TYPES, rtactual, rt)
+  -- if n = $limits_min_nat(lim)
+  -- if tir = { TYPE tt, REFS $make_<refval>(r, n) }
+  -- if STO_1 = STO_eval[ .TABLES = STO_eval.TABLES ++ [tir] ]
+  -- Alloc_tables: STO_1 moduleinst |- table* : STO_2
+
+rule Alloc_tables/nil:
+  STO moduleinst |- eps : STO
+
+relation Alloc_mems: store moduleinst |- memory* : store
+  hint(input %0 %1 %2)
+
+rule Alloc_mems/cons:
+  STO moduleinst |- memory_1 :: memory* : STO_2
+  -- if mt = $inst_memtype(moduleinst, memory_1.MTYPE)
+  -- if MemoryT at lim = mt
+  -- if pages = $limits_min_nat(lim)
+  -- if n = $(pages * $page_size)
+  -- if mir = { TYPE mt, BYTES $zero_bytes(n) }
+  -- if STO_1 = STO[ .MEMS = STO.MEMS ++ [mir] ]
+  -- Alloc_mems: STO_1 moduleinst |- memory* : STO_2
+
+rule Alloc_mems/nil:
+  STO moduleinst |- eps : STO
+
+relation Alloc_tags: store moduleinst deftype* |- tag* : store
+  hint(input %0 %1 %2 %3)
+
+rule Alloc_tags/cons:
+  STO moduleinst dt* |- tag_1 :: tag* : STO_2
+  -- if x = tag_1.TGTYPE
+  -- if jt = TagT ($deftype_at(dt*, x))
+  -- if hir = { TYPE jt }
+  -- if STO_1 = STO[ .TAGS = STO.TAGS ++ [hir] ]
+  -- Alloc_tags: STO_1 moduleinst dt* |- tag* : STO_2
+
+rule Alloc_tags/nil:
+  STO moduleinst dt* |- eps : STO
+
+relation Alloc_elems: store moduleinst |- elem* : store
+  hint(input %0 %1 %2)
+
+rule Alloc_elems/cons:
+  STO moduleinst |- elem_1 :: elem* : STO_2
+  -- if et = $inst_reftype(moduleinst, elem_1.ETYPE)
+  -- Eval_consts: STO moduleinst |- elem_1.EINIT : (STO_eval, v*)
+  -- if r* = $refs_of_values(v*)
+  -- if eir = { TYPE et, REFS r* }
+  -- if STO_1 = STO_eval[ .ELEMS = STO_eval.ELEMS ++ [eir] ]
+  -- Alloc_elems: STO_1 moduleinst |- elem* : STO_2
+
+rule Alloc_elems/nil:
+  STO moduleinst |- eps : STO
+
+relation Alloc_datas: store moduleinst |- data* : store
+  hint(input %0 %1 %2)
+
+rule Alloc_datas/cons:
+  STO moduleinst |- data_1 :: data* : STO_2
+  -- if b* = $bytes_of_text(data_1.DINIT)
+  -- if dir = { BYTES b* }
+  -- if STO_1 = STO[ .DATAS = STO.DATAS ++ [dir] ]
+  -- Alloc_datas: STO_1 moduleinst |- data* : STO_2
+
+rule Alloc_datas/nil:
+  STO moduleinst |- eps : STO
+
+dec $allocexport(moduleinst, export) : exportinst
+def $allocexport(moduleinst, { NAME name, EDESC (FuncExport x) }) =
+  { NAME name, ADDR (FuncAddr moduleinst.FUNCS[x]) }
+def $allocexport(moduleinst, { NAME name, EDESC (GlobalExport x) }) =
+  { NAME name, ADDR (GlobalAddr moduleinst.GLOBALS[x]) }
+def $allocexport(moduleinst, { NAME name, EDESC (TableExport x) }) =
+  { NAME name, ADDR (TableAddr moduleinst.TABLES[x]) }
+def $allocexport(moduleinst, { NAME name, EDESC (MemExport x) }) =
+  { NAME name, ADDR (MemAddr moduleinst.MEMS[x]) }
+def $allocexport(moduleinst, { NAME name, EDESC (TagExport x) }) =
+  { NAME name, ADDR (TagAddr moduleinst.TAGS[x]) }
+
+dec $allocexports(moduleinst, export*) : exportinst*
+def $allocexports(moduleinst, export*) = ($allocexport(moduleinst, export))*
+
+;; Prepare the module instance without allocating runtime objects in the store.
+dec $initialize_moduleinst(store, module, externaddr*) : moduleinst
+
+def $initialize_moduleinst(STO_0, module, externaddr*) = moduleinst_0
+  -- if dt* = $alloctypes(module.TYPES)
+  -- if fa_import* = $externaddr_funcaddr(externaddr*)
+  -- if ga_import* = $externaddr_globaladdr(externaddr*)
+  -- if ta_import* = $externaddr_tableaddr(externaddr*)
+  -- if ma_import* = $externaddr_memaddr(externaddr*)
+  -- if ja_import* = $externaddr_tagaddr(externaddr*)
+  -- if fa* = fa_import* ++ $range_from(|STO_0.FUNCS|, |module.FUNCS|)
+  -- if ga* = ga_import* ++ $range_from(|STO_0.GLOBALS|, |module.GLOBALS|)
+  -- if ta* = ta_import* ++ $range_from(|STO_0.TABLES|, |module.TABLES|)
+  -- if ma* = ma_import* ++ $range_from(|STO_0.MEMS|, |module.MEMS|)
+  -- if ja* = ja_import* ++ $range_from(|STO_0.TAGS|, |module.TAGS|)
+  -- if ea* = $range_from(|STO_0.ELEMS|, |module.ELEMS|)
+  -- if da* = $range_from(|STO_0.DATAS|, |module.DATAS|)
+  -- if moduleinst_0 = {
+      TYPES dt*,
+      FUNCS fa*,
+      GLOBALS ga*,
+      TABLES ta*,
+      MEMS ma*,
+      TAGS ja*,
+      ELEMS ea*,
+      DATAS da*,
+      EXPORTS eps
+    }
+
+;; Import initialization.
+;; OCaml eval.ml first checks that the supplied extern list has the same length
+;; as module imports, then checks each extern type before appending imported
+;; instances to the module instance.
+
+dec $import_externtype(moduleinst, import) : externtype
+
+def $import_externtype(moduleinst, { MODULENAME _, ITEMNAME _, IDESC (FuncImport x) }) =
+  ExtFunct ($deftype_at(moduleinst.TYPES, x))
+def $import_externtype(moduleinst, { MODULENAME _, ITEMNAME _, IDESC (GlobalImport gt) }) =
+  ExtGlobalT ($inst_globaltype(moduleinst, gt))
+def $import_externtype(moduleinst, { MODULENAME _, ITEMNAME _, IDESC (TableImport tt) }) =
+  ExtTableT ($inst_tabletype(moduleinst, tt))
+def $import_externtype(moduleinst, { MODULENAME _, ITEMNAME _, IDESC (MemImport mt) }) =
+  ExtMemoryT ($inst_memtype(moduleinst, mt))
+def $import_externtype(moduleinst, { MODULENAME _, ITEMNAME _, IDESC (TagImport x) }) =
+  ExtTagT (TagT ($deftype_at(moduleinst.TYPES, x)))
+
+relation Import_match_ok: store moduleinst |- externaddr import : OK
+  hint(input %0 %1 %2 %3)
+relation Imports_match_ok: store moduleinst |- externaddr* import* : OK
+  hint(input %0 %1 %2 %3)
+
+rule Import_match_ok:
+  STO moduleinst |- xa import : OK
+  -- Externaddr_ok: STO |- xa : xt_actual
+  -- if xt_expect = $import_externtype(moduleinst, import)
+  -- if $match_externtype(moduleinst.TYPES, xt_actual, xt_expect)
+
+rule Imports_match_ok/cons:
+  STO moduleinst |- externaddr* import* : OK
+  -- if xa :: xa_t* = externaddr*
+  -- if import_1 :: import_t* = import*
+  -- Import_match_ok: STO moduleinst |- xa import_1 : OK
+  -- Imports_match_ok: STO moduleinst |- xa_t* import_t* : OK
+
+rule Imports_match_ok/nil:
+  STO moduleinst |- externaddr* import* : OK
+  -- if externaddr* = eps
+  -- if import* = eps
+
+;; Active segment execution required by instantiation.
+
+relation Run_elem: store moduleinst elemidx |- elem : execoutcome
+  hint(input %0 %1 %2 %3)
+relation Run_elems_from: store moduleinst elemidx |- elem* : execoutcome
+  hint(input %0 %1 %2 %3)
+relation Run_data: store moduleinst dataidx |- data : execoutcome
+  hint(input %0 %1 %2 %3)
+relation Run_datas_from: store moduleinst dataidx |- data* : execoutcome
+  hint(input %0 %1 %2 %3)
+relation Run_start: store moduleinst |- start? : execoutcome
+  hint(input %0 %1 %2)
+
+rule Run_elem/passive:
+  STO moduleinst i |- { ETYPE _, EINIT _, EMODE Passive } : ValuesO STO eps
+
+rule Run_elem/declarative:
+  STO moduleinst i |- { ETYPE _, EINIT _, EMODE Declarative } : ValuesO STO' eps
+  -- if ea = moduleinst.ELEMS[i]
+  -- if STO' = STO[ .ELEMS[ea].REFS = eps ]
+
+rule Run_elem/active:
+  STO moduleinst i |- { ETYPE _, EINIT _, EMODE (Active { INDEX x, OFFSET const }) } : ValuesO STO' eps
+  -- Eval_const: STO moduleinst |- const : (STO_eval, NumV num)
+  -- if offset = $nat_of_num(num)
+  -- if ea = moduleinst.ELEMS[i]
+  -- if ta = moduleinst.TABLES[x]
+  -- if r* = STO_eval.ELEMS[ea].REFS
+  -- if n = |r*|
+  -- if $(offset + n <= |STO_eval.TABLES[ta].REFS|)
+  -- if STO_1 = STO_eval[ .TABLES[ta].REFS = $replace_slice_<refval>(STO_eval.TABLES[ta].REFS, offset, r*) ]
+  -- if STO' = STO_1[ .ELEMS[ea].REFS = eps ]
+
+rule Run_elem/active-oob:
+  STO moduleinst i |- { ETYPE _, EINIT _, EMODE (Active { INDEX x, OFFSET const }) } : TrapO STO_eval
+  -- Eval_const: STO moduleinst |- const : (STO_eval, NumV num)
+  -- if offset = $nat_of_num(num)
+  -- if ea = moduleinst.ELEMS[i]
+  -- if ta = moduleinst.TABLES[x]
+  -- if r* = STO_eval.ELEMS[ea].REFS
+  -- if n = |r*|
+  -- if $(offset + n > |STO_eval.TABLES[ta].REFS|)
+
+rule Run_elems_from/cons:
+  STO moduleinst i |- elem_1 :: elem* : eo
+  -- Run_elem: STO moduleinst i |- elem_1 : ValuesO STO_1 eps
+  -- if i' = $(i + 1)
+  -- Run_elems_from: STO_1 moduleinst i' |- elem* : eo
+
+rule Run_elems_from/head-trap:
+  STO moduleinst i |- elem_1 :: elem* : TrapO STO_trap
+  -- Run_elem: STO moduleinst i |- elem_1 : TrapO STO_trap
+
+rule Run_elems_from/nil:
+  STO moduleinst i |- eps : ValuesO STO eps
+
+rule Run_data/passive:
+  STO moduleinst i |- { DINIT _, DMODE Passive } : ValuesO STO eps
+
+rule Run_data/active:
+  STO moduleinst i |- { DINIT _, DMODE (Active { INDEX x, OFFSET const }) } : ValuesO STO' eps
+  -- Eval_const: STO moduleinst |- const : (STO_eval, NumV num)
+  -- if offset = $nat_of_num(num)
+  -- if da = moduleinst.DATAS[i]
+  -- if ma = moduleinst.MEMS[x]
+  -- if b* = STO_eval.DATAS[da].BYTES
+  -- if n = |b*|
+  -- if $(offset + n <= |STO_eval.MEMS[ma].BYTES|)
+  -- if STO_1 = STO_eval[ .MEMS[ma].BYTES = $replace_bytes(STO_eval.MEMS[ma].BYTES, offset, b*) ]
+  -- if STO' = STO_1[ .DATAS[da].BYTES = eps ]
+
+rule Run_data/active-oob:
+  STO moduleinst i |- { DINIT _, DMODE (Active { INDEX x, OFFSET const }) } : TrapO STO_eval
+  -- Eval_const: STO moduleinst |- const : (STO_eval, NumV num)
+  -- if offset = $nat_of_num(num)
+  -- if da = moduleinst.DATAS[i]
+  -- if ma = moduleinst.MEMS[x]
+  -- if b* = STO_eval.DATAS[da].BYTES
+  -- if n = |b*|
+  -- if $(offset + n > |STO_eval.MEMS[ma].BYTES|)
+
+rule Run_datas_from/cons:
+  STO moduleinst i |- data_1 :: data* : eo
+  -- Run_data: STO moduleinst i |- data_1 : ValuesO STO_1 eps
+  -- if i' = $(i + 1)
+  -- Run_datas_from: STO_1 moduleinst i' |- data* : eo
+
+rule Run_datas_from/head-trap:
+  STO moduleinst i |- data_1 :: data* : TrapO STO_trap
+  -- Run_data: STO moduleinst i |- data_1 : TrapO STO_trap
+
+rule Run_datas_from/nil:
+  STO moduleinst i |- eps : ValuesO STO eps
+
+rule Run_start/none:
+  STO moduleinst |- eps : ValuesO STO eps
+
+rule Run_start/some:
+  STO moduleinst |- { SFUNC x } : eo
+  -- if fa = moduleinst.FUNCS[x]
+  -- Invoke: STO fa eps |- eo
+
+;; Instantiation relations.
+;; Init_with_store_ok makes the OCaml heap/store explicit. Init_ok is the public
+;; wrapper matching init's visible module + extern list -> module instance shape.
+
+relation Init_allocated: store module externaddr* |- moduleinst : store
+  hint(input %0 %1 %2)
+relation Init_with_store_ok: store module externaddr* |- moduleinst : execoutcome
+  hint(input %0 %1 %2)
+relation Init_ok: module externaddr* |- moduleinst : OK
+  hint(input %0 %1)
+relation Module_init_ok: |- module : moduleinst
+  hint(input %0)
+relation Modules_init_ok: |- module* : OK
+  hint(input %0)
+
+rule Init_allocated:
+  STO_0 module externaddr* |- moduleinst : STO_7
+  -- if moduleinst_0 = $initialize_moduleinst(STO_0, module, externaddr*)
+  -- Imports_match_ok: STO_0 moduleinst_0 |- externaddr* module.IMPORTS : OK
+  -- if xi* = $allocexports(moduleinst_0, module.EXPORTS)
+  -- if moduleinst = moduleinst_0[ .EXPORTS = xi* ]
+  -- Alloc_funcs: STO_0 moduleinst moduleinst_0.TYPES |- module.FUNCS : STO_1
+  -- Alloc_globals: STO_1 moduleinst |- module.GLOBALS : STO_2
+  -- Alloc_tables: STO_2 moduleinst |- module.TABLES : STO_3
+  -- Alloc_mems: STO_3 moduleinst |- module.MEMS : STO_4
+  -- Alloc_tags: STO_4 moduleinst moduleinst_0.TYPES |- module.TAGS : STO_5
+  -- Alloc_elems: STO_5 moduleinst |- module.ELEMS : STO_6
+  -- Alloc_datas: STO_6 moduleinst |- module.DATAS : STO_7
+
+rule Init_with_store_ok/elem-trap:
+  STO_0 module externaddr* |- moduleinst : TrapO STO_trap
+  -- Init_allocated: STO_0 module externaddr* |- moduleinst : STO_7
+  -- Run_elems_from: STO_7 moduleinst 0 |- module.ELEMS : TrapO STO_trap ;; element segment initializer 를 실행해서 table 초기화
+
+rule Init_with_store_ok/data-trap:
+  STO_0 module externaddr* |- moduleinst : TrapO STO_trap
+  -- Init_allocated: STO_0 module externaddr* |- moduleinst : STO_7
+  -- Run_elems_from: STO_7 moduleinst 0 |- module.ELEMS : ValuesO STO_8 eps ;; element segment initializer 를 실행해서 table 초기화
+  -- Run_datas_from: STO_8 moduleinst 0 |- module.DATAS : TrapO STO_trap ;; data segment initializer 를 실행해서 memory 초기화
+
+rule Init_with_store_ok/start:
+  STO_0 module externaddr* |- moduleinst : eo
+  -- Init_allocated: STO_0 module externaddr* |- moduleinst : STO_7
+  -- Run_elems_from: STO_7 moduleinst 0 |- module.ELEMS : ValuesO STO_8 eps ;; element segment initializer 를 실행해서 table 초기화
+  -- Run_datas_from: STO_8 moduleinst 0 |- module.DATAS : ValuesO STO_9 eps ;; data segment initializer 를 실행해서 memory 초기화
+  -- Run_start: STO_9 moduleinst |- module.START : eo
+
+rule Init_ok:
+  module externaddr* |- moduleinst : OK
+  -- Module_ok: |- module : OK
+  -- Init_with_store_ok: $empty_store module externaddr* |- moduleinst : ValuesO STO eps
+
+rule Module_init_ok:
+  |- module : moduleinst
+  -- Init_ok: module eps |- moduleinst : OK
+
+rule Modules_init_ok/cons:
+  |- module* : OK
+  -- (Module_init_ok: |- module : moduleinst)*
+
+rule Modules_init_ok/nil:
+  |- eps : OK

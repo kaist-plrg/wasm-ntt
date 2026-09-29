@@ -26,6 +26,21 @@ type instantiation_result =
   | InitRelationFailed of relation_failure
   | ImportResolutionFailed of { message : string }
 
+type invocation_result =
+  | InvokeReturned of {
+      store : Lang.Il.value;
+      values : Lang.Il.value list;
+    }
+  | InvokeTrapped of { store : Lang.Il.value }
+  | InvokeThrown of {
+      store : Lang.Il.value;
+      tagaddr : Lang.Il.value;
+      values : Lang.Il.value list;
+    }
+  | InvokeStuck of relation_failure
+  | TargetRejected of relation_failure
+  | NotInvoked of instantiation_result
+
 type phase_error =
   | SyntaxError of Util.Source.region * string
   | EpisodeError of Util.Source.region * string
@@ -38,3 +53,8 @@ val instantiation_result_of_outputs :
   ?at:Util.Source.region ->
   Lang.Il.value list ->
   (instantiation_result, phase_error) result
+
+val invocation_result_of_outputs :
+  ?at:Util.Source.region ->
+  Lang.Il.value list ->
+  (invocation_result, phase_error) result

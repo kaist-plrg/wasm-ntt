@@ -1,0 +1,338 @@
+syntax free = {
+  TYPES set<typeidx>,
+  GLOBALS set<globalidx>,
+  TABLES set<tableidx>,
+  MEMS set<memidx>,
+  TAGS set<tagidx>,
+  FUNCS set<funcidx>,
+  ELEMS set<elemidx>,
+  DATAS set<dataidx>,
+  LOCALS set<localidx>,
+  LABELS set<labelidx>
+}
+
+dec $free_empty : free
+def $free_empty = {
+  TYPES $empty_set<typeidx>,
+  GLOBALS $empty_set<globalidx>,
+  TABLES $empty_set<tableidx>,
+  MEMS $empty_set<memidx>,
+  TAGS $empty_set<tagidx>,
+  FUNCS $empty_set<funcidx>,
+  ELEMS $empty_set<elemidx>,
+  DATAS $empty_set<dataidx>,
+  LOCALS $empty_set<localidx>,
+  LABELS $empty_set<labelidx>
+}
+dec $fold_left<X, Y>(def $f(X, Y) : X, X, Y*) : X
+def $fold_left<X, Y>(def $f, X, eps) = X
+def $fold_left<X, Y>(def $f, X, Y_h :: Y_t*) =
+    $fold_left<X, Y>(def $f, $f(X, Y_h), Y_t*)
+
+dec $free_union(free, free) : free
+def $free_union(free_1, free_2) =
+    {
+      TYPES $union_set<typeidx>(free_1.TYPES, free_2.TYPES),
+      GLOBALS $union_set<globalidx>(free_1.GLOBALS, free_2.GLOBALS),
+      TABLES $union_set<tableidx>(free_1.TABLES, free_2.TABLES),
+      MEMS $union_set<memidx>(free_1.MEMS, free_2.MEMS),
+      TAGS $union_set<tagidx>(free_1.TAGS, free_2.TAGS),
+      FUNCS $union_set<funcidx>(free_1.FUNCS, free_2.FUNCS),
+      ELEMS $union_set<elemidx>(free_1.ELEMS, free_2.ELEMS),
+      DATAS $union_set<dataidx>(free_1.DATAS, free_2.DATAS),
+      LOCALS $union_set<localidx>(free_1.LOCALS, free_2.LOCALS),
+      LABELS $union_set<labelidx>(free_1.LABELS, free_2.LABELS)
+    }
+
+dec $free_unions(free*) : free
+def $free_unions(eps) = $free_empty
+def $free_unions(free_h :: free_t*) = free
+  -- if free' = $free_unions(free_t*)
+  -- if free = $free_union(free_h, free')
+
+dec $add_minus_one(idx) : idx
+def $add_minus_one(x) = x'
+  -- if x' = $(x - 1)
+
+dec $free_idx(idx) : set<idx>
+def $free_idx(x) = `{ [x] `}
+
+dec $free_shift(set<idx>) : set<idx>
+def $free_shift(`{ x* `}) = `{ x''* `}
+  -- if `{ x'* `} = $diff_set<idx>(`{ x* `}, `{ [0] `})
+  -- if `{ x''* `} = $map_set<idx, idx>(def $add_minus_one, `{ x'* `})
+
+dec $free_list<X>(def $free_(X) : free, X*) : free
+def $free_list<X>(def $free_, eps) = $free_empty
+def $free_list<X>(def $free_, X_h :: X_t*) =
+    $fold_left<free, free>(def $free_union, $free_(X_h), $free_list<X>(def $free_, X_t*))
+
+dec $free_opt<X>(def $free_(X) : free, X?) : free
+def $free_opt<X>(def $free_, eps) = $free_empty ;; None
+def $free_opt<X>(def $free_, X) = $free_(X) ;; Some v
+
+dec $free_catch(catch) : free
+dec $free_type_(type) : free
+dec $free_global(global) : free
+dec $free_table(table) : free
+dec $free_mem(memory) : free
+dec $free_func(func) : free
+dec $free_start(start) : free
+dec $free_elem(elem) : free
+dec $free_data(data) : free
+dec $free_import(import) : free
+dec $free_export(export) : free
+
+dec $free_rectype(rectype) : free
+dec $free_subtype(subtype) : free
+dec $free_heaptype(heaptype) : free
+dec $free_typevar(typevar) : free
+dec $free_strtype(strtype) : free
+dec $free_structtype(structtype) : free
+dec $free_arraytype(arraytype) : free
+dec $free_functype(functype) : free
+dec $free_fieldtype(fieldtype) : free
+dec $free_storagetype(storagetype) : free
+dec $free_valtype(valtype) : free
+dec $free_packtype(packtype) : free
+dec $free_numtype(numtype) : free
+dec $free_vectype(vectype) : free
+dec $free_reftype(reftype) : free
+dec $free_globaltype(globaltype) : free
+dec $free_blocktype(blocktype) : free
+dec $free_instr(instr) : free
+dec $free_block(instr*) : free
+dec $free_const(const) : free
+
+
+dec $update_types(set<typeidx>) : free
+dec $update_globals(set<globalidx>) : free
+dec $update_tables(set<tableidx>) : free
+dec $update_mems(set<memidx>) : free
+dec $update_tags(set<tagidx>) : free
+dec $update_funcs(set<funcidx>) : free
+dec $update_elems(set<elemidx>) : free
+dec $update_datas(set<dataidx>) : free
+dec $update_locals(set<localidx>) : free
+dec $update_labels(set<labelidx>) : free
+
+def $update_types(`{ x* `}) = $free_empty[ .TYPES = `{ x* `} ]
+def $update_globals(`{ x* `}) = $free_empty[ .GLOBALS = `{ x* `} ]
+def $update_tables(`{ x* `}) = $free_empty[ .TABLES = `{ x* `} ]
+def $update_mems(`{ x* `}) = $free_empty[ .MEMS = `{ x* `} ]
+def $update_tags(`{ x* `}) = $free_empty[ .TAGS = `{ x* `} ]
+def $update_funcs(`{ x* `}) = $free_empty[ .FUNCS = `{ x* `} ]
+def $update_elems(`{ x* `}) = $free_empty[ .ELEMS = `{ x* `} ]
+def $update_datas(`{ x* `}) = $free_empty[ .DATAS = `{ x* `} ]
+def $update_locals(`{ x* `}) = $free_empty[ .LOCALS = `{ x* `} ]
+def $update_labels(`{ x* `}) = $free_empty[ .LABELS = `{ x* `} ]
+
+def $free_catch(Catch x y) = $free_union($update_tags($free_idx(x)), $update_labels($free_idx(y)))
+def $free_catch(CatchRef x y) = $free_union($update_tags($free_idx(x)), $update_labels($free_idx(y)))
+def $free_catch(CatchAll x) = $update_labels($free_idx(x))
+def $free_catch(CatchAllRef x) = $update_labels($free_idx(x))
+
+dec $update_label(idx) : free
+def $update_label(x) = $update_labels($free_idx(x))
+
+def $free_type_(type) = $free_rectype(type)
+def $free_typevar(StatX x) = $update_types($free_idx(x))
+def $free_typevar(RecX _) = $free_empty
+def $free_rectype(RecT st*) = $free_list<subtype>(def $free_subtype, st*)
+def $free_subtype(SubT fin ht* strt) = $free_union($free_list<heaptype>(def $free_heaptype, ht*), $free_strtype(strt))
+def $free_heaptype(ht) = $free_typevar(tv)
+  -- if VarHT tv = ht
+def $free_heaptype(ht) = $free_empty
+  -- otherwise
+def $free_strtype(DefStructT strctt) = $free_structtype(strctt)
+def $free_strtype(DefArrayT arrt) = $free_arraytype(arrt)
+def $free_strtype(DefFuncT ft) = $free_functype(ft)
+def $free_structtype(StructT yt*) = $free_list<fieldtype>(def $free_fieldtype, yt*)
+def $free_arraytype(ArrayT yt) = $free_fieldtype(yt)
+def $free_functype(FuncT t_1* t_2*) = $free_union($free_list<valtype>(def $free_valtype, t_1*), $free_list<valtype>(def $free_valtype, t_2*))
+def $free_fieldtype(FieldT _ zt) = $free_storagetype(zt)
+def $free_storagetype(ValStorageT t) = $free_valtype(t)
+def $free_storagetype(PackStorageT pt) = $free_packtype(pt)
+def $free_valtype(NumT nt) = $free_numtype(nt)
+def $free_valtype(VecT vt) = $free_vectype(vt)
+def $free_valtype(RefT rt) = $free_reftype(rt)
+def $free_valtype(BotT) = $free_empty
+def $free_packtype(pt) = $free_empty
+def $free_numtype(nt) = $free_empty
+def $free_vectype(vt) = $free_empty
+def $free_reftype(_ ht) = $free_heaptype(ht)
+def $free_globaltype(GlobalT _ t) = $free_valtype(t)
+def $free_blocktype(VarBlockType x) = $update_types($free_idx(x))
+def $free_blocktype(ValBlockType t) = $free_valtype(t)
+def $free_blocktype(ValBlockType eps) = $free_empty
+
+def $free_instr(UNREACHABLE) = $free_empty
+def $free_instr(NOP) = $free_empty
+def $free_instr(DROP) = $free_empty
+def $free_instr(SELECT eps) = $free_list<valtype>(def $free_valtype, eps)
+def $free_instr(SELECT t*) = $free_list<valtype>(def $free_valtype, t*)
+def $free_instr(BLOCK blocktype instr*) = $free_union($free_blocktype(blocktype), $free_block(instr*))
+def $free_instr(LOOP blocktype instr*) = $free_union($free_blocktype(blocktype), $free_block(instr*))
+def $free_instr(IF blocktype instr_t* ELSE instr_f*) = $free_union($free_blocktype(blocktype), $free_union($free_block(instr_t*), $free_block(instr_f*)))
+def $free_instr(BR x) = $update_labels($free_idx(x))
+def $free_instr(BR_IF x) = $update_labels($free_idx(x))
+def $free_instr(BR_TABLE x* y) = $free_list<idx>(def $update_label, y :: x*)
+def $free_instr(BR_ON_NULL x) = $update_labels($free_idx(x))
+def $free_instr(BR_ON_NON_NULL x) = $update_labels($free_idx(x))
+def $free_instr(BR_ON_CAST x rt_1 rt_2) = $free_union($update_labels($free_idx(x)), $free_union($free_reftype(rt_1), $free_reftype(rt_2)))
+def $free_instr(BR_ON_CAST_FAIL x rt_1 rt_2) = $free_union($update_labels($free_idx(x)), $free_union($free_reftype(rt_1), $free_reftype(rt_2)))
+def $free_instr(CALL x) = $update_funcs($free_idx(x))
+def $free_instr(CALL_REF x) = $update_types($free_idx(x))
+def $free_instr(CALL_INDIRECT x y) = $free_union($update_tables($free_idx(x)), $update_types($free_idx(y)))
+def $free_instr(RETURN) = $free_empty
+def $free_instr(RETURN_CALL x) = $update_funcs($free_idx(x))
+def $free_instr(RETURN_CALL_REF x) = $update_types($free_idx(x))
+def $free_instr(RETURN_CALL_INDIRECT x y) = $free_union($update_tables($free_idx(x)), $update_types($free_idx(y)))
+def $free_instr(THROW x) = $update_tags($free_idx(x))
+def $free_instr(THROW_REF) = $free_empty
+def $free_instr(TRY_TABLE blocktype catch* instr*) = $free_union($free_blocktype(blocktype), $free_union($free_list<catch>(def $free_catch, catch*), $free_block(instr*)))
+def $free_instr(LOCAL.GET x) = $update_locals($free_idx(x))
+def $free_instr(LOCAL.SET x) = $update_locals($free_idx(x))
+def $free_instr(LOCAL.TEE x) = $update_locals($free_idx(x))
+def $free_instr(GLOBAL.GET x) = $update_globals($free_idx(x))
+def $free_instr(GLOBAL.SET x) = $update_globals($free_idx(x))
+def $free_instr(TABLE.GET x) = $update_tables($free_idx(x))
+def $free_instr(TABLE.SET x) = $update_tables($free_idx(x))
+def $free_instr(TABLE.SIZE x) = $update_tables($free_idx(x))
+def $free_instr(TABLE.GROW x) = $update_tables($free_idx(x))
+def $free_instr(TABLE.FILL x) = $update_tables($free_idx(x))
+def $free_instr(TABLE.COPY x y) = $free_union($update_tables($free_idx(x)), $update_tables($free_idx(y)))
+def $free_instr(TABLE.INIT x y) = $free_union($update_tables($free_idx(x)), $update_elems($free_idx(y)))
+def $free_instr(ELEM.DROP x) = $update_elems($free_idx(x))
+def $free_instr(LOAD x _) = $update_mems($free_idx(x))
+def $free_instr(STORE x _) = $update_mems($free_idx(x))
+def $free_instr(VEC.LOAD x _) = $update_mems($free_idx(x))
+def $free_instr(VEC.STORE x _) = $update_mems($free_idx(x))
+def $free_instr(VEC.LOAD_LANE x _ _) = $update_mems($free_idx(x))
+def $free_instr(VEC.STORE_LANE x _ _) = $update_mems($free_idx(x))
+def $free_instr(MEMORY.SIZE x) = $update_mems($free_idx(x))
+def $free_instr(MEMORY.GROW x) = $update_mems($free_idx(x))
+def $free_instr(MEMORY.FILL x) = $update_mems($free_idx(x))
+def $free_instr(MEMORY.COPY x y) = $free_union($update_mems($free_idx(x)), $update_mems($free_idx(y)))
+def $free_instr(MEMORY.INIT x y) = $free_union($update_mems($free_idx(x)), $update_datas($free_idx(y)))
+def $free_instr(DATA.DROP x) = $update_datas($free_idx(x))
+def $free_instr(REF.NULL ht) = $free_heaptype(ht)
+def $free_instr(REF.FUNC x) = $update_funcs($free_idx(x))
+def $free_instr(REF.IS_NULL) = $free_empty
+def $free_instr(REF.AS_NON_NULL) = $free_empty
+def $free_instr(REF.TEST rt) = $free_reftype(rt)
+def $free_instr(REF.CAST rt) = $free_reftype(rt)
+def $free_instr(REF.EQ) = $free_empty
+def $free_instr(REF.I31) = $free_empty
+def $free_instr(I31.GET _) = $free_empty
+def $free_instr(STRUCT.NEW x _) = $update_types($free_idx(x))
+def $free_instr(STRUCT.GET x _ _) = $update_types($free_idx(x))
+def $free_instr(STRUCT.SET x _) = $update_types($free_idx(x))
+def $free_instr(ARRAY.NEW x _) = $update_types($free_idx(x))
+def $free_instr(ARRAY.NEW_FIXED x _) = $update_types($free_idx(x))
+def $free_instr(ARRAY.NEW_ELEM x y) = $free_union($update_types($free_idx(x)), $update_elems($free_idx(y)))
+def $free_instr(ARRAY.NEW_DATA x y) = $free_union($update_types($free_idx(x)), $update_datas($free_idx(y)))
+def $free_instr(ARRAY.GET x _) = $update_types($free_idx(x))
+def $free_instr(ARRAY.SET x) = $update_types($free_idx(x))
+def $free_instr(ARRAY.LEN) = $free_empty
+def $free_instr(ARRAY.COPY x y) = $free_union($update_types($free_idx(x)), $update_types($free_idx(y)))
+def $free_instr(ARRAY.FILL x) = $update_types($free_idx(x))
+def $free_instr(ARRAY.INIT_DATA x y) = $free_union($update_types($free_idx(x)), $update_datas($free_idx(y)))
+def $free_instr(ARRAY.INIT_ELEM x y) = $free_union($update_types($free_idx(x)), $update_elems($free_idx(y)))
+def $free_instr(EXTERN.CONVERT _) = $free_empty
+def $free_instr(CONST _) = $free_empty
+def $free_instr(TEST _) = $free_empty
+def $free_instr(COMPARE _) = $free_empty
+def $free_instr(UNARY _) = $free_empty
+def $free_instr(BINOP _) = $free_empty
+def $free_instr(CONVERT _) = $free_empty
+def $free_instr(instr) = $free_empty
+  -- otherwise
+
+def $free_block(instr*) = free'
+  -- if free = $free_list<instr>(def $free_instr, instr*)
+  -- if free' = free[ .LABELS = $free_shift(free.LABELS) ]
+
+def $free_const(instr*) = $free_block(instr*)
+def $free_global(global) = free
+  -- if free_1 = $free_globaltype(global.GTYPE)
+  -- if free_2 = $free_const(global.GINIT)
+  -- if free = $free_union(free_1, free_2)
+
+dec $free_tabletype(tabletype) : free
+def $free_tabletype(TableT _ _ rt) = $free_reftype(rt)
+
+def $free_table(table) = free
+  -- if free_1 = $free_tabletype(table.TTYPE)
+  -- if free_2 = $free_const(table.TINIT)
+  -- if free = $free_union(free_1, free_2)
+
+dec $free_memtype(memtype) : free
+def $free_memtype(MemoryT _ _) = $free_empty
+
+def $free_mem({MTYPE mt}) = $free_memtype(mt)
+
+def $free_func(func) = free[ .LOCALS = $empty_set<localidx> ]
+  -- if free_1 = $update_types(`{ [func.FTYPE] `})
+  -- if free_2 = $free_block(func.BODY)
+  -- if free = $free_union(free_1, free_2)
+
+def $free_start(start) = $update_funcs(`{ [start.SFUNC] `})
+
+dec $free_elemmode(def $f(set<tableidx>) : free, elemmode) : free
+def $free_elemmode(def $f, elemmode) = $free_empty
+  -- if elemmode = Passive \/ elemmode = Declarative
+def $free_elemmode(def $f, elemmode) = $free_union(free_1, free_2)
+  -- if elemmode = Active { INDEX idx, OFFSET instr* }
+  -- if free_1 = $f(`{ [idx] `})
+  -- if free_2 = $free_const(instr*)
+
+dec $free_datamode(def $f(set<memidx>) : free, datamode) : free
+def $free_datamode(def $f, datamode) = $free_empty
+  -- if datamode = Passive
+def $free_datamode(def $f, datamode) = $free_union(free_1, free_2)
+  -- if datamode = Active { INDEX idx, OFFSET instr* }
+  -- if free_1 = $f(`{ [idx] `})
+  -- if free_2 = $free_const(instr*)
+
+
+def $free_elem(elem) = free
+  -- if free_1 = $free_list<const>(def $free_const, elem.EINIT)
+  -- if free_2 = $free_elemmode(def $update_tables, elem.EMODE)
+  -- if free = $free_union(free_1, free_2)
+
+def $free_data(data) = $free_datamode(def $update_mems, data.DMODE)
+
+dec $free_importdesc(importdesc) : free
+def $free_importdesc(FuncImport x) = $update_types($free_idx(x))
+def $free_importdesc(TableImport tt) = $free_tabletype(tt)
+def $free_importdesc(MemImport mt) = $free_memtype(mt)
+def $free_importdesc(GlobalImport gt) = $free_globaltype(gt)
+def $free_importdesc(TagImport x) = $update_tags($free_idx(x))
+
+def $free_import(import) = $free_importdesc(import.IDESC)
+
+dec $free_exportdesc(exportdesc) : free
+def $free_exportdesc(FuncExport x) = $update_funcs($free_idx(x))
+def $free_exportdesc(TableExport x) = $update_tables($free_idx(x))
+def $free_exportdesc(MemExport x) = $update_mems($free_idx(x))
+def $free_exportdesc(GlobalExport x) = $update_globals($free_idx(x))
+def $free_exportdesc(TagExport x) = $update_tags($free_idx(x))
+
+def $free_export(export) = $free_exportdesc(export.EDESC)
+
+dec $free_module(module) : free
+def $free_module(module) = free
+  -- if free_1 = $free_list<type>(def $free_type_, module.TYPES)
+  -- if free_2 = $free_list<global>(def $free_global, module.GLOBALS)
+  -- if free_3 = $free_list<table>(def $free_table, module.TABLES)
+  -- if free_4 = $free_list<memory>(def $free_mem, module.MEMS)
+  -- if free_5 = $free_opt<start>(def $free_start, module.START)
+  -- if free_6 = $free_list<elem>(def $free_elem, module.ELEMS)
+  -- if free_7 = $free_list<data>(def $free_data, module.DATAS)
+  -- if free_8 = $free_list<import>(def $free_import, module.IMPORTS)
+  -- if free_9 = $free_list<export>(def $free_export, module.EXPORTS)
+  -- if free = $free_unions([free_1, free_2, free_3,
+                            free_4, free_5, free_6,
+                            free_7, free_8, free_9])
+

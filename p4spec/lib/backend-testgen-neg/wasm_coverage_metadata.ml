@@ -9,8 +9,10 @@ type coverage_metadata = {
 
 let validation_schema = 1
 let instantiation_schema = 2
+let invocation_schema = 3
 let validation_oracle = "phase-direct"
 let instantiation_oracle = "phase-direct-roots"
+let invocation_oracle = "phase-direct"
 
 let metadata_path coverage = coverage ^ ".meta.json"
 let temporary_path coverage = metadata_path coverage ^ ".tmp"
@@ -50,6 +52,11 @@ let validate_relation_set phase relations =
                   (List.filter
                      (fun relation -> List.mem relation relations)
                      [ "Init_with_store_ok"; "Invoke" ])))
+  (* Invocation instantiates its target too, but only the observed invocation
+     is measured. *)
+  | Config.Invocation ->
+      if relations = [ "Invoke" ] then Ok relations
+      else Error (error "invocation coverage relations must be exactly Invoke")
 
 let metadata_for ?coverage_relations phase =
   let relations =
@@ -69,7 +76,12 @@ let metadata_for ?coverage_relations phase =
           { schema = instantiation_schema;
             phase;
             coverage_relations;
-            oracle = instantiation_oracle })
+            oracle = instantiation_oracle }
+      | Config.Invocation ->
+          { schema = invocation_schema;
+            phase;
+            coverage_relations;
+            oracle = invocation_oracle })
     (validate_relation_set phase relations)
 
 let json_of_metadata metadata =
@@ -80,7 +92,7 @@ let json_of_metadata metadata =
           ("phase", `String (Config.string_of_wasm_phase metadata.phase));
           ("coverage_relation", `String "Modules_ok");
           ("oracle", `String metadata.oracle) ]
-  | Config.Instantiation ->
+  | Config.Instantiation | Config.Invocation ->
       `Assoc
         [ ("schema", `Int metadata.schema);
           ("phase", `String (Config.string_of_wasm_phase metadata.phase));
@@ -221,6 +233,30 @@ let validate_instantiation fields =
                                "coverage metadata oracle mismatch: expected %s but found %s"
                                instantiation_oracle oracle))))))
 
+let validate_invocation fields =
+  Result.bind
+    (exact_fields [ "schema"; "phase"; "coverage_relations"; "oracle" ] fields)
+    (fun () ->
+      Result.bind (int_field "schema" fields) (fun schema ->
+          if schema <> invocation_schema then
+            Error
+              (error "coverage metadata schema must be %d (found %d)"
+                 invocation_schema schema)
+          else
+            Result.bind (string_list_field "coverage_relations" fields)
+              (fun relations ->
+                Result.bind
+                  (validate_relation_set Config.Invocation relations)
+                  (fun canonical_relations ->
+                    Result.bind (string_field "oracle" fields) (fun oracle ->
+                        if String.equal oracle invocation_oracle then
+                          Ok canonical_relations
+                        else
+                          Error
+                            (error
+                               "coverage metadata oracle mismatch: expected %s but found %s"
+                               invocation_oracle oracle))))))
+
 let read ~phase coverage =
   let path = metadata_path coverage in
   let parsed =
@@ -260,6 +296,8 @@ let read ~phase coverage =
                       ( instantiation_schema,
                         instantiation_oracle,
                         validate_instantiation )
+                  | Config.Invocation ->
+                      (invocation_schema, invocation_oracle, validate_invocation)
                 in
                 Result.map
                   (fun coverage_relations ->

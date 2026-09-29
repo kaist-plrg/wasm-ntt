@@ -10,24 +10,30 @@ open Runtime.Testgen_neg
 open Envs
 module Sim = Runtime.Sim.Signature
 
-type wasm_phase = Validation | Instantiation
+type wasm_phase = Validation | Instantiation | Invocation
 
 let wasm_phase_of_string = function
   | "validation" -> Ok Validation
   | "instantiation" -> Ok Instantiation
+  | "invocation" -> Ok Invocation
   | value ->
       Error
         (Format.sprintf
-           "unknown Wasm testgen phase %S (expected validation or instantiation)"
+           "unknown Wasm testgen phase %S (expected validation, instantiation \
+            or invocation)"
            value)
 
 let string_of_wasm_phase = function
   | Validation -> "validation"
   | Instantiation -> "instantiation"
+  | Invocation -> "invocation"
 
+(* Invocation instantiates its target before invoking it, but measures only the
+   observed invocation. *)
 let coverage_relation = function
   | Validation -> "Modules_ok"
   | Instantiation -> "Init_with_store_ok"
+  | Invocation -> "Invoke"
 
 (* Hyperparameters for the fuzzing loop *)
 
@@ -78,6 +84,7 @@ type storage = {
   dirname_close_miss_p4 : string;
   dirname_welltyped_p4 : string;
   dirname_illtyped_p4 : string;
+  dirname_trapped_wasm : string;
 }
 
 (* Seed for the fuzz campaign *)
@@ -246,6 +253,8 @@ let init_storage (dirname_gen : string) : storage =
   Util.Filesys.mkdir dirname_welltyped_p4;
   let dirname_illtyped_p4 = dirname_gen ^ "/illtyped" in
   Util.Filesys.mkdir dirname_illtyped_p4;
+  let dirname_trapped_wasm = dirname_gen ^ "/trapped" in
+  Util.Filesys.mkdir dirname_trapped_wasm;
   {
     dirname_gen;
     dirname_log;
@@ -253,6 +262,7 @@ let init_storage (dirname_gen : string) : storage =
     dirname_close_miss_p4;
     dirname_welltyped_p4;
     dirname_illtyped_p4;
+    dirname_trapped_wasm;
   }
 
 let directory_for_output_category storage = function
@@ -260,6 +270,7 @@ let directory_for_output_category storage = function
   | Wasm_policy.ValidationInvalid -> storage.dirname_illtyped_p4
   | Wasm_policy.InitPass -> storage.dirname_welltyped_p4
   | Wasm_policy.InitFail -> storage.dirname_illtyped_p4
+  | Wasm_policy.InvokeStuck -> storage.dirname_trapped_wasm
   | Wasm_policy.CloseMiss -> storage.dirname_close_miss_p4
 
 let init_seed (cover : DCov_multi.t) : seed = { cover }

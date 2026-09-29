@@ -36,6 +36,17 @@ val evaluate_instantiation_with_dangling :
     Wasm_phase.phase_error )
   result
 
+val evaluate_invocation_with_dangling_and_vdg :
+  ?vdg:bool ->
+  derive:bool ->
+  env ->
+  Wasm_episode.invocation_episode ->
+  Lang.Il.value ->
+  ( Wasm_phase.invocation_result * Coverage.Dangling.Single.t option *
+    Runtime.Testgen_neg.Dep.Graph.t option,
+    Wasm_phase.phase_error )
+  result
+
 val evaluate_instantiation_with_dangling_and_vdg :
   derive:bool ->
   env ->

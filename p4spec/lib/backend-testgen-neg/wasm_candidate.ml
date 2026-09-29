@@ -13,10 +13,12 @@ module Renderer = Wasm_episode_renderer
 type seed =
   | ValidationSeed of Wasm_interface.Parse.expectation
   | InstantiationSeed of Episode.t
+  | InvocationSeed of Episode.invocation_episode
 
 type semantic_result =
   | ValidationResult of Phase.validation_result
   | InstantiationResult of Phase.instantiation_result
+  | InvocationResult of Phase.invocation_result
 
 type observation = {
   semantic : semantic_result;
@@ -108,6 +110,13 @@ let evaluate env seed mutated_module =
         |> Result.map (fun (result, coverage) ->
                let policy = Policy.of_instantiation_result result in
                observation (InstantiationResult result) coverage policy)
+    | InvocationSeed episode ->
+        (* derive:false — candidates are judged, not backtracked from. *)
+        Evaluator.evaluate_invocation_with_dangling_and_vdg ~vdg:false
+          ~derive:false env episode mutated_module
+        |> Result.map (fun (result, coverage, _graph) ->
+               let policy = Policy.of_invocation_result result in
+               observation (InvocationResult result) coverage policy)
   with
   | Util.Error.RuntimeError (at, message) ->
       Error (Phase.HarnessFailure (at, message))
@@ -184,10 +193,36 @@ let load_instantiation_seed ~derive ~env filename =
               Option.iter clear_graph graph;
               error "candidate policy and seed VDG disagreed"))
 
+let load_invocation_seed ~derive ~env filename =
+  match Episode.parse_invocation_file filename with
+  | Error _ as failure -> failure
+  | Ok episode -> (
+      let target = Episode.invocation_target_value episode in
+      match
+        Evaluator.evaluate_invocation_with_dangling_and_vdg ~derive env episode
+          target
+      with
+      | Error _ as failure -> failure
+      | Ok (result, coverage, graph) -> (
+          match (result, coverage, graph) with
+          (* A seed returns values; its close misses on the premises that guard
+             execution are where mutation starts from. *)
+          | Phase.InvokeReturned _, Some coverage, Some graph ->
+              Ok
+                (reusable ~seed:(InvocationSeed episode) ~target ~coverage
+                   ~graph)
+          | _, _, graph ->
+              Option.iter clear_graph graph;
+              Ok
+                (Diagnostic
+                   "invocation seed did not return values and has no reusable \
+                    close-miss path")))
+
 let load_seed_with_vdg ~derive ~env ~phase filename =
   match phase with
   | Config.Validation -> load_validation_seed ~derive ~env filename
   | Config.Instantiation -> load_instantiation_seed ~derive ~env filename
+  | Config.Invocation -> load_invocation_seed ~derive ~env filename
 
 let write_file path text =
   try
@@ -216,6 +251,9 @@ let render (observation : observation) seed mutated_module =
     InstantiationSeed episode,
     Some Policy.InitFail ->
       Renderer.render_instantiation ~episode ~mutated_module
+  | InvocationResult (Phase.InvokeStuck _), InvocationSeed episode,
+    Some Policy.InvokeStuck ->
+      Renderer.render_invocation ~episode ~mutated_module
   | _ -> error "diagnostic or unsupported result cannot be rendered"
 
 let category_of_observation (observation : observation) =
@@ -251,6 +289,21 @@ let recheck env path = function
               let policy = Policy.of_instantiation_result result in
               Ok
                 (observation (InstantiationResult result) coverage policy)))
+  | InvocationSeed _ -> (
+      (* The rendered artifact asserts a trap, which the modified specification
+         under test cannot produce; it is replayed as a bare action to confirm
+         the invocation is still stuck. *)
+      match Episode.parse_invocation_file path with
+      | Error _ as failure -> failure
+      | Ok episode -> (
+          match
+            Evaluator.evaluate_invocation_with_dangling_and_vdg ~vdg:false
+              ~derive:false env episode (Episode.invocation_target_value episode)
+          with
+          | Error _ as failure -> failure
+          | Ok (result, coverage, _graph) ->
+              let policy = Policy.of_invocation_result result in
+              Ok (observation (InvocationResult result) coverage policy)))
 
 let coverage_preserves coverage selected_hits selected_close_misses =
   match coverage with

@@ -31,6 +31,29 @@ type instantiation_result =
   | InitRelationFailed of relation_failure
   | ImportResolutionFailed of { message : string }
 
+(* Invocation instantiates its target before invoking it, so the invocation may
+   never happen; [NotInvoked] carries whatever stopped it.
+
+   [InvokeStuck] is what this phase hunts for: under a specification whose trap
+   counterparts have been removed, going out of bounds leaves the execution
+   relation with no applicable rule. *)
+type invocation_result =
+  | InvokeReturned of {
+      store : value;
+      values : value list;
+    }
+  | InvokeTrapped of { store : value }
+  | InvokeThrown of {
+      store : value;
+      tagaddr : value;
+      values : value list;
+    }
+  | InvokeStuck of relation_failure
+  (* The oracle only counts a stuck invocation of a module the type system
+     accepts, so a rejected target never reaches the invocation. *)
+  | TargetRejected of relation_failure
+  | NotInvoked of instantiation_result
+
 type phase_error =
   | SyntaxError of region * string
   | EpisodeError of region * string
@@ -53,6 +76,17 @@ let instantiation_result_of_outputs ?(at = no_region) outputs =
         | Harness.Trapped store -> Ok (Trapped { module_inst; store })
         | Harness.Thrown { store; tagaddr; values } ->
             Ok (Thrown { module_inst; store; tagaddr; values }))
+  with
+  | Util.Error.InterpError (error_at, message) ->
+      Error (HarnessFailure (error_at, message))
+
+let invocation_result_of_outputs ?(at = no_region) outputs =
+  try
+    match Harness.invoke_outputs at outputs with
+    | Harness.Returned { store; values } -> Ok (InvokeReturned { store; values })
+    | Harness.Trapped store -> Ok (InvokeTrapped { store })
+    | Harness.Thrown { store; tagaddr; values } ->
+        Ok (InvokeThrown { store; tagaddr; values })
   with
   | Util.Error.InterpError (error_at, message) ->
       Error (HarnessFailure (error_at, message))

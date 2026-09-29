@@ -19,6 +19,7 @@ type invocation_episode = {
   invocation_source_path : string;
   invocation_prefix : source_group list;
   invocation_target_groups : source_group list;
+  invocation_target_module_var : Script.var option;
   invocation_target_entry : Wasm_interface.Script_harness.module_entry;
   invocation_suffix : source_group list;
 }
@@ -40,6 +41,18 @@ val invocation_prefix_commands : invocation_episode -> Script.command list
 val invocation_target_commands : invocation_episode -> Script.command list
 val invocation_suffix_commands : invocation_episode -> Script.command list
 val invocation_target_value : invocation_episode -> Lang.Il.value
+val action_of_command : Script.command -> Script.command
+val invocation_driver_commands : invocation_episode -> Script.command list
+val invocation_replayed_commands : invocation_episode -> Script.command list
+val invocation_observed_commands : invocation_episode -> Script.command list
+val prepare_invocation :
+  Wasm_interface.Script_harness.runtime ->
+  invocation_episode ->
+  Lang.Il.value ->
+  ((Wasm_interface.Script_harness.state *
+    Wasm_interface.Script_harness.module_entry),
+   Wasm_phase.phase_error)
+  result
 val mutation_root : Lang.Il.value -> Lang.Il.value
 val module_entry_of_value :
   Lang.Il.value ->

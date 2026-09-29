@@ -1,0 +1,694 @@
+relation Instrs_ok: context inferresulttype |- instr* : (inferresulttype, idx*)   hint(input %0 %1 %2)
+relation Instr_ok: context inferresulttype |- instr : inferinstrtype              hint(input %0 %1 %2)
+relation Block_ok: context instrtype |- const : OK                                hint(input %0 %1 %2)
+
+relation Pack_ok: int |- packtype : OK   hint(input %0 %1)
+rule Pack_ok:
+  i |- packtype : OK
+  -- if $($pack_size(packtype) < i)
+
+relation Unop_ok: |- unop_ : OK          hint(input %0)
+rule Unop_ok/i32:
+  |- uop : OK
+  -- if uop = I32 (ExtendS packtype)
+  -- Pack_ok: $num_size($type_num<iunop, iunop, funop, funop>(uop)) |- packtype : OK
+
+rule Unop_ok/i64:
+  |- uop : OK
+  -- if uop = I64 (ExtendS packtype)
+  -- Pack_ok: $num_size($type_num<iunop, iunop, funop, funop>(uop)) |- packtype : OK
+
+rule Unop_ok/else:
+  |- uop : OK
+
+dec $check_lane_index(nat*) : bool
+def $check_lane_index(eps) = true
+def $check_lane_index(i_1 :: i*) = $check_lane_index(i*)
+  -- if $(i_1 < 32)
+def $check_lane_index(_) = false
+  -- otherwise
+
+dec $check_vbop_shuffle(vbinop_) : bool
+def $check_vbop_shuffle(V128 (I8x16 (Shuffle _))) = true
+def $check_vbop_shuffle(vbop) = false
+  -- otherwise
+
+relation Vecbinop_ok: |- vbinop_ : OK    hint(input %0)
+rule Vecbinop_ok/i816:
+  |- vbop : OK
+  -- if vbop = V128 (I8x16 (Shuffle i*))
+  -- if $check_lane_index(i*)
+
+rule Vecbinop_ok/else:
+  |- vbop : OK
+  -- if ~$check_vbop_shuffle(vbop)
+
+relation Loadop_ok: context |- loadop_ : numtype  hint(input %0 %1)
+rule Loadop_ok/some-i32at:
+  C_0 |- { TYPE nt, ALIGN u32, OFFSET u64, PACK (packtype, extension) } : nt
+  -- Pack_ok: $num_size(nt) |- packtype : OK
+  -- if int_3 = $pack_size(packtype)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
+  -- if MemoryT I32AT lim = C_0.MEMS[0]
+  -- if $(u64 < 4294967296)
+
+rule Loadop_ok/some-i64at:
+  C_0 |- { TYPE nt, ALIGN u32, OFFSET u64, PACK (packtype, extension) } : nt
+  -- Pack_ok: $num_size(nt) |- packtype : OK
+  -- if int_3 = $pack_size(packtype)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
+  -- if MemoryT I64AT lim = C_0.MEMS[0]
+
+rule Loadop_ok/none-i32at:
+  C_0 |- { TYPE nt, ALIGN u32, OFFSET u64, PACK eps } : nt
+  -- if int_3 = $num_size(nt)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
+  -- if MemoryT I32AT lim = C_0.MEMS[0]
+  -- if $(u64 < 4294967296)
+
+rule Loadop_ok/none-i64at:
+  C_0 |- { TYPE nt, ALIGN u32, OFFSET u64, PACK eps } : nt
+  -- if int_3 = $num_size(nt)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
+  -- if MemoryT I64AT lim = C_0.MEMS[0]
+
+relation Storeop_ok: context |- storeop_ : numtype  hint(input %0 %1)
+rule Storeop_ok/some-i32at:
+  C_0 |- { TYPE nt, ALIGN u32, OFFSET u64, PACK packtype } : nt
+  -- Pack_ok: $num_size(nt) |- packtype : OK
+  -- if int_3 = $pack_size(packtype)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
+  -- if MemoryT I32AT lim = C_0.MEMS[0]
+  -- if $(u64 < 4294967296)
+
+rule Storeop_ok/some-i64at:
+  C_0 |- { TYPE nt, ALIGN u32, OFFSET u64, PACK packtype } : nt
+  -- Pack_ok: $num_size(nt) |- packtype : OK
+  -- if int_3 = $pack_size(packtype)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
+  -- if MemoryT I64AT lim = C_0.MEMS[0]
+
+rule Storeop_ok/none-i32at:
+  C_0 |- { TYPE nt, ALIGN u32, OFFSET u64, PACK eps } : nt
+  -- if int_3 = $num_size(nt)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
+  -- if MemoryT I32AT lim = C_0.MEMS[0]
+  -- if $(u64 < 4294967296)
+
+rule Storeop_ok/none-i64at:
+  C_0 |- { TYPE nt, ALIGN u32, OFFSET u64, PACK eps } : nt
+  -- if int_3 = $num_size(nt)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
+  -- if MemoryT I64AT lim = C_0.MEMS[0]
+
+relation Vloadop_ok: context |- vloadop_ : vectype  hint(input %0 %1)
+rule Vloadop_ok/some-i32at:
+  C_0 |- { TYPE vt, ALIGN u32, OFFSET u64, PACK (packtype, vextension) } : vt
+  -- Pack_ok: $vec_size(vt) |- packtype : OK
+  -- if int_3 = $pack_size(packtype)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
+  -- if MemoryT I32AT lim = C_0.MEMS[0]
+  -- if $(u64 < 4294967296)
+
+rule Vloadop_ok/some-i64at:
+  C_0 |- { TYPE vt, ALIGN u32, OFFSET u64, PACK (packtype, vextension) } : vt
+  -- Pack_ok: $vec_size(vt) |- packtype : OK
+  -- if int_3 = $pack_size(packtype)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
+  -- if MemoryT I64AT lim = C_0.MEMS[0]
+
+rule Vloadop_ok/none-i32at:
+  C_0 |- { TYPE vt, ALIGN u32, OFFSET u64, PACK eps } : vt
+  -- if int_3 = $vec_size(vt)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
+  -- if MemoryT I32AT lim = C_0.MEMS[0]
+  -- if $(u64 < 4294967296)
+
+rule Vloadop_ok/none-i64at:
+  C_0 |- { TYPE vt, ALIGN u32, OFFSET u64, PACK eps } : vt
+  -- if int_3 = $vec_size(vt)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
+  -- if MemoryT I64AT lim = C_0.MEMS[0]
+
+relation Vstoreop_ok: context |- vstoreop_ : vectype  hint(input %0 %1)
+rule Vstoreop_ok/none-i32at:
+  C_0 |- { TYPE vt, ALIGN u32, OFFSET u64, PACK void } : vt
+  -- if int_3 = $vec_size(vt)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
+  -- if MemoryT I32AT lim = C_0.MEMS[0]
+  -- if $(u64 < 4294967296)
+
+rule Vstoreop_ok/none-i64at:
+  C_0 |- { TYPE vt, ALIGN u32, OFFSET u64, PACK void } : vt
+  -- if int_3 = $vec_size(vt)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
+  -- if MemoryT I64AT lim = C_0.MEMS[0]
+
+relation Vlaneop_ok: context |- vlaneop_ : vectype  hint(input %0 %1)
+rule Vlaneop_ok/some-i32at:
+  C_0 |- { TYPE vt, ALIGN u32, OFFSET u64, PACK packtype } : vt
+  -- Pack_ok: $vec_size(vt) |- packtype : OK
+  -- if int_3 = $pack_size(packtype)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
+  -- if MemoryT I32AT lim = C_0.MEMS[0]
+  -- if $(u64 < 4294967296)
+
+rule Vlaneop_ok/some-i64at:
+  C_0 |- { TYPE vt, ALIGN u32, OFFSET u64, PACK packtype } : vt
+  -- Pack_ok: $vec_size(vt) |- packtype : OK
+  -- if int_3 = $pack_size(packtype)
+  -- if $($lsl_(1, u32) >= 1) /\ $($lsl_(1, u32) <= int_3)
+  -- if MemoryT I64AT lim = C_0.MEMS[0]
+
+rule Instr_ok/unreachable:
+  C_0 irt |- UNREACHABLE : ({INS (Ellipses, eps), OUTS (Ellipses, eps)}, eps)
+
+rule Instr_ok/nop:
+  C_0 irt |- NOP : ({INS (NoEllipses, eps), OUTS (NoEllipses, eps)}, eps)
+
+rule Instr_ok/drop:
+  C_0 irt |- DROP : ({INS (NoEllipses, [$peek(0, irt)]), OUTS (NoEllipses, eps)}, eps)
+
+rule Instr_ok/select-none:
+  C_0 irt |- SELECT eps : ({INS (NoEllipses, [t, t, NumT I32T]), OUTS (NoEllipses, [t])}, eps)
+  -- if t = $peek(1, irt)
+  -- if $is_num_type(t) \/ $is_vec_type(t)
+
+rule Instr_ok/select-some:
+  C_0 irt |- SELECT t* : ({INS (NoEllipses, t* ++ t* ++ [NumT I32T]), OUTS (NoEllipses, t*)}, eps)
+  -- if |t*| = 1
+  -- Resulttype_ok: C_0 |- t* : OK
+
+rule Instr_ok/block:
+  C_0 irt |- BLOCK blocktype instr* : ({INS (NoEllipses, t_1*), OUTS (NoEllipses, t_2*)}, x*)
+  -- Blocktype_ok: C_0 |- blocktype : (InstrT t_1* t_2* x*)
+  -- Block_ok: C_0[ .LABELS = t_2* ++ C_0.LABELS ] (InstrT t_1* t_2* x*) |- instr* : OK
+
+rule Instr_ok/loop:
+  C_0 irt |- LOOP blocktype instr* : ({INS (NoEllipses, t_1*), OUTS (NoEllipses, t_2*)}, x*)
+  -- Blocktype_ok: C_0 |- blocktype : (InstrT t_1* t_2* x*)
+  -- Block_ok: C_0[ .LABELS = t_1* ++ C_0.LABELS ] (InstrT t_1* t_2* x*) |- instr* : OK
+
+rule Instr_ok/if':
+  C_0 irt |- IF blocktype instr_t* ELSE instr_f* : ({INS (NoEllipses, t_1* ++ [NumT I32T]), OUTS (NoEllipses, t_2*)}, x*)
+  -- Blocktype_ok: C_0 |- blocktype : (InstrT t_1* t_2* x*)
+  -- Block_ok: C_0[ .LABELS = t_2* ++ C_0.LABELS ] (InstrT t_1* t_2* x*) |- instr_t* : OK
+  -- Block_ok: C_0[ .LABELS = t_2* ++ C_0.LABELS ] (InstrT t_1* t_2* x*) |- instr_f* : OK
+
+rule Instr_ok/br:
+  C_0 irt |- BR x : ({INS (Ellipses, C_0.LABELS[x]), OUTS (Ellipses, eps)}, eps)
+
+rule Instr_ok/br_if:
+  C_0 irt |- BR_IF x : ({INS (NoEllipses, t* ++ [NumT I32T]), OUTS (NoEllipses, t*)}, eps)
+  -- if t* = C_0.LABELS[x]
+
+rule Instr_ok/br_table:
+  C_0 irt |- BR_TABLE x* y : ({INS (Ellipses, t* ++ [NumT I32T]), OUTS (Ellipses, eps)}, eps)
+  -- if n = |C_0.LABELS[y]|
+  -- if t* = $init_valtypes(irt, 0, n)
+  -- Match_resulttype: C_0 |- t* C_0.LABELS[y] : OK
+  -- (Match_resulttype: C_0 |- t* C_0.LABELS[x] : OK)*
+
+rule Instr_ok/br_on_null:
+  C_0 irt |- BR_ON_NULL x : ({INS (NoEllipses, t* ++ [RefT (Null ht)]), OUTS (NoEllipses, t* ++ [RefT (NoNull ht)])}, eps)
+  -- if null ht = $peek_ref(0, irt)
+  -- if t* = C_0.LABELS[x]
+
+rule Instr_ok/br_on_non_null:
+  C_0 irt |- BR_ON_NON_NULL x : ({INS (NoEllipses, t_h* ++ [RefT (Null ht)]), OUTS (NoEllipses, t_h*)}, eps)
+  -- if null ht = $peek_ref(0, irt)
+  -- if t' = RefT (NoNull ht)
+  -- if i = |C_0.LABELS[x]|
+  -- if $(i > 0)
+  -- if i' = $(i - 1)
+  -- if t_h* = C_0.LABELS[x][0:i']
+  -- if t_l = C_0.LABELS[x][i']
+  -- if $match_valtype(C_0.TYPES, t', t_l)
+
+rule Instr_ok/br_on_cast:
+  C_0 irt |- BR_ON_CAST x rt_1 rt_2 : ({INS (NoEllipses, t_h* ++ [RefT rt_1]), OUTS (NoEllipses, t_h* ++ [RefT $diff_reftype(rt_1, rt_2)])}, eps)
+  -- Reftype_ok: C_0 |- rt_1 : OK
+  -- Reftype_ok: C_0 |- rt_2 : OK
+  -- if $match_reftype(C_0.TYPES, rt_2, rt_1)
+  -- if i = |C_0.LABELS[x]|
+  -- if $(i > 0)
+  -- if i' = $(i - 1)
+  -- if t_h* = C_0.LABELS[x][0:i']
+  -- if t_l = C_0.LABELS[x][i']
+  -- if $match_valtype(C_0.TYPES, RefT rt_2, t_l)
+
+rule Instr_ok/br_on_cast_fail:
+  C_0 irt |- BR_ON_CAST_FAIL x rt_1 rt_2 : ({INS (NoEllipses, t_h* ++ [RefT rt_1]), OUTS (NoEllipses, t_h* ++ [RefT rt_2])}, eps)
+  -- Reftype_ok: C_0 |- rt_1 : OK
+  -- Reftype_ok: C_0 |- rt_2 : OK
+  -- if rt_1' = $diff_reftype(rt_1, rt_2)
+  -- if $match_reftype(C_0.TYPES, rt_2, rt_1)
+  -- if i = |C_0.LABELS[x]|
+  -- if $(i > 0)
+  -- if i' = $(i - 1)
+  -- if t_h* = C_0.LABELS[x][0:i']
+  -- if t_l = C_0.LABELS[x][i']
+  -- if $match_valtype(C_0.TYPES, RefT rt_1', t_l)
+
+rule Instr_ok/call:
+  C_0 irt |- CALL x : ({INS (NoEllipses, t_1*), OUTS (NoEllipses, t_2*)}, eps)
+  -- if FuncT t_1* t_2* = $functype_of_strtype($expanddt(C_0.FUNCS[x]))
+
+rule Instr_ok/call_ref:
+  C_0 irt |- CALL_REF x : ({INS (NoEllipses, t_1* ++ [RefT (Null (DefHT C_0.TYPES[x]))]), OUTS (NoEllipses, t_2*)}, eps)
+  -- if FuncT t_1* t_2* = $func_type(C_0, x)
+
+rule Instr_ok/call_indirect:
+  C_0 irt |- CALL_INDIRECT x y : ({INS (NoEllipses, t_1* ++ [NumT $numtype_of_addrtype(at)]), OUTS (NoEllipses, t_2*)}, eps)
+  -- if TableT at lim rt = C_0.TABLES[x]
+  -- if FuncT t_1* t_2* = $func_type(C_0, y)
+  -- if $match_reftype(C_0.TYPES, rt, (Null FuncHT))
+
+rule Instr_ok/return:
+  C_0 irt |- RETURN : ({INS (Ellipses, C_0.RESULTS), OUTS (Ellipses, eps)}, eps)
+
+rule Instr_ok/return_call:
+  C_0 irt |- RETURN_CALL x : ({INS (Ellipses, t_1*), OUTS (Ellipses, eps)}, eps)
+  -- if FuncT t_1* t_2* = $functype_of_strtype($expanddt(C_0.FUNCS[x]))
+  -- if $match_resulttype(C_0.TYPES, t_2*, C_0.RESULTS)
+
+rule Instr_ok/return_call_ref:
+  C_0 irt |- RETURN_CALL_REF x : ({INS (Ellipses, t_1* ++ [RefT (Null (DefHT C_0.TYPES[x]))]), OUTS (Ellipses, eps)}, eps)
+  -- if FuncT t_1* t_2* = $func_type(C_0, x)
+  -- if $match_resulttype(C_0.TYPES, t_2*, C_0.RESULTS)
+
+rule Instr_ok/return_call_indirect:
+  C_0 irt |- RETURN_CALL_INDIRECT x y : ({INS (Ellipses, t_1* ++ [NumT $numtype_of_addrtype(at)]), OUTS (Ellipses, eps)}, eps)
+  -- if TableT at lim rt = C_0.TABLES[x]
+  -- if FuncT t_1* t_2* = $func_type(C_0, y)
+  -- if $match_reftype(C_0.TYPES, rt, (Null FuncHT))
+  -- if $match_resulttype(C_0.TYPES, t_2*, C_0.RESULTS)
+
+rule Instr_ok/throw:
+  C_0 irt |- THROW x : ({INS (Ellipses, t_1*), OUTS (Ellipses, eps)}, eps)
+  -- if TagT dt = C_0.TAGS[x]
+  -- if FuncT t_1* t_2* = $functype_of_strtype($expanddt(dt))
+
+rule Instr_ok/throw_ref:
+  C_0 irt |- THROW_REF : ({INS (Ellipses, [RefT (Null ExnHT)]), OUTS (Ellipses, eps)}, eps)
+
+rule Instr_ok/try_table:
+  C_0 irt |- TRY_TABLE blocktype catch* instr* : ({INS (NoEllipses, t_1*), OUTS (NoEllipses, t_2*)}, x*)
+  -- Blocktype_ok: C_0 |- blocktype : (InstrT t_1* t_2* x*)
+  -- if C_1 = C_0[ .LABELS = t_2* ++ C_0.LABELS ]
+  -- (Catch_ok: C_0 t_2* |- catch : OK)*
+  -- Block_ok: C_1 (InstrT t_1* t_2* x*) |- instr* : OK
+
+rule Instr_ok/local.get:
+  C_0 irt |- LOCAL.GET x : ({INS (NoEllipses, eps), OUTS (NoEllipses, [t])}, eps)
+  -- if LocalT Set t = C_0.LOCALS[x]
+
+rule Instr_ok/local.set:
+  C_0 irt |- LOCAL.SET x : ({INS (NoEllipses, [t]), OUTS (NoEllipses, eps)}, [x])
+  -- if LocalT init t = C_0.LOCALS[x]
+
+rule Instr_ok/local.tee:
+  C_0 irt |- LOCAL.TEE x : ({INS (NoEllipses, [t]), OUTS (NoEllipses, [t])}, [x])
+  -- if LocalT init t = C_0.LOCALS[x]
+
+rule Instr_ok/global.get:
+  C_0 irt |- GLOBAL.GET x : ({INS (NoEllipses, eps), OUTS (NoEllipses, [t])}, eps)
+  -- if GlobalT mut t = C_0.GLOBALS[x]
+
+rule Instr_ok/global.set:
+  C_0 irt |- GLOBAL.SET x : ({INS (NoEllipses, [t]), OUTS (NoEllipses, eps)}, eps)
+  -- if GlobalT Var t = C_0.GLOBALS[x]
+
+rule Instr_ok/table.get:
+  C_0 irt |- TABLE.GET x : ({INS (NoEllipses, [t]), OUTS (NoEllipses, [RefT rt])}, eps)
+  -- if TableT at lim rt = C_0.TABLES[x]
+  -- if t = NumT $numtype_of_addrtype(at)
+
+rule Instr_ok/table.set:
+  C_0 irt |- TABLE.SET x : ({INS (NoEllipses, [t, RefT rt]), OUTS (NoEllipses, eps)}, eps)
+  -- if TableT at lim rt = C_0.TABLES[x]
+  -- if t = NumT $numtype_of_addrtype(at)
+
+rule Instr_ok/table.size:
+  C_0 irt |- TABLE.SIZE x : ({INS (NoEllipses, eps), OUTS (NoEllipses, [t])}, eps)
+  -- if TableT at lim rt = C_0.TABLES[x]
+  -- if t = NumT $numtype_of_addrtype(at)
+
+rule Instr_ok/table.grow:
+  C_0 irt |- TABLE.GROW x : ({INS (NoEllipses, [RefT rt, t]), OUTS (NoEllipses, [t])}, eps)
+  -- if TableT at lim rt = C_0.TABLES[x]
+  -- if t = NumT $numtype_of_addrtype(at)
+
+rule Instr_ok/table.fill:
+  C_0 irt |- TABLE.FILL x : ({INS (NoEllipses, [t, RefT rt, t]), OUTS (NoEllipses, eps)}, eps)
+  -- if TableT at lim rt = C_0.TABLES[x]
+  -- if t = NumT $numtype_of_addrtype(at)
+
+rule Instr_ok/table.copy:
+  C_0 irt |- TABLE.COPY x y : ({INS (NoEllipses, [t_1, t_2, t_min]), OUTS (NoEllipses, eps)}, eps)
+  -- if TableT at_1 lim_1 rt_1 = C_0.TABLES[x]
+  -- if TableT at_2 lim_2 rt_2 = C_0.TABLES[y]
+  -- if $match_reftype(C_0.TYPES, rt_2, rt_1)
+  -- if t_1 = NumT $numtype_of_addrtype(at_1)
+  -- if t_2 = NumT $numtype_of_addrtype(at_2)
+  -- if t_min = NumT $numtype_of_addrtype($min_addrtype(at_1, at_2))
+
+rule Instr_ok/table.init:
+  C_0 irt |- TABLE.INIT x y : ({INS (NoEllipses, [t, NumT I32T, NumT I32T]), OUTS (NoEllipses, eps)}, eps)
+  -- if TableT at lim rt = C_0.TABLES[x]
+  -- if rt' = C_0.ELEMS[y]
+  -- if $match_reftype(C_0.TYPES, rt', rt)
+  -- if t = NumT $numtype_of_addrtype(at)
+
+rule Instr_ok/elem.drop:
+  C_0 irt |- ELEM.DROP x : ({INS (NoEllipses, eps), OUTS (NoEllipses, eps)}, eps)
+  -- if $(x >= 0) /\ $(x < |C_0.ELEMS|)
+
+rule Instr_ok/load:
+  C_0 irt |- LOAD x loadop_ : ({INS (NoEllipses, [NumT $numtype_of_addrtype(at)]), OUTS (NoEllipses, [NumT nt])}, eps)
+  -- if MemoryT at lim = C_0.MEMS[x]
+  -- Loadop_ok: C_0 |- loadop_ : nt
+
+rule Instr_ok/store:
+  C_0 irt |- STORE x storeop_ : ({INS (NoEllipses, [NumT $numtype_of_addrtype(at), NumT nt]), OUTS (NoEllipses, eps)}, eps)
+  -- if MemoryT at lim = C_0.MEMS[x]
+  -- Storeop_ok: C_0 |- storeop_ : nt
+
+rule Instr_ok/vec.load:
+  C_0 irt |- VEC.LOAD x vloadop_ : ({INS (NoEllipses, [NumT $numtype_of_addrtype(at)]), OUTS (NoEllipses, [VecT vt])}, eps)
+  -- if MemoryT at lim = C_0.MEMS[x]
+  -- Vloadop_ok: C_0 |- vloadop_ : vt
+
+rule Instr_ok/vec.store:
+  C_0 irt |- VEC.STORE x vstoreop_ : ({INS (NoEllipses, [NumT $numtype_of_addrtype(at), VecT vt]), OUTS (NoEllipses, eps)}, eps)
+  -- if MemoryT at lim = C_0.MEMS[x]
+  -- Vstoreop_ok: C_0 |- vstoreop_ : vt
+
+rule Instr_ok/vec.load_lane:
+  C_0 irt |- VEC.LOAD_LANE x vlaneop_ int_1 : ({INS (NoEllipses, [NumT $numtype_of_addrtype(at), VecT vt]), OUTS (NoEllipses, [VecT vt])}, eps)
+  -- if vlaneop_ = { TYPE _, ALIGN _, OFFSET _, PACK packtype }
+  -- if MemoryT at lim = C_0.MEMS[x]
+  -- Vlaneop_ok: C_0 |- vlaneop_ : vt
+  -- if $(int_1 < ($vec_size(vt) / $pack_size(packtype)))
+
+rule Instr_ok/vec.store_lane:
+  C_0 irt |- VEC.STORE_LANE x vlaneop_ int_1 : ({INS (NoEllipses, [NumT $numtype_of_addrtype(at), VecT vt]), OUTS (NoEllipses, eps)}, eps)
+  -- if vlaneop_ = { TYPE _, ALIGN _, OFFSET _, PACK packtype }
+  -- if MemoryT at lim = C_0.MEMS[x]
+  -- Vlaneop_ok: C_0 |- vlaneop_ : vt
+  -- if $(int_1 < ($vec_size(vt) / $pack_size(packtype)))
+
+rule Instr_ok/memory.size:
+  C_0 irt |- MEMORY.SIZE x : ({INS (NoEllipses, eps), OUTS (NoEllipses, [NumT $numtype_of_addrtype(at)])}, eps)
+  -- if MemoryT at lim = C_0.MEMS[x]
+
+rule Instr_ok/memory.grow:
+  C_0 irt |- MEMORY.GROW x : ({INS (NoEllipses, [NumT $numtype_of_addrtype(at)]), OUTS (NoEllipses, [NumT $numtype_of_addrtype(at)])}, eps)
+  -- if MemoryT at lim = C_0.MEMS[x]
+
+rule Instr_ok/memory.fill:
+  C_0 irt |- MEMORY.FILL x : ({INS (NoEllipses, [t, NumT I32T, t]), OUTS (NoEllipses, eps)}, eps)
+  -- if MemoryT at lim = C_0.MEMS[x]
+  -- if t = NumT $numtype_of_addrtype(at)
+
+rule Instr_ok/memory.copy:
+  C_0 irt |- MEMORY.COPY x y : ({INS (NoEllipses, [t_1, t_2, t_min]), OUTS (NoEllipses, eps)}, eps)
+  -- if MemoryT at_1 lim_1 = C_0.MEMS[x]
+  -- if MemoryT at_2 lim_2 = C_0.MEMS[y]
+  -- if t_1 = NumT $numtype_of_addrtype(at_1)
+  -- if t_2 = NumT $numtype_of_addrtype(at_2)
+  -- if t_min = NumT $numtype_of_addrtype($min_addrtype(at_1, at_2))
+
+rule Instr_ok/memory.init:
+  C_0 irt |- MEMORY.INIT x y : ({INS (NoEllipses, [t, NumT I32T, NumT I32T]), OUTS (NoEllipses, eps)}, eps)
+  -- if MemoryT at lim = C_0.MEMS[x]
+  -- if $(y >= 0) /\ $(y < |C_0.DATAS|)
+  -- if t = NumT $numtype_of_addrtype(at)
+
+rule Instr_ok/data.drop:
+  C_0 irt |- DATA.DROP x : ({INS (NoEllipses, eps), OUTS (NoEllipses, eps)}, eps)
+  -- if $(x >= 0) /\ $(x < |C_0.DATAS|)
+
+rule Instr_ok/ref.null:
+  C_0 irt |- REF.NULL ht : ({INS (NoEllipses, eps), OUTS (NoEllipses, [RefT (Null ht)])}, eps)
+  -- Heaptype_ok: C_0 |- ht : OK
+
+rule Instr_ok/ref.func:
+  C_0 irt |- REF.FUNC x : ({INS (NoEllipses, eps), OUTS (NoEllipses, [RefT (NoNull (DefHT dt))])}, eps)
+  -- if dt = C_0.FUNCS[x]
+  -- if $in_set<funcidx>(x, C_0.REFS.FUNCS)
+
+rule Instr_ok/ref.is_null:
+  C_0 irt |- REF.IS_NULL : ({INS (NoEllipses, [RefT (Null ht)]), OUTS (NoEllipses, [NumT I32T])}, eps)
+  -- if null ht = $peek_ref(0, irt)
+
+rule Instr_ok/ref.as_non_null:
+  C_0 irt |- REF.AS_NON_NULL : ({INS (NoEllipses, [RefT (Null ht)]), OUTS (NoEllipses, [RefT (NoNull ht)])}, eps)
+  -- if null ht = $peek_ref(0, irt)
+
+rule Instr_ok/ref.test:
+  C_0 irt |- REF.TEST rt : ({INS (NoEllipses, [RefT (Null $top_of_heap_type(C_0.TYPES, ht))]), OUTS (NoEllipses, [NumT I32T])}, eps)
+  -- if null ht = rt
+  -- Reftype_ok: C_0 |- rt : OK
+
+rule Instr_ok/ref.cast:
+  C_0 irt |- REF.CAST rt : ({INS (NoEllipses, [RefT (Null $top_of_heap_type(C_0.TYPES, ht))]), OUTS (NoEllipses, [RefT (null ht)])}, eps)
+  -- if null ht = rt
+  -- Reftype_ok: C_0 |- rt : OK
+
+rule Instr_ok/ref.eq:
+  C_0 irt |- REF.EQ : ({INS (NoEllipses, [RefT (Null EqHT), RefT (Null EqHT)]), OUTS (NoEllipses, [NumT I32T])}, eps)
+
+rule Instr_ok/ref.i31:
+  C_0 irt |- REF.I31 : ({INS (NoEllipses, [NumT I32T]), OUTS (NoEllipses, [RefT (NoNull I31HT)])}, eps)
+
+rule Instr_ok/i31.get:
+  C_0 irt |- I31.GET extension : ({INS (NoEllipses, [RefT (Null I31HT)]), OUTS (NoEllipses, [NumT I32T])}, eps)
+
+;; Struct instructions
+rule Instr_ok/struct.new.explicit:
+  C_0 irt |- STRUCT.NEW x Explicit : ({INS (NoEllipses, t*), OUTS (NoEllipses, [RefT (NoNull (DefHT C_0.TYPES[x]))])}, eps)
+  -- if StructT yt* = $struct_type(C_0, x)
+  -- if (t = $unpacked_field_type(yt))*
+
+rule Instr_ok/struct.new.implicit:
+  C_0 irt |- STRUCT.NEW x Implicit : ({INS (NoEllipses, eps), OUTS (NoEllipses, [RefT (NoNull (DefHT C_0.TYPES[x]))])}, eps)
+  -- if StructT yt* = $struct_type(C_0, x)
+  -- (if $defaultable($unpacked_field_type(yt)))*
+
+rule Instr_ok/struct.get.some:
+  C_0 irt |- STRUCT.GET x y extension : ({INS (NoEllipses, [RefT (Null (DefHT C_0.TYPES[x]))]), OUTS (NoEllipses, [t])}, eps)
+  -- if StructT yt* = $struct_type(C_0, x)
+  -- if $(y < |yt*|)
+  -- if FieldT mut zt = yt*[y]
+  -- if $is_packed_storage_type(zt)
+  -- if t = $unpacked_storage_type(zt)
+
+rule Instr_ok/struct.get.none:
+  C_0 irt |- STRUCT.GET x y eps : ({INS (NoEllipses, [RefT (Null (DefHT C_0.TYPES[x]))]), OUTS (NoEllipses, [t])}, eps)
+  -- if StructT yt* = $struct_type(C_0, x)
+  -- if $(y < |yt*|)
+  -- if FieldT mut zt = yt*[y]
+  -- if ~$is_packed_storage_type(zt)
+  -- if t = $unpacked_storage_type(zt)
+
+rule Instr_ok/struct.set:
+  C_0 irt |- STRUCT.SET x y : ({INS (NoEllipses, [RefT (Null (DefHT C_0.TYPES[x])), t]), OUTS (NoEllipses, eps)}, eps)
+  -- if StructT yt* = $struct_type(C_0, x)
+  -- if $(y < |yt*|)
+  -- if FieldT mut zt = yt*[y]
+  -- if mut = Var
+  -- if t = $unpacked_storage_type(zt)
+
+;; Array instructions
+rule Instr_ok/array.new.explicit:
+  C_0 irt |- ARRAY.NEW x Explicit : ({INS (NoEllipses, [t, NumT I32T]), OUTS (NoEllipses, [RefT (NoNull (DefHT C_0.TYPES[x]))])}, eps)
+  -- if ArrayT yt = $array_type(C_0, x)
+  -- if t = $unpacked_field_type(yt)
+
+rule Instr_ok/array.new.implicit:
+  C_0 irt |- ARRAY.NEW x Implicit : ({INS (NoEllipses, [NumT I32T]), OUTS (NoEllipses, [RefT (NoNull (DefHT C_0.TYPES[x]))])}, eps)
+  -- if ArrayT yt = $array_type(C_0, x)
+  -- if $defaultable($unpacked_field_type(yt))
+
+rule Instr_ok/array.new.fixed:
+  C_0 irt |- ARRAY.NEW_FIXED x n : ({INS (NoEllipses, t*), OUTS (NoEllipses, [RefT (NoNull (DefHT C_0.TYPES[x]))])}, eps)
+  -- if ArrayT yt = $array_type(C_0, x)
+  -- if t* = $make_<valtype>($unpacked_field_type(yt), n)
+
+rule Instr_ok/array.new.elem:
+  C_0 irt |- ARRAY.NEW_ELEM x y : ({INS (NoEllipses, [NumT I32T, NumT I32T]), OUTS (NoEllipses, [RefT (NoNull (DefHT C_0.TYPES[x]))])}, eps)
+  -- if ArrayT yt = $array_type(C_0, x)
+  -- if rt = C_0.ELEMS[y]
+  -- if $match_valtype(C_0.TYPES, RefT rt, $unpacked_field_type(yt))
+
+rule Instr_ok/array.new.data:
+  C_0 irt |- ARRAY.NEW_DATA x y : ({INS (NoEllipses, [NumT I32T, NumT I32T]), OUTS (NoEllipses, [RefT (NoNull (DefHT C_0.TYPES[x]))])}, eps)
+  -- if ArrayT yt = $array_type(C_0, x)
+  -- if C_0.DATAS[y] = OK
+  -- if t = $unpacked_field_type(yt)
+  -- if $is_num_type(t) \/ $is_vec_type(t)
+
+rule Instr_ok/array.get.some:
+  C_0 irt |- ARRAY.GET x extension : ({INS (NoEllipses, [RefT (Null (DefHT C_0.TYPES[x])), NumT I32T]), OUTS (NoEllipses, [t])}, eps)
+  -- if ArrayT (FieldT mut zt) = $array_type(C_0, x)
+  -- if $is_packed_storage_type(zt)
+  -- if t = $unpacked_storage_type(zt)
+
+rule Instr_ok/array.get.none:
+  C_0 irt |- ARRAY.GET x eps : ({INS (NoEllipses, [RefT (Null (DefHT C_0.TYPES[x])), NumT I32T]), OUTS (NoEllipses, [t])}, eps)
+  -- if ArrayT (FieldT mut zt) = $array_type(C_0, x)
+  -- if ~$is_packed_storage_type(zt)
+  -- if t = $unpacked_storage_type(zt)
+
+rule Instr_ok/array.set:
+  C_0 irt |- ARRAY.SET x : ({INS (NoEllipses, [RefT (Null (DefHT C_0.TYPES[x])), NumT I32T, t]), OUTS (NoEllipses, eps)}, eps)
+  -- if ArrayT (FieldT Var zt) = $array_type(C_0, x)
+  -- if t = $unpacked_storage_type(zt)
+
+rule Instr_ok/array.len:
+  C_0 irt |- ARRAY.LEN : ({INS (NoEllipses, [RefT (Null ArrayHT)]), OUTS (NoEllipses, [NumT I32T])}, eps)
+
+rule Instr_ok/array.copy:
+  C_0 irt |- ARRAY.COPY x y : ({INS (NoEllipses, [RefT (Null (DefHT C_0.TYPES[x])), NumT I32T, RefT (Null (DefHT C_0.TYPES[y])), NumT I32T, NumT I32T]), OUTS (NoEllipses, eps)}, eps)
+  -- if ArrayT (FieldT mut_1 zt_1) = $array_type(C_0, x)
+  -- if ArrayT (FieldT mut_2 zt_2) = $array_type(C_0, y)
+  -- if mut_1 = Var
+  -- if $match_storagetype(C_0.TYPES, zt_2, zt_1)
+
+rule Instr_ok/array.fill:
+  C_0 irt |- ARRAY.FILL x : ({INS (NoEllipses, [RefT (Null (DefHT C_0.TYPES[x])), NumT I32T, t, NumT I32T]), OUTS (NoEllipses, eps)}, eps)
+  -- if ArrayT (FieldT mut zt) = $array_type(C_0, x)
+  -- if mut = Var
+  -- if t = $unpacked_storage_type(zt)
+
+rule Instr_ok/array.init.data:
+  C_0 irt |- ARRAY.INIT_DATA x y : ({INS (NoEllipses, [RefT (Null (DefHT C_0.TYPES[x])), NumT I32T, NumT I32T, NumT I32T]), OUTS (NoEllipses, eps)}, eps)
+  -- if ArrayT (FieldT mut zt) = $array_type(C_0, x)
+  -- if mut = Var
+  -- if C_0.DATAS[y] = OK
+  -- if t = $unpacked_storage_type(zt)
+  -- if $is_num_type(t) \/ $is_vec_type(t)
+
+rule Instr_ok/array.init.elem:
+  C_0 irt |- ARRAY.INIT_ELEM x y : ({INS (NoEllipses, [RefT (Null (DefHT C_0.TYPES[x])), NumT I32T, NumT I32T, NumT I32T]), OUTS (NoEllipses, eps)}, eps)
+  -- if ArrayT (FieldT mut zt) = $array_type(C_0, x)
+  -- if mut = Var
+  -- if rt = C_0.ELEMS[y]
+  -- if $match_valtype(C_0.TYPES, RefT rt, $unpacked_storage_type(zt))
+
+rule Instr_ok/extern.convert:
+  C_0 irt |- EXTERN.CONVERT eop : ({INS (NoEllipses, [RefT (null ht_1)]), OUTS (NoEllipses, [RefT (null ht_2)])}, eps)
+  -- if (ht_1, ht_2) = $type_externop(eop)
+  -- if null ht = $peek_ref(0, irt)
+
+rule Instr_ok/const:
+  C_0 irt |- CONST num : ({INS (NoEllipses, eps), OUTS (NoEllipses, [t])}, eps)
+  -- if t = NumT $type_num<i32,i64,f32,f64>(num)
+
+rule Instr_ok/testop:
+  C_0 irt |- TEST top : ({INS (NoEllipses, [t]), OUTS (NoEllipses, [NumT I32T])}, eps)
+  -- if t = NumT $type_num<itestop,itestop,ftestop,ftestop>(top)
+
+rule Instr_ok/relop:
+  C_0 irt |- COMPARE rop : ({INS (NoEllipses, [t, t]), OUTS (NoEllipses, [NumT I32T])}, eps)
+  -- if t = NumT $type_num<irelop,irelop,frelop,frelop>(rop)
+
+rule Instr_ok/unop:
+  C_0 irt |- UNARY uop : ({INS (NoEllipses, [t]), OUTS (NoEllipses, [t])}, eps)
+  -- Unop_ok: |- uop : OK
+  -- if t = NumT $type_num<iunop,iunop,funop,funop>(uop)
+
+rule Instr_ok/binop:
+  C_0 irt |- BINOP bop : ({INS (NoEllipses, [t, t]), OUTS (NoEllipses, [t])}, eps)
+  -- if t = NumT $type_num<ibinop,ibinop,fbinop,fbinop>(bop)
+
+rule Instr_ok/cvtop:
+  C_0 irt |- CONVERT cop : ({INS (NoEllipses, [NumT nt_1]), OUTS (NoEllipses, [NumT nt_2])}, eps)
+  -- if (nt_1, nt_2) = $type_cvtop(cop)
+
+rule Instr_ok/vec.const:
+  C_0 irt |- VEC.CONST vec : ({INS (NoEllipses, eps), OUTS (NoEllipses, [t])}, eps)
+  -- if t = VecT $type_vecop<v128>(vec)
+
+rule Instr_ok/vec.test:
+  C_0 irt |- VEC.TEST vtop : ({INS (NoEllipses, [t]), OUTS (NoEllipses, [NumT I32T])}, eps)
+  -- if t = VecT $type_vecop<vtestop>(vtop)
+
+rule Instr_ok/vec.unary:
+  C_0 irt |- VEC.UNARY vuop : ({INS (NoEllipses, [t]), OUTS (NoEllipses, [t])}, eps)
+  -- if t = VecT $type_vecop<vunop>(vuop)
+
+rule Instr_ok/vec.binary:
+  C_0 irt |- VEC.BINARY vbop : ({INS (NoEllipses, [t, t]), OUTS (NoEllipses, [t])}, eps)
+  -- Vecbinop_ok: |- vbop : OK
+  -- if t = VecT $type_vecop<vbinop>(vbop)
+
+rule Instr_ok/vec.ternary:
+  C_0 irt |- VEC.TERNARY vterop : ({INS (NoEllipses, [t, t, t]), OUTS (NoEllipses, [t])}, eps)
+  -- if t = VecT $type_vecop<vternop>(vterop)
+
+rule Instr_ok/vec.compare:
+  C_0 irt |- VEC.COMPARE vrop : ({INS (NoEllipses, [t, t]), OUTS (NoEllipses, [t])}, eps)
+  -- if t = VecT $type_vecop<vrelop>(vrop)
+
+rule Instr_ok/vec.convert:
+  C_0 irt |- VEC.CONVERT vcvop : ({INS (NoEllipses, [t]), OUTS (NoEllipses, [t])}, eps)
+  -- if t = VecT $type_vecop<vcvtop>(vcvop)
+
+rule Instr_ok/vec.shift:
+  C_0 irt |- VEC.SHIFT vshop : ({INS (NoEllipses, [t, NumT I32T]), OUTS (NoEllipses, [t])}, eps)
+  -- if t = VecT $type_vecop<vshiftop>(vshop)
+
+rule Instr_ok/vec.bitmask:
+  C_0 irt |- VEC.BITMASK vbitop : ({INS (NoEllipses, [t]), OUTS (NoEllipses, [NumT I32T])}, eps)
+  -- if t = VecT $type_vecop<vbitmaskop>(vbitop)
+
+rule Instr_ok/vec.testbits:
+  C_0 irt |- VEC.TESTBITS vvtop : ({INS (NoEllipses, [t]), OUTS (NoEllipses, [NumT I32T])}, eps)
+  -- if t = VecT $type_vecop<vvtestop>(vvtop)
+
+rule Instr_ok/vec.unarybits:
+  C_0 irt |- VEC.UNARYBITS vvuop : ({INS (NoEllipses, [t]), OUTS (NoEllipses, [t])}, eps)
+  -- if t = VecT $type_vecop<vvunop>(vvuop)
+
+rule Instr_ok/vec.binarybits:
+  C_0 irt |- VEC.BINARYBITS vvbop : ({INS (NoEllipses, [t, t]), OUTS (NoEllipses, [t])}, eps)
+  -- if t = VecT $type_vecop<vvbinop>(vvbop)
+
+rule Instr_ok/vec.ternarybits:
+  C_0 irt |- VEC.TERNARYBITS vvterop : ({INS (NoEllipses, [t, t, t]), OUTS (NoEllipses, [t])}, eps)
+  -- if t = VecT $type_vecop<vvternop>(vvterop)
+
+rule Instr_ok/vec.splat:
+  C_0 irt |- VEC.SPLAT vspop : ({INS (NoEllipses, [t_1]), OUTS (NoEllipses, [t_2])}, eps)
+  -- if t_1 = NumT $type_vec_lane<vnsplatop,vnsplatop,vnsplatop,vnsplatop,vnsplatop,vnsplatop>(vspop)
+  -- if t_2 = VecT $type_vecop<vsplatop>(vspop)
+
+rule Instr_ok/vec.extract:
+  C_0 irt |- VEC.EXTRACT vexop : ({INS (NoEllipses, [t_1]), OUTS (NoEllipses, [t_2])}, eps)
+  -- if t_1 = VecT $type_vecop<vextractop>(vexop)
+  -- if t_2 = NumT $type_vec_lane<vnextractop<extension>,vnextractop<extension>,vnextractop<void>,vnextractop<void>,vnextractop<void>,vnextractop<void> >(vexop)
+  -- if $($lane_extractop(vexop) < $num_lanes<vnextractop<extension>,vnextractop<extension>,vnextractop<void>,vnextractop<void>,vnextractop<void>,vnextractop<void> >(vexop))
+
+rule Instr_ok/vec.replace:
+  C_0 irt |- VEC.REPLACE vrepop : ({INS (NoEllipses, [t_1, t_2]), OUTS (NoEllipses, [t_1])}, eps)
+  -- if t_1 = VecT $type_vecop<vreplaceop>(vrepop)
+  -- if t_2 = NumT $type_vec_lane<vnreplaceop,vnreplaceop,vnreplaceop,vnreplaceop,vnreplaceop,vnreplaceop>(vrepop)
+  -- if $($lane_replaceop(vrepop) < $num_lanes<vnreplaceop,vnreplaceop,vnreplaceop,vnreplaceop,vnreplaceop,vnreplaceop>(vrepop))
+
+rule Instrs_ok/empty:
+  C_0 irt |- eps : (irt, eps)
+
+rule Instrs_ok/cons:
+  C_0 irt |- instr_1 :: instr* : (irt', idx'*)
+  -- Instr_ok: C_0 irt |- instr_1 : ({INS irt_1, OUTS irt_2}, idx*)
+  -- if C_1 = $init_locals(C_0, idx*)
+  -- if (ellipses, valtype*) = $push(C_0, irt_2, $pop(C_0, irt_1, irt))
+  -- Instrs_ok: C_1 (ellipses, valtype*) |-  instr* : (irt', idx'*)
+
+rule Block_ok:
+  C_0 (InstrT t_1* t_2* x*) |- instr* : OK
+  -- Instrs_ok: C_0 $stack(t_1*) |- instr* : (irt, x'*)
+  -- if (ellipses, t'*) = $pop(C_0, $stack(t_2*), irt)
+  -- if t'* = eps

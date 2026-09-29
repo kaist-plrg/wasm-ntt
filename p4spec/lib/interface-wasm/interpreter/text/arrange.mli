@@ -11,6 +11,7 @@ val instr : Ast.instr -> sexpr
 val func : Ast.func -> sexpr
 val module_with_var_opt :
   bool -> Script.var option -> Ast.module_ * Custom.section list -> sexpr
+val action : [`Textual | `Binary] -> Script.action -> sexpr
 val module_ : Ast.module_ -> sexpr
 val module_with_custom : Ast.module_ * Custom.section list -> sexpr
 val script : [`Textual | `Binary] -> Script.script -> sexpr list

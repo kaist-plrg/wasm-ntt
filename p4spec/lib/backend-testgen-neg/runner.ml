@@ -56,6 +56,69 @@ let eval_rel_with_dangling_and_vdg ~derive
   in
   (rel_result, read_coverage_dangling (), read_vdg ())
 
+(* One instrumentation session spanning several relation calls.
+
+   [eval_rel_with_dangling_and_vdg] assembles a fresh graph from [root] on every
+   call, so relations run separately share no dependency edges. A phase that
+   observes one relation but depends on values another produced -- an invocation
+   reading a store built during instantiation -- must run both under one session,
+   or backtracking from the observed relation cannot reach the source program. *)
+
+type vdg_session = {
+  graph : Dep.Graph.t option;
+  step : relname:string -> inputs:value list -> Sim.rel_result;
+  set_coverage_enabled : bool -> unit;
+  read_coverage : unit -> DCov_single.t;
+}
+
+(* [vdg] is what makes a session expensive: each graph preallocates its node and
+   edge tables, so building one per mutation candidate costs far more than the
+   candidates themselves. Only seed loading, which backtracks, needs it. *)
+let with_vdg_session ~vdg ~derive ~simulator:(module Simulator : Sim.SIM) ~spec
+    ~root (f : vdg_session -> 'a) : 'a =
+  let (module DH : Inst.Handler.HANDLER), read_coverage, set_coverage_enabled =
+    Inst.Coverage_dangling.make_switchable ()
+  in
+  let dependency =
+    if vdg then
+      let (module VH : Inst.Handler.HANDLER), read_vdg =
+        Inst.Value_dependency.make ~derive ~cache_on:Simulator.Cache.cache_on
+          ~cache_off:Simulator.Cache.cache_off
+      in
+      Some ((module VH : Inst.Handler.HANDLER), read_vdg)
+    else None
+  in
+  let handlers =
+    (module DH : Inst.Handler.HANDLER)
+    :: (match dependency with Some (handler, _) -> [ handler ] | None -> [])
+  in
+  (* The interpreter memoizes relation and function results, keyed by input
+     values. Every candidate supplies fresh values, so nothing is ever reused
+     across candidates and the tables only grow; a campaign evaluates thousands
+     of them. *)
+  Simulator.Interp.clear ();
+  with_instrumentation ~spec handlers (fun () ->
+      let graph =
+        match dependency with
+        | Some (_, read_vdg) ->
+            (* Seeds the mutation target as the graph's source nodes. Runs once:
+               it rebuilds the graph from scratch. *)
+            Inst.Hook.on_program root;
+            Some (read_vdg ())
+        | None -> None
+      in
+      let step ~relname ~inputs =
+        (* add_value_subtree skips values already present, so a store threaded
+           out of an earlier step keeps the taint it accumulated there instead
+           of being re-seeded as a non-source input. *)
+        Option.iter
+          (fun graph ->
+            List.iter (Dep.Graph.add_value_subtree ~taint:false graph) inputs)
+          graph;
+        Simulator.Interp.eval_rel relname inputs
+      in
+      f { graph; step; set_coverage_enabled; read_coverage })
+
 type wasm_program_result =
   | WasmPass of value list
   | WasmFail of [ `Syntax of region * string | `Runtime of region * string ]

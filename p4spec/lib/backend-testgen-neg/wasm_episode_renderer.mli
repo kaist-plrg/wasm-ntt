@@ -3,6 +3,11 @@ val render_validation :
   valid:bool ->
   (string, Wasm_phase.phase_error) result
 
+val render_invocation :
+  episode:Wasm_episode.invocation_episode ->
+  mutated_module:Lang.Il.value ->
+  (string, Wasm_phase.phase_error) result
+
 val render_instantiation :
   episode:Wasm_episode.t ->
   mutated_module:Lang.Il.value ->

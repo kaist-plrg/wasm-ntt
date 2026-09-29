@@ -864,7 +864,7 @@ let wasm_run_testgen_command =
        anon (non_empty_sequence_as_list ("path" %: string))
      and phase =
        flag "-phase" (required wasm_testgen_phase_arg)
-         ~doc:"PHASE validation or instantiation"
+         ~doc:"PHASE validation, instantiation or invocation"
      and fuel = flag "-fuel" (optional int) ~doc:"fuel for test generation"
      and timeout =
        flag "-timeout" (optional int)

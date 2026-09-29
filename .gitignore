@@ -11,6 +11,9 @@ spectec-boot
 gen
 seed
 
+# generated invocation seed corpus (rebuild: scripts/extract_wasm_invocation_return_seeds.py)
+test-invocation-return
+
 # p4spectec testgen scripts
 scripts/__pycache__
 

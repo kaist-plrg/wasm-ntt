@@ -6,6 +6,7 @@ type output_category =
   | ValidationInvalid
   | InitPass
   | InitFail
+  | InvokeStuck
   | CloseMiss
 
 type emission_policy =
@@ -36,3 +37,25 @@ let of_instantiation_result = function
       { coverage = coverage Multi.Likely false; emission = MainArtifact InitFail }
   | Phase.ImportResolutionFailed _ ->
       { coverage = None; emission = DiagnosticOnly }
+
+let of_invocation_result = function
+  (* The invocation ran out of applicable rules: the outcome this phase looks
+     for. Not a close-miss seed, since seeds are programs that return values. *)
+  | Phase.InvokeStuck _ ->
+      { coverage = coverage Multi.Exact false;
+        emission = MainArtifact InvokeStuck }
+  (* The invocation produced an outcome, so the specification was not stuck.
+     Even a new dangling hit here only means a rule the interpreter backtracked
+     out of, which is not what this phase reports. *)
+  | Phase.InvokeReturned _ | Phase.InvokeTrapped _ ->
+      { coverage = None; emission = DiagnosticOnly }
+  (* Rendering an exception outcome needs the sidecar artifact pair that the
+     instantiation phase uses; unsupported here. *)
+  | Phase.InvokeThrown _ -> { coverage = None; emission = DiagnosticOnly }
+  | Phase.TargetRejected _ -> { coverage = None; emission = DiagnosticOnly }
+  | Phase.NotInvoked result -> (
+      match result with
+      | Phase.Instantiated _ ->
+          (* Instantiated but the invocation never ran: a harness-level gap. *)
+          { coverage = None; emission = DiagnosticOnly }
+      | _ -> of_instantiation_result result)

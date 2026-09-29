@@ -211,12 +211,52 @@ let wasm_boot_cold ?(timeout_seed = Config.timeout_seed)
                         (Util.Source.no_region,
                          "candidate policy and Init coverage disagreed") }))
   in
+  let apply_invocation cover filename =
+    match Episode.parse_invocation_file filename with
+    | Error error -> Error { filename; error }
+    | Ok episode -> (
+        match
+          Evaluator.evaluate_invocation_with_dangling_and_vdg ~vdg:false
+            ~derive:false env episode
+            (Episode.invocation_target_value episode)
+        with
+        | Error error -> Error { filename; error }
+        | Ok (result, single, _graph) -> (
+            let { Policy.coverage = policy; emission } =
+              Policy.of_invocation_result result
+            in
+            match (policy, single, emission) with
+            | Some policy, Some single, _ ->
+                Ok
+                  (DCov_multi.extend_with_policy cover filename policy single,
+                   None)
+            (* A seed that returns values contributes its close misses without
+               being an artifact. *)
+            | None, Some single, Policy.DiagnosticOnly ->
+                Ok
+                  (DCov_multi.extend_with_policy cover filename
+                     DCov_multi.{ merge_hits = true;
+                                  hit_confidence = DCov_multi.Exact;
+                                  record_close_misses = true }
+                     single,
+                   None)
+            | None, None, Policy.DiagnosticOnly -> Ok (cover, None)
+            | _ ->
+                Error
+                  { filename;
+                    error =
+                      Phase.HarnessFailure
+                        (Util.Source.no_region,
+                         "candidate policy and Invoke coverage disagreed") }))
+  in
   let apply_file cover filename =
     match phase with
     | Config.Validation ->
         Result.map (fun cover -> (cover, None)) (apply_validation cover filename)
     | Config.Instantiation ->
         apply_with_seed_limit ~timeout_seed cover filename apply_instantiation
+    | Config.Invocation ->
+        apply_with_seed_limit ~timeout_seed cover filename apply_invocation
   in
   let cover, diagnostics, failures =
     fold_wasm_files ~coverage:(init_coverage spec) filenames_wasm apply_file

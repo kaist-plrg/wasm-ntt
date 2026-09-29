@@ -3,6 +3,7 @@ type output_category =
   | ValidationInvalid
   | InitPass
   | InitFail
+  | InvokeStuck
   | CloseMiss
 
 type emission_policy =
@@ -18,3 +19,5 @@ type candidate_policy = {
 val of_validation_result : Wasm_phase.validation_result -> candidate_policy
 
 val of_instantiation_result : Wasm_phase.instantiation_result -> candidate_policy
+
+val of_invocation_result : Wasm_phase.invocation_result -> candidate_policy

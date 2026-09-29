@@ -21,6 +21,7 @@ type invocation_episode = {
   invocation_source_path : string;
   invocation_prefix : source_group list;
   invocation_target_groups : source_group list;
+  invocation_target_module_var : Script.var option;
   invocation_target_entry : Harness.module_entry;
   invocation_suffix : source_group list;
 }
@@ -458,11 +459,17 @@ let parse_invocation_file filename =
                       (fun group -> group.ordinal > driver_group.ordinal)
                       groups
                   in
+                  let invocation_target_module_var =
+                    match module_var_of_command selected.command with
+                    | Some module_var -> module_var
+                    | None -> assert false
+                  in
                   Result.map
                     (fun () ->
                       { invocation_source_path = filename;
                         invocation_prefix;
                         invocation_target_groups;
+                        invocation_target_module_var;
                         invocation_target_entry;
                         invocation_suffix })
                     (validate_invocation_suffix invocation_suffix))))
@@ -487,6 +494,42 @@ let invocation_suffix_commands episode =
   commands_of_groups episode.invocation_suffix
 
 let invocation_target_value episode = episode.invocation_target_entry.value
+
+(* The target's own module command would re-decode the original definition and
+   overwrite the mutated binding, so it is dropped; the instantiation driver
+   that follows resolves the module by name. *)
+let invocation_driver_commands episode =
+  episode.invocation_target_groups
+  |> commands_of_groups
+  |> List.filter (fun (command : Script.command) ->
+         match command.it with Script.Module _ -> false | _ -> true)
+
+(* Every invocation but the last is replayed only to reach the observed one. *)
+let invocation_replayed_commands episode =
+  match List.rev episode.invocation_suffix with
+  | [] -> []
+  | _ :: earlier -> commands_of_groups (List.rev earlier)
+
+(* The observed invocation runs as a bare action. Its assertion states what the
+   unmutated module returned, which a mutated one is not expected to match; the
+   phase judges the invocation by whether the specification can execute it. *)
+let action_of_command (command : Script.command) : Script.command =
+  match command.it with
+  | Script.Assertion assertion -> (
+      match assertion.it with
+      (* AssertTrap appears when re-reading an artifact this phase rendered. *)
+      | Script.AssertReturn (action, _)
+      | Script.AssertTrap (action, _)
+      | Script.AssertExhaustion (action, _)
+      | Script.AssertException action ->
+          { Source.it = Script.Action action; at = command.at }
+      | _ -> command)
+  | _ -> command
+
+let invocation_observed_commands episode =
+  match List.rev episode.invocation_suffix with
+  | observed :: _ -> List.map action_of_command observed.commands
+  | [] -> []
 
 let mutation_root mutated_module =
   Wasm_interface.Construct.il_of_list "module" (fun value -> value) [ mutated_module ]
@@ -525,6 +568,30 @@ let prepare runtime episode mutated_target =
       | Ok entry ->
           Ok
             ( Harness.bind_module_entry state (target_module_var episode) entry,
+              entry )
+    with
+    | Util.Error.InterpError (at, message) ->
+        Error (Phase.EpisodeError (at, message)))
+
+let prepare_invocation runtime episode mutated_target =
+  if Inst.Hook.is_active () then
+    Error
+      (Phase.HarnessFailure
+         (Util.Source.no_region,
+          "instrumentation handler leaked from an earlier run"))
+  else (
+    Wasm_interface.Builtin_hooks.init ();
+    try
+      let state =
+        Harness.run_commands runtime (Harness.initial_state ())
+          (invocation_prefix_commands episode)
+      in
+      match module_entry_of_value mutated_target with
+      | Error _ as error -> error
+      | Ok entry ->
+          Ok
+            ( Harness.bind_module_entry state
+                episode.invocation_target_module_var entry,
               entry )
     with
     | Util.Error.InterpError (at, message) ->

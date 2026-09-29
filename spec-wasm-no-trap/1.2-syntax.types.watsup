@@ -1,0 +1,335 @@
+;;
+;; Syntax of Types
+;;
+
+syntax null = NoNull | Null
+syntax mut = Cons | Var
+syntax init = Set | Unset
+syntax final = Final | NoFinal
+syntax limits = {MIN u64, MAX u64?}
+syntax range = u64
+
+syntax typevar hint(concrete "typevarConcrete") =
+  | StatX typeidx | RecX nat
+
+syntax typevarConcrete =
+  | StatX typeidx
+
+syntax addrtype =
+  | I32AT | I64AT
+
+syntax numtype =
+  | I32T | I64T | F32T | F64T
+
+syntax vectype =
+  | V128T
+
+syntax deftype
+syntax heaptypeVar = VarHT typevar
+syntax heaptype hint(concrete "heaptypeConcrete") =
+  | AnyHT | NoneHT | EqHT | I31HT | StructHT | ArrayHT
+  | FuncHT | NoFuncHT
+  | ExnHT | NoExnHT
+  | ExternHT | NoExternHT
+  | heaptypeVar
+  | DefHT deftype
+  | BotHT
+syntax heaptypeConcrete =
+  | AnyHT | NoneHT | EqHT | I31HT | StructHT | ArrayHT
+  | FuncHT | NoFuncHT
+  | ExnHT | NoExnHT
+  | ExternHT | NoExternHT
+  | heaptypeVar
+
+syntax reftype = null heaptype
+
+syntax valtype hint(concrete "valtypeConcrete") =
+  | NumT numtype | VecT vectype | RefT reftype | BotT
+syntax valtypeConcrete =
+  | NumT numtype | VecT vectype | RefT reftype
+
+syntax resulttype = valtype*
+
+
+syntax instrtype = InstrT resulttype resulttype localidx*
+
+syntax packtype = I8 | I16 | I32 | I64
+syntax extension = SX | ZX
+
+syntax packshape = Pack8x8 | Pack16x4 | Pack32x2
+syntax vextension =
+  | ExtLane packshape extension
+  | ExtSplat
+  | ExtZero
+
+syntax storagetype =
+  | ValStorageT valtype
+  | PackStorageT packtype
+
+syntax fieldtype = FieldT mut storagetype
+
+syntax structtype = StructT fieldtype*
+
+syntax arraytype = ArrayT fieldtype
+
+syntax functype = FuncT resulttype resulttype
+
+syntax strtype =
+  | DefStructT structtype
+  | DefArrayT arraytype
+  | DefFuncT functype
+
+syntax subtype hint(concrete "subtypeConcrete") = SubT final heaptype* strtype
+syntax subtypeConcrete = SubT final heaptypeVar* strtype
+syntax rectype
+syntax rectype = RecT subtype*
+syntax deftype hint(concrete "deftypeConcrete") = DefT rectype n
+syntax deftypeConcrete = typevar
+
+syntax tabletype = TableT addrtype limits reftype
+syntax memtype = MemoryT addrtype limits
+syntax globaltype = GlobalT mut valtype
+syntax tagtype = TagT deftype
+syntax localtype = LocalT init valtype
+syntax elemtype = reftype
+syntax datatype = OK
+
+syntax externtype =
+  | ExtFunct deftype
+  | ExtTableT tabletype
+  | ExtMemoryT memtype
+  | ExtGlobalT globaltype
+  | ExtTagT tagtype
+
+syntax exporttype = ExportT externtype name
+syntax importtype = ImportT externtype name name
+syntax moduletype = ModuleT importtype* exporttype*
+
+syntax Inn = I32 | I64
+syntax Fnn = F32 | F64
+syntax Vnn = V128
+syntax Cnn = Inn | Fnn | Vnn
+
+syntax Pnn = I8 | I16
+syntax Jnn = Inn | Pnn
+syntax Lnn = Inn | Fnn | Pnn
+
+;; Meta variables
+
+var lim : limits
+var fin : final
+
+var t : valtype
+var at : addrtype
+var arrt : arraytype
+;; var bt : blocktype  ;; defined below
+var dt : deftype
+var ft : functype
+var gt : globaltype
+var ht : heaptype
+;; var it : instrtype  ;; defined in typing
+var jt : tagtype
+;; var kt : conttype   ;; future extension
+var mt : memtype
+var nt : numtype
+var pt : packtype
+var rt : reftype
+var rect : rectype
+var st : subtype
+var strctt : structtype
+var strt : strtype
+var tt : tabletype
+var vt : vectype
+var xt : externtype
+var yt : fieldtype
+var zt : storagetype
+var rest : resulttype
+
+var tv : typevar
+
+;; Substitution
+
+dec $subst_rectype<X>(X, def $s(typevar, X) : heaptype, rectype) : rectype
+dec $subst_subtype<X>(X, def $s(typevar, X) : heaptype, subtype) : subtype
+dec $subst_heaptype<X>(X, def $s(typevar, X) : heaptype, heaptype) : heaptype
+dec $subst_strtype<X>(X, def $s(typevar, X) : heaptype, strtype) : strtype
+dec $subst_structtype<X>(X, def $s(typevar, X) : heaptype, structtype) : structtype
+dec $subst_arraytype<X>(X, def $s(typevar, X) : heaptype, arraytype) : arraytype
+dec $subst_functype<X>(X, def $s(typevar, X) : heaptype, functype) : functype
+dec $subst_resulttype<X>(X, def $s(typevar, X) : heaptype, resulttype) : resulttype
+dec $subst_valtype<X>(X, def $s(typevar, X) : heaptype, valtype) : valtype
+dec $subst_reftype<X>(X, def $s(typevar, X) : heaptype, reftype) : reftype
+dec $subst_storagetype<X>(X, def $s(typevar, X) : heaptype, storagetype) : storagetype
+dec $subst_fieldtype<X>(X, def $s(typevar, X) : heaptype, fieldtype) : fieldtype
+dec $subst_deftype<X>(X, def $s(typevar, X) : heaptype, deftype) : deftype
+
+dec $s_roll(typevar, (typeidx, typeidx)) : heaptype
+def $s_roll(tv, (x, y)) = VarHT (RecX x'')
+  -- if tv = StatX x'
+  -- if $(x <= x') /\ $(x' < y)
+  -- if x'' = $(x' - x)
+def $s_roll(tv, (x, y)) = VarHT tv
+  -- otherwise
+
+dec $s_unroll(typevar, rectype) : heaptype
+def $s_unroll(tv, rect) = DefHT (DefT rect n)
+  -- if tv = RecX n
+def $s_unroll(tv, rect) = VarHT tv
+  -- otherwise
+
+def $subst_rectype<X>(X, def $s, rect) = RecT st'*
+  -- if RecT st* = rect
+  -- if (st' = $subst_subtype<X>(X, def $s, st))*
+
+def $subst_subtype<X>(X, def $s, st) = SubT fin ht'* strt'
+  -- if SubT fin ht* strt = st
+  -- if (ht' = $subst_heaptype<X>(X, def $s, ht))*
+  -- if strt' = $subst_strtype<X>(X, def $s, strt)
+
+def $subst_heaptype<X>(X, def $s, ht) = ht
+  -- if ht = AnyHT \/ ht = NoneHT \/ ht = EqHT \/
+        ht = I31HT \/ ht = StructHT \/ ht = ArrayHT \/
+        ht = FuncHT \/ ht = NoFuncHT \/ ht = ExnHT \/
+        ht = NoExnHT \/ ht = ExternHT \/ ht = NoExternHT \/
+        ht = BotHT
+def $subst_heaptype<X>(X, def $s, ht) = $s(tv, X)
+  -- if ht = VarHT tv
+def $subst_heaptype<X>(X, def $s, ht) = DefHT dt
+  -- if ht = DefHT dt
+
+def $subst_strtype<X>(X, def $s, strt) = DefStructT structtype'
+  -- if strt = DefStructT structtype
+  -- if structtype' = $subst_structtype<X>(X, def $s, structtype)
+def $subst_strtype<X>(X, def $s, strt) = DefArrayT arraytype'
+  -- if strt = DefArrayT arraytype
+  -- if arraytype' = $subst_arraytype<X>(X, def $s, arraytype)
+def $subst_strtype<X>(X, def $s, strt) = DefFuncT functype'
+  -- if strt = DefFuncT functype
+  -- if functype' = $subst_functype<X>(X, def $s, functype)
+
+def $subst_storagetype<X>(X, def $s, ValStorageT t) = ValStorageT t'
+  -- if t' = $subst_valtype<X>(X, def $s, t)
+def $subst_storagetype<X>(X, def $s, PackStorageT pt) = PackStorageT pt
+
+def $subst_fieldtype<X>(X, def $s, FieldT mut zt) = FieldT mut zt'
+  -- if zt' = $subst_storagetype<X>(X, def $s, zt)
+
+def $subst_structtype<X>(X, def $s, (StructT yt*)) = StructT yt'*
+  -- if (yt' = $subst_fieldtype<X>(X, def $s, yt))*
+
+def $subst_arraytype<X>(X, def $s, (ArrayT yt)) = ArrayT yt'
+  -- if yt' = $subst_fieldtype<X>(X, def $s, yt)
+
+def $subst_functype<X>(X, def $s, FuncT resulttype_1 resulttype_2) = FuncT resulttype_1' resulttype_2'
+  -- if resulttype_1' = $subst_resulttype<X>(X, def $s, resulttype_1)
+  -- if resulttype_2' = $subst_resulttype<X>(X, def $s, resulttype_2)
+
+def $subst_resulttype<X>(X, def $s, t*) = t'*
+  -- if (t' = $subst_valtype<X>(X, def $s, t))*
+
+def $subst_valtype<X>(X, def $s, t) = NumT nt
+  -- if t = NumT nt
+def $subst_valtype<X>(X, def $s, t) = VecT vt
+  -- if t = VecT vt
+def $subst_valtype<X>(X, def $s, t) = RefT rt'
+  -- if t = RefT rt
+  -- if rt' = $subst_reftype<X>(X, def $s, rt)
+def $subst_valtype<X>(X, def $s, t) = BotT
+  -- if t = BotT
+
+def $subst_reftype<X>(X, def $s, null ht) = null ht'
+  -- if ht' = $subst_heaptype<X>(X, def $s, ht)
+
+def $subst_deftype<X>(X, def $s, DefT rect n) = DefT rect' n
+  -- if rect' = $subst_rectype<X>(X, def $s, rect)
+
+;; Rolling & unrolling
+
+dec $rollrt(typeidx, rectype) : rectype
+dec $unrollrt(rectype) : rectype
+dec $rolldt(typeidx, rectype) : deftype*
+dec $unrolldt(deftype) : subtype
+dec $expanddt(deftype) : strtype
+
+def $rollrt(x, rect) = $subst_rectype<(nat, nat)>((x, y), def $s_roll, rect)
+  -- if RecT st* = rect
+  -- if y = $(|st*| + x)
+
+dec $rolldt'(nat, rectype) : deftype*
+def $rolldt'(i, rect) = (DefT rect i) :: $rolldt'($(i + 1), rect)
+  -- if RecT st* = rect
+  -- if $(i < |st*|)
+def $rolldt'(i, rect) = eps
+  -- otherwise
+
+def $rolldt(x, rect) = $rolldt'(0, rect')
+  -- if rect' = $rollrt(x, rect)
+
+def $unrollrt(rect) = $subst_rectype<rectype>(rect, def $s_unroll, rect)
+
+def $unrolldt(dt) = st*[n]
+  -- if DefT rect n = dt
+  -- if RecT st* = $unrollrt(rect)
+
+def $expanddt(dt) = strt
+  -- if SubT _ _ strt = $unrolldt(dt)
+
+dec $numtype_of_addrtype(addrtype) : numtype
+def $numtype_of_addrtype(I32AT) = I32T
+def $numtype_of_addrtype(I64AT) = I64T
+
+dec $functype_of_strtype(strtype) : functype
+def $functype_of_strtype(DefFuncT ft) = ft
+
+dec $min_addrtype(addrtype, addrtype) : addrtype
+def $min_addrtype(at_1, at_2) = I64AT
+  -- if at_1 = I64AT /\ at_2 = I64AT
+def $min_addrtype(at_1, at_2) = I32AT -- otherwise
+
+dec $num_size(numtype) : int
+def $num_size(nt) = 4
+  -- if nt = I32T \/ nt = F32T
+def $num_size(nt) = 8
+  -- if nt = I64T \/ nt = F64T
+
+dec $vec_size(vectype) : int
+def $vec_size(V128T) = 16
+
+dec $pack_size(packtype) : int
+def $pack_size(I8) = 1
+def $pack_size(I16) = 2
+def $pack_size(I32) = 4
+def $pack_size(I64) = 8
+
+dec $unpacked_storage_type(storagetype) : valtype
+def $unpacked_storage_type(ValStorageT t) = t
+def $unpacked_storage_type(PackStorageT pt) = NumT I32T
+
+dec $unpacked_field_type(fieldtype) : valtype
+def $unpacked_field_type(FieldT mut zt) = $unpacked_storage_type(zt)
+
+dec $is_num_type(valtype) : bool
+def $is_num_type(NumT _) = true
+def $is_num_type(BotT) = true
+def $is_num_type(t) = false
+  -- otherwise
+
+dec $is_vec_type(valtype) : bool
+def $is_vec_type(VecT _) = true
+def $is_vec_type(BotT) = true
+def $is_vec_type(t) = false
+  -- otherwise
+
+dec $is_packed_storage_type(storagetype) : bool
+def $is_packed_storage_type(ValStorageT _) = false
+def $is_packed_storage_type(PackStorageT _) = true
+
+dec $diff_reftype(reftype, reftype) : reftype
+def $diff_reftype(null_1 ht_1, Null ht_2) = (NoNull ht_1)
+def $diff_reftype(null_1 ht_1, NoNull ht_2) = (null_1 ht_1)
+
+dec $defaultable(valtype) : bool
+def $defaultable(NumT nt) = true
+def $defaultable(VecT vt) = true
+def $defaultable(RefT (null ht)) = (null = Null)
+def $defaultable(BotT) = false

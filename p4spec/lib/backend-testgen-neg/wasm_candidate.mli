@@ -4,10 +4,12 @@ module Dep = Runtime.Testgen_neg.Dep
 type seed =
   | ValidationSeed of Wasm_interface.Parse.expectation
   | InstantiationSeed of Wasm_episode.t
+  | InvocationSeed of Wasm_episode.invocation_episode
 
 type semantic_result =
   | ValidationResult of Wasm_phase.validation_result
   | InstantiationResult of Wasm_phase.instantiation_result
+  | InvocationResult of Wasm_phase.invocation_result
 
 type observation = {
   semantic : semantic_result;
