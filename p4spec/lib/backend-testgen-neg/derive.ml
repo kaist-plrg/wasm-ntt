@@ -85,8 +85,13 @@ let derive_dangling (iid : iid) (vdg : Dep.Graph.t) (cover : DCov_single.t) :
          let vids_visited, depths_visited = derive_vid vdg vid_related in
          vids_visited
          |> VIdSet.filter (fun vid ->
-                vid |> Dep.Graph.G.find vdg.nodes |> Dep.Node.taint
-                |> Dep.Node.is_source)
+                (* An edge can reach a value that was never registered as a
+                   node: on_value records a compound value without descending
+                   into it. Such a value is never a source, since every source
+                   is added when the program is planted. *)
+                match Dep.Graph.find_node vdg vid with
+                | Some node -> node |> Dep.Node.taint |> Dep.Node.is_source
+                | None -> false)
          |> VIdSet.elements
          |> List.map (fun vid ->
                 let depth = VIdMap.find vid depths_visited in
