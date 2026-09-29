@@ -1,1 +1,1 @@
-(module (import "test" "memory64-2-inf" (memory i64 0)))
+(module (import "spectest" "memory" (memory 0 3)))

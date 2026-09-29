@@ -1,5 +1,5 @@
 (module
-  (memory 1  )
+  (memory 1 1 )
   (data "\42\42\42\42\42\42\42\42\42\42\42\42\42\42\42\42")
    
   (func (export "checkRange") (param $from i32) (param $to i32) (param $expected i32) (result i32)

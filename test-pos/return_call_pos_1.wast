@@ -89,4 +89,9 @@
   (func (export "type-f64-i64-to-i32-f32") (param f64 i64) (result i32 f32)
     (return_call $swizzle (local.get 0) (local.get 1))
   )
+
+  ;; Result subtyping
+  (type $t (func))
+  (func $f (result (ref null $t)) (ref.null $t))
+  (func (export "type-funcref") (result funcref) (return_call $f))
 )

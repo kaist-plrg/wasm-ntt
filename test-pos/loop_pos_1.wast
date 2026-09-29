@@ -423,4 +423,15 @@
     )
     (drop) (drop) (drop)
   )
+
+  (func (export "br-implicit-drop") (result i32)
+    (local $i i32)
+    (i32.const 1)
+    (loop $loop
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (i32.const 2)
+      (br_if $loop (i32.lt_s (local.get $i) (i32.const 10)))
+      (drop)
+    )
+  )
 )

@@ -1,1 +1,1 @@
-(module (import "test" "global-mut-i64" (global (mut i64))))
+(module (import "test" "func-i64->i64" (func (param i64) (result i64))))

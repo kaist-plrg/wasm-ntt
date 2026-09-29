@@ -1,0 +1,1 @@
+(module (import "test-table64-10-inf" "table64-10-inf" (table $tab64 i64 10 funcref)))

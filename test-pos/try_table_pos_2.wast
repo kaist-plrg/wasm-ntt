@@ -244,4 +244,28 @@
   (func (export "try-with-param")
     (i32.const 0) (try_table (param i32) (drop))
   )
+
+  (func (export "duplicated-catches") (result i32)
+    (block
+      (block
+        (try_table (catch $e0 0) (catch $e0 1)
+          (throw $e0)
+        )
+      )
+      (return (i32.const 2))
+    )
+    (return (i32.const 3))
+  )
+
+  (func (export "catch-all-before-catch") (result i32)
+    (block
+      (block
+        (try_table (catch_all 0) (catch $e0 1)
+          (throw $e0)
+        )
+      )
+      (return (i32.const 2))
+    )
+    (return (i32.const 3))
+  )
 )

@@ -1,6 +1,6 @@
 (module
   (type (func (result i32)))
-  (table 160 320 funcref)
+  (table 32 64 funcref)
   (elem funcref
     (ref.func $f0) (ref.func $f1) (ref.func $f2) (ref.func $f3)
     (ref.func $f4) (ref.func $f5) (ref.func $f6) (ref.func $f7)

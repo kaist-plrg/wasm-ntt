@@ -1,4 +1,5 @@
-(module $M
-  (rec (type $f1 (func)) (type (struct)))
-  (func (export "f") (type $f1))
+(module
+  (rec (type $ft (func)))
+  (func $f)  ;; the implicit type of $f is $ft
+  (global (ref $ft) (ref.func $f))
 )

@@ -1,20 +1,3 @@
-(module quote
-  "(func (export \"f1\") (result i32)"
-  "  (i32.const 1)"
-  "  ;; comment\0a"
-  "  (return (i32.const 2))"
-  "\0a"
-  ")"
-  "(func (export \"f2\") (result i32)"
-  "  (i32.const 1)"
-  "  ;; comment\0d"
-  "  (return (i32.const 2))"
-  "\0a"
-  ")"
-  "(func (export \"f3\") (result i32)"
-  "  (i32.const 1)"
-  "  ;; comment\0d\0a"
-  "  (return (i32.const 2))"
-  "\0a"
-  ")"
+(module
+  (;comment;;comment(;nested;)comment;)
 )

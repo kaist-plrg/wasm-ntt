@@ -1,1 +1,1 @@
-(module (import "test" "table-10-inf" (table 10 funcref)))
+(module (import "test" "global-mut-i64" (global (mut i64))))

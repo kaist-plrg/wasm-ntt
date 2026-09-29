@@ -1,0 +1,10 @@
+(module
+  (memory (data "\AB"))
+  (data $d "\CD")
+  (func (export "init")
+    (memory.init $d (i32.const 0) (i32.const 0) (i32.const 1))
+  )
+  (func (export "load") (result i32)
+    (i32.load8_u (i32.const 0))
+  )
+)

@@ -83,6 +83,18 @@
     (i32.load $mem1 offset=25 align=4 (local.get $i))             ;; 122 'z\0\0\0'
   )
 
+  (func (export "8u_bad") (param $i i32)
+    (drop (i32.load8_u $mem1 offset=4294967295 (local.get $i)))
+  )
+  (func (export "8s_bad") (param $i i32)
+    (drop (i32.load8_s $mem1 offset=4294967295 (local.get $i)))
+  )
+  (func (export "16u_bad") (param $i i32)
+    (drop (i32.load16_u $mem1 offset=4294967295 (local.get $i)))
+  )
+  (func (export "16s_bad") (param $i i32)
+    (drop (i32.load16_s $mem1 offset=4294967295 (local.get $i)))
+  )
   (func (export "32_bad") (param $i i32)
     (drop (i32.load $mem1 offset=4294967295 (local.get $i)))
   )

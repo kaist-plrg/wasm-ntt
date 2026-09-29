@@ -1,6 +1,17 @@
 (module
-  (rec (type $f1 (func)) (type (struct (field (ref $f1)))))
-  (rec (type $f2 (func)) (type (struct (field (ref $f2)))))
-  (func $f (type $f2))
-  (global (ref $f1) (ref.func $f))
+  (type (func (param (ref 0)) (result (ref 0))))
+  (rec
+    (type (func (param (ref 2))))
+    (type (func (result (ref 1))))
+  )
+
+  (rec)
+  (rec (type (func)))
+  (rec (type $t (func)))
+  (rec (type $t1 (func)) (type (func)) (type $t2 (func)))
+  (rec (type $g (func (param (ref $g)) (result (ref $g)))))
+  (rec
+    (type $h (func (param (ref $k))))
+    (type $k (func (result (ref $h))))
+  )
 )

@@ -1,6 +1,6 @@
 (module
   (type (func (result i32)))
-  (table 16 16 funcref)
+  (table 160 320 funcref)
   (elem funcref
     (ref.func $f0) (ref.func $f1) (ref.func $f2) (ref.func $f3)
     (ref.func $f4) (ref.func $f5) (ref.func $f6) (ref.func $f7)
@@ -25,4 +25,4 @@
   (func (export "test") (param $n i32) (result i32)
     (call_indirect (type 0) (local.get $n)))
   (func (export "run") (param $offs i32) (param $len i32)
-    (table.init 0 (local.get $offs) (i32.const 8) (local.get $len))))
+    (table.init 0 (local.get $offs) (i32.const 0) (local.get $len))))

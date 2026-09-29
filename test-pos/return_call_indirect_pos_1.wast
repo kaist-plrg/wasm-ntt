@@ -232,4 +232,12 @@
   (func (export "call_mpmr") (param f64 i64) (result i32 f32)
     (return_call_indirect $tab4 (param f64 i64) (result i32 f32) (local.get 0) (local.get 1) (i32.const 1))
   )
+
+  ;; Result subtyping
+  (type $t (func))
+  (func $f (result (ref null $t)) (ref.null $t))
+  (table $tab5 funcref (elem $f))
+  (func (export "type-funcref") (result funcref)
+    (return_call_indirect $tab5 (result (ref null $t)) (i32.const 0))
+  )
 )

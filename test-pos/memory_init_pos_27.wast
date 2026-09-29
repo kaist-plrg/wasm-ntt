@@ -1,10 +1,17 @@
 (module
-  (memory (export "memory0") i64 1 1)
-  (data (i64.const 2) "\03\01\04\01")
-  (data "\02\07\01\08")
-  (data (i64.const 12) "\07\05\02\03\06")
-  (data "\05\09\02\07\06")
-  (func (export "test")
-    (memory.init 3 (i64.const 15) (i32.const 1) (i32.const 3)))
-  (func (export "load8_u") (param i64) (result i32)
-    (i32.load8_u (local.get 0))))
+  (memory 1  )
+  (data "\42\42\42\42\42\42\42\42\42\42\42\42\42\42\42\42")
+   
+  (func (export "checkRange") (param $from i32) (param $to i32) (param $expected i32) (result i32)
+    (loop $cont
+      (if (i32.eq (local.get $from) (local.get $to))
+        (then
+          (return (i32.const -1))))
+      (if (i32.eq (i32.load8_u (local.get $from)) (local.get $expected))
+        (then
+          (local.set $from (i32.add (local.get $from) (i32.const 1)))
+          (br $cont))))
+    (return (local.get $from)))
+
+  (func (export "run") (param $offs i32) (param $len i32)
+    (memory.init 0 (local.get $offs) (i32.const 0) (local.get $len))))

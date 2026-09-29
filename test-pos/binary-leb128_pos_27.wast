@@ -1,19 +1,8 @@
 (module binary
   "\00asm" "\01\00\00\00"
-  "\01\04\01"                          ;; type section
-  "\60\00\00"                          ;; empty function type
-  "\03\02\01"                          ;; function section
-  "\00"                                ;; function 0, type 0
-  "\0a\1b\01\19"                       ;; code section
-  "\00"                                ;; no locals
-  "\00"                                ;; unreachable
-  "\fc\80\00"                          ;; i32_trunc_sat_f32_s with 2 bytes
-  "\00"                                ;; unreachable
-  "\fc\81\80\00"                       ;; i32_trunc_sat_f32_u with 3 bytes
-  "\00"                                ;; unreachable
-  "\fc\86\80\80\00"                    ;; i64_trunc_sat_f64_s with 4 bytes
-  "\00"                                ;; unreachable
-  "\fc\87\80\80\80\00"                 ;; i64_trunc_sat_f64_u with 5 bytes
-  "\00"                                ;; unreachable
-  "\0b"                                ;; end
+  "\05\03\01"                          ;; Memory section with 1 entry
+  "\00\00"                             ;; no max, minimum 0
+  "\0b\07\01"                          ;; Data section with 1 entry
+  "\80\00"                             ;; Active segment, encoded with 2 bytes
+  "\41\00\0b\00"                       ;; (i32.const 0) with contents ""
 )

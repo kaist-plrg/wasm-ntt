@@ -1,0 +1,27 @@
+(module
+  (table $t2 i64 1 externref)
+  (table $t3 i64 2 funcref)
+  (elem (table $t3) (i64.const 1) func $dummy)
+  (func $dummy)
+
+  (func (export "get-externref") (param $i i64) (result externref)
+    (table.get $t2 (local.get $i))
+  )
+  (func $f3 (export "get-funcref") (param $i i64) (result funcref)
+    (table.get $t3 (local.get $i))
+  )
+
+  (func (export "set-externref") (param $i i64) (param $r externref)
+    (table.set (local.get $i) (local.get $r))
+  )
+  (func (export "set-funcref") (param $i i64) (param $r funcref)
+    (table.set $t3 (local.get $i) (local.get $r))
+  )
+  (func (export "set-funcref-from") (param $i i64) (param $j i64)
+    (table.set $t3 (local.get $i) (table.get $t3 (local.get $j)))
+  )
+
+  (func (export "is_null-funcref") (param $i i64) (result i32)
+    (ref.is_null (call $f3 (local.get $i)))
+  )
+)

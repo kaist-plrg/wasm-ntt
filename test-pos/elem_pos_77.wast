@@ -1,0 +1,12 @@
+(module
+  (func $f (result i32) i32.const 0xAB)
+  (func $g (result i32) i32.const 0xCD)
+  (table funcref (elem (ref.func $f)))
+  (elem $e funcref (ref.func $g))
+  (func (export "init")
+    (table.init $e (i32.const 0) (i32.const 0) (i32.const 1))
+  )
+  (func (export "run") (result i32)
+    (call_indirect (result i32) (i32.const 0))
+  )
+)

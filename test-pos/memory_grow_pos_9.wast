@@ -1,5 +1,4 @@
-(module $Mgim1
-  ;; imported memory limits should match, because external memory size is 2 now
-  (memory (export "memory") (import "grown-memory" "memory") 2)
-  (func (export "grow") (result i32) (memory.grow (i32.const 1)))
+(module
+  (memory (export "mem1") 2 5)
+  (memory (export "mem2") 0)
 )
