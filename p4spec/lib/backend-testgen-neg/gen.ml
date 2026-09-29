@@ -1476,16 +1476,17 @@ let wasm_fuzzer_init ?(switches : Mutate.switches = Mutate.all_on)
     (match budget with
     | Config.WasmFuel fuel -> F.asprintf " -fuel %d" fuel
     | Config.WasmTimeout timeout -> F.asprintf " -timeout %d" timeout)
-    (let enabled = Mutate.enabled_kind_names switches in
-     [ "GenFromTyp"; "MutateList"; "MixopGroup"; "MutateTableRefType";
-       "Splicing:memory"; "Splicing:table"; "Splicing:global" ]
-     |> List.filter (fun name -> not (List.mem name enabled))
+    (Mutate.disabled_kind_names switches
      |> List.map (fun name -> " -disable-mutation " ^ name)
      |> String.concat "")
   |> Logger.log modes.logmode log_init;
+  let names = function [] -> "none" | names -> String.concat " " names in
   F.asprintf "[MUTATION] enabled: %s (splice probability %.2f)"
-    (String.concat " " (Mutate.enabled_kind_names switches))
+    (names (Mutate.enabled_kind_names switches))
     Config.splice_probability
+  |> Logger.log modes.logmode log_init;
+  F.asprintf "[MUTATION] disabled: %s"
+    (names (Mutate.disabled_kind_names switches))
   |> Logger.log modes.logmode log_init;
   "Loading type definitions from the spec file"
   |> Logger.log modes.logmode log_init;
@@ -1652,6 +1653,14 @@ let wasm_fuzzer_init ?(switches : Mutate.switches = Mutate.all_on)
     Mutate.
       { switches; fragments; splice_probability = Config.splice_probability }
   in
+  (* The switches alone can overstate splicing: an enabled component with no
+     harvested fragment never splices *)
+  F.asprintf "[MUTATION] splicing in effect: %s"
+    (Mutate.active_splice_components mutation
+    |> List.map (fun component ->
+           "Splicing:" ^ Mutate.string_of_component component)
+    |> names)
+  |> Logger.log modes.logmode log_init;
   Logger.close log_init;
   Config.initw ~focus ~mutation randseed modes specenv storage seed
 

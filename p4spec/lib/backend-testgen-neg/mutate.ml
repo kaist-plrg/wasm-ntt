@@ -105,7 +105,8 @@ let switches_of_disabled (names : string list) : (switches, string) result =
     (fun switches name -> Result.bind switches (fun s -> disable_mutation s name))
     (Ok all_on) names
 
-let enabled_kind_names (switches : switches) : string list =
+(* Every individual mutation kind with its switch, in a fixed order *)
+let kind_switches (switches : switches) : (bool * string) list =
   [
     (switches.gen_from_typ, "GenFromTyp");
     (switches.mutate_list, "MutateList");
@@ -115,7 +116,14 @@ let enabled_kind_names (switches : switches) : string list =
     (switches.splice_table, "Splicing:table");
     (switches.splice_global, "Splicing:global");
   ]
+
+let enabled_kind_names (switches : switches) : string list =
+  kind_switches switches
   |> List.filter_map (fun (on, name) -> if on then Some name else None)
+
+let disabled_kind_names (switches : switches) : string list =
+  kind_switches switches
+  |> List.filter_map (fun (on, name) -> if on then None else Some name)
 
 (* Option monad *)
 
@@ -1388,6 +1396,15 @@ let default_options =
 
 let splice_active (options : options) : bool =
   List.exists
+    (fun component ->
+      splice_enabled options.switches component
+      && Array.length (shapes_of options.fragments component) > 0)
+    components
+
+(* Components that can actually be spliced: enabled and with fragments. A
+   switch can be on while its component stays idle, e.g. under warm boot. *)
+let active_splice_components (options : options) : component list =
+  List.filter
     (fun component ->
       splice_enabled options.switches component
       && Array.length (shapes_of options.fragments component) > 0)
