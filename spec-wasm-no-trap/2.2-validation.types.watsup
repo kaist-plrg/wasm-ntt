@@ -149,12 +149,16 @@ rule Subtype_sub_ok':
   -- if SubT fin _ strt' = $unrolldt(C_0.TYPES[x'])
   -- if $(x' < x) /\ (fin = NoFinal) /\ $match_strtype(C_0.TYPES, strt, strt')
 
+;; Rolled types are closed over the earlier (already closed) context types
+;; before they enter the context, as check_rectype in the reference
+;; interpreter does, so equivalent types compare equal at any depth.
 rule Rectype_ok:
   C_0 |- rectype : C_1
   -- if RecT st* = rectype
   -- if x = |C_0.TYPES|
   -- if n* = $range(|st*|)
-  -- if dt* = $rolldt(x, rectype)
+  -- if dt_rolled* = $rolldt(x, rectype)
+  -- if dt* = ($subst_deftype<deftype*>(C_0.TYPES, def $subst_of, dt_rolled))*
   -- if C_1 = C_0[ .TYPES = C_0.TYPES ++ dt* ]
   -- (Subtype_ok: C_1 |- st : OK)*
   -- (Subtype_sub_ok: C_1 $(x+n) |- st : OK)*
