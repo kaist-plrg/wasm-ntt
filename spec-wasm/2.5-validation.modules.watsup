@@ -115,7 +115,7 @@ rule Func_ok:
   -- if C_1 = C_0[ .FUNCS = C_0.FUNCS ++ [C_0.TYPES[x]] ]
 
 dec $is_const(context, instr) : bool
-def $is_const(C, instr) = true ;; (TODO) complete this function
+def $is_const(C, instr) = true
   -- if instr <- [BINOP (I32 IAdd), BINOP (I32 ISub), BINOP (I32 IMul),
                   BINOP (I64 IAdd), BINOP (I64 ISub), BINOP (I64 IMul)]
 def $is_const(C, CONST _) = true
@@ -126,6 +126,7 @@ def $is_const(C, REF.I31) = true
 def $is_const(C, STRUCT.NEW _ _) = true
 def $is_const(C, ARRAY.NEW _ _) = true
 def $is_const(C, ARRAY.NEW_FIXED _ _) = true
+def $is_const(C, EXTERN.CONVERT _) = true
 def $is_const(C, GLOBAL.GET x) = true
   -- if GlobalT mut t = C.GLOBALS[x]
   -- if mut = Cons
