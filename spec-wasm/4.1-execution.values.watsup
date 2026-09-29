@@ -14,6 +14,24 @@ def $default_value(RefT (Null ht)) = RefV (NullRef ht)
 def $default_value(RefT (NoNull _)) = eps
 def $default_value(BotT) = eps
 
+;; Bottom heap types, the type of a null reference
+
+dec $bot_of_str_type(strtype) : heaptype
+def $bot_of_str_type(DefStructT _) = NoneHT
+def $bot_of_str_type(DefArrayT _) = NoneHT
+def $bot_of_str_type(DefFuncT _) = NoFuncHT
+
+dec $bot_of_heap_type(heaptype) : heaptype
+def $bot_of_heap_type(ht) = NoneHT
+  -- if ht <- [ AnyHT, NoneHT, EqHT, StructHT, ArrayHT, I31HT ]
+def $bot_of_heap_type(ht) = NoFuncHT
+  -- if ht <- [ FuncHT, NoFuncHT ]
+def $bot_of_heap_type(ht) = NoExnHT
+  -- if ht <- [ ExnHT, NoExnHT ]
+def $bot_of_heap_type(ht) = NoExternHT
+  -- if ht <- [ ExternHT, NoExternHT ]
+def $bot_of_heap_type(DefHT dt') = $bot_of_str_type($expanddt(dt'))
+
 ;; Value typing
 
 relation Num_ok: store |- num_ : numtype
