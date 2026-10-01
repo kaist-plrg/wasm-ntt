@@ -18,6 +18,15 @@ open Util.Source
 
 exception Timeout
 
+(* A candidate timer shares SIGALRM with the per-seed timer. While it is armed
+   the alarm handler raises [Candidate_timeout] instead of the seed-level
+   exception, and afterwards the seed alarm is re-armed from [seed_deadline]. *)
+
+exception Candidate_timeout
+
+let candidate_timer_armed = ref false
+let seed_deadline = ref infinity
+
 (* Overview of the fuzzing loop
 
    (#) Pre-loop: Measure the initial coverage of the dangling nodes
@@ -771,11 +780,191 @@ let save_verified_artifact (config : Config.tw)
       config.seed.cover <- cover;
       Ok (main_path, close_path))
 
+let rearm_seed_alarm () =
+  if !seed_deadline < infinity then
+    let remaining = !seed_deadline -. Unix.gettimeofday () in
+    Unix.alarm (max 1 (int_of_float (Float.ceil remaining))) |> ignore
+
+(* Called once a candidate timeout has been caught. The alarm can land between
+   registering the instrumentation handlers and the guard that clears them,
+   and the next candidate of the seed would then find them leaked. *)
+let recover_from_candidate_timeout () =
+  candidate_timer_armed := false;
+  if Inst.Hook.is_active () then Inst.Hook.register [];
+  rearm_seed_alarm ()
+
+(* Runs one candidate step under the candidate timeout and returns [None] when
+   it ran out. A limit that would outlast the seed budget is left to the seed
+   alarm. *)
+let with_candidate_timer (config : Config.tw) (f : unit -> 'a) : 'a option =
+  let limit = config.candidate_timeout in
+  let remaining = !seed_deadline -. Unix.gettimeofday () in
+  (* Outside a seed there is no SIGALRM handler to catch the alarm *)
+  if limit <= 0 || !seed_deadline = infinity || float_of_int limit >= remaining
+  then Some (f ())
+  else (
+    candidate_timer_armed := true;
+    Unix.alarm limit |> ignore;
+    match f () with
+    | value ->
+        candidate_timer_armed := false;
+        rearm_seed_alarm ();
+        Some value
+    | exception Candidate_timeout ->
+        recover_from_candidate_timeout ();
+        None
+    | exception error ->
+        candidate_timer_armed := false;
+        rearm_seed_alarm ();
+        raise error)
+
+let log_candidate_timeout (fuel : int) (iid : iid) (idx_seed : int)
+    (strategy : string) (idx_method : int) (idx_mutation : int)
+    (config : Config.tw) (log : Logger.t) (step : string) : unit =
+  F.asprintf
+    "[F %d] [P %d] [S %d] [%s %d] [M %d] [TIMEOUT] candidate %s exceeded %ds; \
+     moving to the next candidate"
+    fuel iid idx_seed strategy idx_method idx_mutation step
+    config.candidate_timeout
+  |> Logger.warn config.modes.logmode log
+
+let ensure_directory (directory : string) : unit =
+  if not (Sys.file_exists directory) then Util.Filesys.mkdir directory
+
+let repeat_directory (config : Config.tw) : string =
+  config.storage.dirname_gen ^ "/repeat"
+
+(* One JSON object per kept repeat program, appended as it is kept *)
+let append_repeat_manifest (config : Config.tw)
+    (fields : (string * Yojson.Safe.t) list) : unit =
+  let path = repeat_directory config ^ "/manifest.jsonl" in
+  let channel =
+    open_out_gen [ Open_append; Open_creat; Open_text ] 0o644 path
+  in
+  Fun.protect
+    ~finally:(fun () -> close_out channel)
+    (fun () ->
+      output_string channel (Yojson.Safe.to_string (`Assoc fields));
+      output_char channel '\n')
+
+(* A repeat program shows a stuck invocation that re-hits the targeted premise
+   without new coverage. It is kept under repeat/<iid>/ and never changes the
+   campaign coverage. *)
+let keep_repeatw (fuel : int) (iid : iid) (idx_seed : int)
+    (strategy : string) (idx_method : int) (idx_mutation : int)
+    (config : Config.tw) (log : Logger.t) (env : Evaluator.env)
+    (path_gen_wasm : string) (seed_path : string) (kind : Mutate.kind)
+    (seed : Candidate.seed) (mutated_module : value)
+    (observation : Candidate.observation)
+    (provenance : Candidate.mutation_provenance) : unit =
+  let digest = Wasm_repeat.digest_of_module mutated_module in
+  match Wasm_repeat.admission config.repeat ~iid ~digest with
+  | Wasm_repeat.Untracked -> ()
+  | Wasm_repeat.Quota ->
+      F.asprintf
+        "[F %d] [P %d] [S %d] [%s %d] [M %d] [REPEAT] quota reached; not kept"
+        fuel iid idx_seed strategy idx_method idx_mutation
+      |> Logger.log config.modes.logmode log
+  | Wasm_repeat.Duplicate ->
+      F.asprintf
+        "[F %d] [P %d] [S %d] [%s %d] [M %d] [REPEAT] duplicate of a kept \
+         program; not kept"
+        fuel iid idx_seed strategy idx_method idx_mutation
+      |> Logger.log config.modes.logmode log
+  | Wasm_repeat.Admit ->
+      Fun.protect
+        ~finally:(fun () -> ignore (Episode.remove_artifact path_gen_wasm))
+        (fun () ->
+          match
+            with_candidate_timer config (fun () ->
+                Candidate.render_and_recheck_labeled
+                  ~hits_label:"Repeat hit iids"
+                  ~env ~seed ~mutated_module ~observation ~provenance
+                  ~temporary_path:path_gen_wasm
+                  ~selected_hits:(IIdSet.singleton iid)
+                  ~selected_close_misses:IIdSet.empty)
+          with
+          | None ->
+              log_candidate_timeout fuel iid idx_seed strategy idx_method
+                idx_mutation config log "recheck"
+          | Some (Error error) ->
+              log_candidate_error config log
+                (F.asprintf
+                   "[F %d] [P %d] rendered repeat candidate recheck failed" fuel
+                   iid)
+                error
+          | Some (Ok _verified) -> (
+              let directory_repeat = repeat_directory config in
+              let directory = F.asprintf "%s/%d" directory_repeat iid in
+              ensure_directory directory_repeat;
+              ensure_directory directory;
+              let destination = path_in_directory directory path_gen_wasm in
+              match
+                Episode.copy_artifact ~src_wast:path_gen_wasm
+                  ~dst_wast:destination
+              with
+              | Error error ->
+                  log_candidate_error config log
+                    (F.asprintf "[F %d] [P %d] repeat artifact save failed" fuel
+                       iid)
+                    error
+              | Ok () ->
+                  let kept = Wasm_repeat.commit config.repeat ~iid ~digest in
+                  let quota = (Wasm_repeat.options config.repeat).hits in
+                  append_repeat_manifest config
+                    [ ("iid", `Int iid);
+                      ("fuel", `Int fuel);
+                      ("kept", `Int kept);
+                      ("artifact", `String destination);
+                      ("seed", `String seed_path);
+                      ("seed_index", `Int idx_seed);
+                      ("strategy", `String strategy);
+                      ("method", `Int idx_method);
+                      ("mutation_index", `Int idx_mutation);
+                      ("mutation", `String (Mutate.string_of_kind kind));
+                      ("digest", `String digest) ];
+                  F.asprintf
+                    "[F %d] [P %d] [S %d] [%s %d] [M %d] [REPEAT] kept %s \
+                     (%d/%d) (%s)"
+                    fuel iid idx_seed strategy idx_method idx_mutation
+                    destination kept quota (Mutate.string_of_kind kind)
+                  |> Logger.mark config.modes.logmode log))
+
+(* The close-miss seeds of each premise about to be hit for the first time; the
+   coverage update replaces them by the artifact path *)
+let repeat_first_hits (config : Config.tw) (iids_hit : IIdSet.t) :
+    (iid * string list) list =
+  if not (Wasm_repeat.enabled config.repeat) then []
+  else
+    IIdSet.elements iids_hit
+    |> List.filter_map (fun hit ->
+           match (DCov_multi.Cover.find hit config.seed.cover).status with
+           | Miss (_ :: _ as seeds) -> Some (hit, seeds)
+           | Miss [] | Hit _ -> None)
+
+let track_first_hits (fuel : int) (iid : iid) (config : Config.tw)
+    (log : Logger.t) (first_hits : (iid * string list) list)
+    (mutated_module : value) : unit =
+  match first_hits with
+  | [] -> ()
+  | _ ->
+      let digest = Some (Wasm_repeat.digest_of_module mutated_module) in
+      List.iter
+        (fun (hit, seeds) ->
+          Wasm_repeat.record_first_hit config.repeat ~iid:hit ~fuel ~seeds
+            ~digest;
+          F.asprintf
+            "[F %d] [P %d] [REPEAT] tracking dangling %d with %d close-miss \
+             seeds"
+            fuel iid hit (List.length seeds)
+          |> Logger.log config.modes.logmode log)
+        first_hits
+
 let update_interestingw (fuel : int) (iid : iid) (idx_seed : int)
     (strategy : string) (idx_method : int) (idx_mutation : int)
     (trials : int ref) (config : Config.tw) (log : Logger.t)
-    (path_gen_wasm : string) (kind : Mutate.kind) (seed : Candidate.seed)
-    (mutated_module : value)
+    (path_gen_wasm : string) (seed_path : string) (kind : Mutate.kind)
+    (seed : Candidate.seed) (mutated_module : value)
     (provenance : Candidate.mutation_provenance) : unit =
   let time_start = Unix.gettimeofday () in
   F.asprintf "[F %d] [P %d] [S %d] [%s %d] [M %d] [%d/%d] Evaluating %s" fuel
@@ -786,7 +975,10 @@ let update_interestingw (fuel : int) (iid : iid) (idx_seed : int)
     Evaluator.make_env ~simulator:config.specenv.simulator
       ~spec:config.specenv.spec
   in
-  let evaluated = Candidate.evaluate env seed mutated_module in
+  let evaluated =
+    with_candidate_timer config (fun () ->
+        Candidate.evaluate env seed mutated_module)
+  in
   let time_end = Unix.gettimeofday () in
   F.asprintf
     "[F %d] [P %d] [S %d] [%s %d] [M %d] [%d/%d] Evaluated %s (took %.2f)" fuel
@@ -794,11 +986,14 @@ let update_interestingw (fuel : int) (iid : iid) (idx_seed : int)
     path_gen_wasm (time_end -. time_start)
   |> Logger.log config.modes.logmode log;
   match evaluated with
-  | Error error ->
+  | None ->
+      log_candidate_timeout fuel iid idx_seed strategy idx_method idx_mutation
+        config log "evaluation"
+  | Some (Error error) ->
       log_candidate_error config log
         (F.asprintf "[F %d] [P %d] candidate phase evaluation failed" fuel iid)
         error
-  | Ok observation -> (
+  | Some (Ok observation) -> (
       match
         observation.Candidate.policy.coverage,
         observation.Candidate.emission,
@@ -837,18 +1032,23 @@ let update_interestingw (fuel : int) (iid : iid) (idx_seed : int)
                 ignore (Episode.remove_artifact path_gen_wasm))
               (fun () ->
                 match
-                  Candidate.render_and_recheck ~env ~seed ~mutated_module
-                    ~observation ~provenance ~temporary_path:path_gen_wasm
-                    ~selected_hits:iids_hit_new
-                    ~selected_close_misses:iids_close_miss_new
+                  with_candidate_timer config (fun () ->
+                      Candidate.render_and_recheck ~env ~seed ~mutated_module
+                        ~observation ~provenance ~temporary_path:path_gen_wasm
+                        ~selected_hits:iids_hit_new
+                        ~selected_close_misses:iids_close_miss_new)
                 with
-                | Error error ->
+                | None ->
+                    log_candidate_timeout fuel iid idx_seed strategy idx_method
+                      idx_mutation config log "recheck"
+                | Some (Error error) ->
                     log_candidate_error config log
                       (F.asprintf
                          "[F %d] [P %d] rendered candidate recheck failed" fuel
                          iid)
                       error
-                | Ok verified -> (
+                | Some (Ok verified) -> (
+                    let first_hits = repeat_first_hits config iids_hit_new in
                     match
                       save_verified_artifact config path_gen_wasm
                         verified.Candidate.category policy iids_hit_new
@@ -871,7 +1071,18 @@ let update_interestingw (fuel : int) (iid : iid) (idx_seed : int)
                             log_close_miss_neww fuel iid idx_seed strategy
                               idx_method idx_mutation config log path
                               iids_close_miss_new)
-                          close_path))
+                          close_path;
+                        if Option.is_some main_path then
+                          track_first_hits fuel iid config log first_hits
+                            mutated_module))
+          else if
+            Wasm_repeat.enabled config.repeat
+            && category = Policy.InvokeStuck
+            && DCov_single.is_hit cover iid
+          then
+            keep_repeatw fuel iid idx_seed strategy idx_method idx_mutation
+              config log env path_gen_wasm seed_path kind seed mutated_module
+              observation provenance
       | _ ->
           F.asprintf
             "[F %d] [P %d] candidate policy, category, and coverage disagreed"
@@ -904,7 +1115,7 @@ let classify_mutationw' (fuel : int) (iid : iid) (idx_seed : int)
         mutated = Sl.Print.string_of_value value_mutated }
   in
   update_interestingw fuel iid idx_seed strategy idx_method idx_mutation trials
-    config log path_gen_wasm kind seed mutated_module provenance
+    config log path_gen_wasm path_wasm kind seed mutated_module provenance
 
 let classify_mutationw (fuel : int) (iid : iid) (idx_seed : int)
     (strategy : string) (idx_method : int) (idx_mutation : int)
@@ -930,7 +1141,14 @@ let classify_mutationw (fuel : int) (iid : iid) (idx_seed : int)
       classify_mutationw' fuel iid idx_seed strategy idx_method idx_mutation
         trials config log dirname_gen_tmp path_wasm depth kind
         value_source value_mutated seed mutated_module
-    with err ->
+    with
+    (* The candidate alarm fired just as a timed step returned, outside the
+       handler of [with_candidate_timer] *)
+    | Candidate_timeout ->
+        recover_from_candidate_timeout ();
+        log_candidate_timeout fuel iid idx_seed strategy idx_method
+          idx_mutation config log "step"
+    | err ->
       Logger.warn config.modes.logmode log
         (F.asprintf
            "[F %d] [P %d] [S %d] [%s %d] [M %d] unexpected exception in \
@@ -944,6 +1162,12 @@ let classify_mutationw (fuel : int) (iid : iid) (idx_seed : int)
            (Lang.Il.Print.string_of_value value_program_before)
            (Lang.Il.Print.string_of_value value_program));
       raise err
+
+(* A premise is fuzzed while it is a miss, or while repeat collection still
+   wants programs for it after its first hit *)
+let targetingw (config : Config.tw) ~(fuel : int) (iid : iid) : bool =
+  DCov_multi.is_miss config.seed.cover iid
+  || Wasm_repeat.wants config.repeat ~iid ~fuel
 
 let fuzz_mutationw (fuel : int) (iid : iid) (idx_seed : int)
     (strategy : string) (idx_method : int) (trials : int ref)
@@ -975,7 +1199,7 @@ let fuzz_mutationw (fuel : int) (iid : iid) (idx_seed : int)
   List.iteri
     (fun idx_mutation (kind, value_source, value_mutated) ->
       if
-        !trials < Config.trials_seed && DCov_multi.is_miss config.seed.cover iid
+        !trials < Config.trials_seed && targetingw config ~fuel iid
       then (
         trials := !trials + 1;
         F.asprintf "[Source] %s\n" (Sl.Print.string_of_value value_source)
@@ -997,7 +1221,7 @@ let fuzz_derivationsw (fuel : int) (iid : iid) (idx_seed : int)
   List.iteri
     (fun idx_derivation (vid_source, depth) ->
       if
-        !trials < Config.trials_seed && DCov_multi.is_miss config.seed.cover iid
+        !trials < Config.trials_seed && targetingw config ~fuel iid
       then
         fuzz_mutationw fuel iid idx_seed "Derive" idx_derivation trials config
           log query dirname_gen_tmp path_wasm (Some depth) vdg seed
@@ -1020,7 +1244,7 @@ let fuzz_derivations_boundedw (fuel : int) (iid : iid) (idx_seed : int)
     |> Logger.log config.modes.logmode log;
     let trials = ref 0 in
     while
-      !trials < Config.trials_seed && DCov_multi.is_miss config.seed.cover iid
+      !trials < Config.trials_seed && targetingw config ~fuel iid
     do
       fuzz_derivationsw fuel iid idx_seed trials config log query
         dirname_gen_tmp path_wasm vdg seed derivations_source
@@ -1033,7 +1257,7 @@ let fuzz_randomsw (fuel : int) (iid : iid) (idx_seed : int)
   List.iteri
     (fun idx_random vid_source ->
       if
-        !trials < Config.trials_seed && DCov_multi.is_miss config.seed.cover iid
+        !trials < Config.trials_seed && targetingw config ~fuel iid
       then
         fuzz_mutationw fuel iid idx_seed "Random" idx_random trials config log
           query dirname_gen_tmp path_wasm None vdg seed vid_source)
@@ -1054,7 +1278,7 @@ let fuzz_randoms_boundedw (fuel : int) (iid : iid) (idx_seed : int)
     |> Logger.log config.modes.logmode log;
     let trials = ref 0 in
     while
-      !trials < Config.trials_seed && DCov_multi.is_miss config.seed.cover iid
+      !trials < Config.trials_seed && targetingw config ~fuel iid
     do
       fuzz_randomsw fuel iid idx_seed trials config log query dirname_gen_tmp
         path_wasm vdg seed vids_source
@@ -1196,7 +1420,7 @@ let fuzz_seedsw ?(deadline : float option) (fuel : int) (iid : iid)
     (dirname_gen_tmp : string) (paths_wasm : string list) : unit =
   List.iteri
     (fun idx_seed path_wasm ->
-      if DCov_multi.is_miss config.seed.cover iid then (
+      if targetingw config ~fuel iid then (
         let timeout_seed =
           match deadline with
           | None -> Config.timeout_seed
@@ -1209,16 +1433,24 @@ let fuzz_seedsw ?(deadline : float option) (fuel : int) (iid : iid)
         let signal_previous =
           Sys.signal Sys.sigalrm
             (Sys.Signal_handle (fun _ ->
-                 match deadline with
-                 | None -> raise Timeout
-                 | Some _ -> raise Focus_timeout))
+                 if !candidate_timer_armed then (
+                   candidate_timer_armed := false;
+                   raise Candidate_timeout)
+                 else
+                   match deadline with
+                   | None -> raise Timeout
+                   | Some _ -> raise Focus_timeout))
         in
         Fun.protect
           ~finally:(fun () ->
             Unix.alarm 0 |> ignore;
+            candidate_timer_armed := false;
+            seed_deadline := infinity;
             Sys.set_signal Sys.sigalrm signal_previous)
           (fun () ->
             Boot.with_wasm_interrupt (fun () ->
+                seed_deadline :=
+                  Unix.gettimeofday () +. float_of_int timeout_seed;
                 Unix.alarm timeout_seed |> ignore;
                 try
                   fuzz_seedw fuel iid idx_seed config log query dirname_gen_tmp
@@ -1290,7 +1522,20 @@ let fuzz_danglingsw ?(deadline : float option) (fuel : int)
           | Miss [] -> ()
           | Miss paths_wasm ->
               fuzz_danglingw ?deadline fuel iid config log query paths_wasm)
-        iids
+        iids;
+      (* Premises hit in earlier fuels are revisited until their quota or
+         window runs out. They come after every miss, so new coverage keeps
+         priority within a fuel. *)
+      List.iter
+        (fun (iid, seeds) ->
+          F.asprintf
+            "[F %d] [P %d] [REPEAT] Retargeting hit dangling %d (kept %d/%d)"
+            fuel iid iid
+            (Wasm_repeat.saved config.repeat ~iid)
+            (Wasm_repeat.options config.repeat).hits
+          |> Logger.log config.modes.logmode log;
+          fuzz_danglingw ?deadline fuel iid config log query seeds)
+        (Wasm_repeat.targets config.repeat ~fuel)
 
 let fuzz_loopw_once ?(deadline : float option) (fuel : int)
     (config : Config.tw) : unit =
@@ -1311,7 +1556,11 @@ let fuzz_loopw_once ?(deadline : float option) (fuel : int)
       let total, hits, coverage = DCov_multi.measure_coverage config.seed.cover in
       F.asprintf "[F %d] End fuzzing loop with coverage %d/%d (%.2f%%)" fuel hits
         total coverage
-      |> Logger.log config.modes.logmode log)
+      |> Logger.log config.modes.logmode log;
+      if Wasm_repeat.enabled config.repeat then
+        F.asprintf "[F %d] [REPEAT] kept %d repeat programs in total" fuel
+          (Wasm_repeat.total_saved config.repeat)
+        |> Logger.log config.modes.logmode log)
 
 let focus_target_hit (config : Config.tw) : bool =
   match config.focus with
@@ -1422,7 +1671,8 @@ let wasm_harvest_fragments (modes : Modes.t) (log : Logger.t)
       fragments
 
 let wasm_fuzzer_init ?(switches : Mutate.switches = Mutate.all_on)
-    (spec : spec) (phase : Config.wasm_phase)
+    ?(repeat : Wasm_repeat.options = Wasm_repeat.default_options)
+    ?(candidate_timeout : int = 0) (spec : spec) (phase : Config.wasm_phase)
     (dirname_gen : string)
     (name_campaign : string option) (randseed : int option)
     (logmode : Modes.logmode) (bootmode : Modes.bootmode)
@@ -1450,7 +1700,7 @@ let wasm_fuzzer_init ?(switches : Mutate.switches = Mutate.all_on)
   let logname_init = storage.dirname_log ^ "/init.log" in
   let log_init = Logger.init logname_init in
   F.asprintf
-    "[COMMAND] wasm-testgen -phase %s (coverage relation %s) -gen %s%s%s%s%s%s%s%s%s"
+    "[COMMAND] wasm-testgen -phase %s (coverage relation %s) -gen %s%s%s%s%s%s%s%s%s%s"
     (Config.string_of_wasm_phase phase)
     (Config.coverage_relation phase)
     dirname_gen
@@ -1479,6 +1729,27 @@ let wasm_fuzzer_init ?(switches : Mutate.switches = Mutate.all_on)
     (Mutate.disabled_kind_names switches
      |> List.map (fun name -> " -disable-mutation " ^ name)
      |> String.concat "")
+    ((if repeat.Wasm_repeat.hits > 0 then
+        F.asprintf " -repeat-hits %d" repeat.Wasm_repeat.hits
+      else "")
+    ^ (match repeat.Wasm_repeat.fuel with
+      | Some fuel -> F.asprintf " -repeat-fuel %d" fuel
+      | None -> "")
+    ^
+    if candidate_timeout > 0 then
+      F.asprintf " -timeout-candidate %d" candidate_timeout
+    else "")
+  |> Logger.log modes.logmode log_init;
+  F.asprintf "[REPEAT] %s; candidate timeout %s"
+    (if repeat.Wasm_repeat.hits > 0 then
+       F.asprintf "keep up to %d repeat programs per premise, %s"
+         repeat.Wasm_repeat.hits
+         (match repeat.Wasm_repeat.fuel with
+         | Some fuel -> F.asprintf "for %d fuels after its first hit" fuel
+         | None -> "until that quota")
+     else "repeat collection off")
+    (if candidate_timeout > 0 then F.asprintf "%ds" candidate_timeout
+     else "off")
   |> Logger.log modes.logmode log_init;
   let names = function [] -> "none" | names -> String.concat " " names in
   F.asprintf "[MUTATION] enabled: %s (splice probability %.2f)"
@@ -1662,9 +1933,12 @@ let wasm_fuzzer_init ?(switches : Mutate.switches = Mutate.all_on)
     |> names)
   |> Logger.log modes.logmode log_init;
   Logger.close log_init;
-  Config.initw ~focus ~mutation randseed modes specenv storage seed
+  Config.initw ~focus ~mutation ~repeat ~candidate_timeout randseed modes
+    specenv storage seed
 
 let wasm_fuzzer ?(switches : Mutate.switches = Mutate.all_on)
+    ?(repeat : Wasm_repeat.options = Wasm_repeat.default_options)
+    ?(candidate_timeout : int = 0)
     (budget : Config.wasm_budget) (spec : spec)
     (phase : Config.wasm_phase)
     (dirname_gen : string) (name_campaign : string option)
@@ -1674,7 +1948,8 @@ let wasm_fuzzer ?(switches : Mutate.switches = Mutate.all_on)
     (mutationmode : Modes.mutationmode)
     (covermode : Modes.covermode) (focus : Config.wasm_focus option) : unit =
   let config =
-    wasm_fuzzer_init ~switches spec phase dirname_gen name_campaign randseed logmode
+    wasm_fuzzer_init ~switches ~repeat ~candidate_timeout spec phase dirname_gen
+      name_campaign randseed logmode
       bootmode boot_observe_dirs boot_invoke_dirs mutationmode covermode focus
       budget
   in

@@ -116,6 +116,9 @@ type tw = {
   seed : seed;
   focus : wasm_focus option;
   mutation : Mutate.options;
+  repeat : Wasm_repeat.t;
+  (* Seconds one candidate may take before it is skipped; 0 is off *)
+  candidate_timeout : int;
 }
 
 (* Load mixop groups into the environment *)
@@ -287,11 +290,22 @@ let init (randseed : int option) (modes : Modes.t) (specenv : specenv)
 
 let initw ?(focus : wasm_focus option = None)
     ?(mutation : Mutate.options = Mutate.default_options)
-    (randseed : int option) (modes : Modes.t) (specenv : wasm_specenv)
-    (storage : storage) (seed : seed) : tw =
+    ?(repeat : Wasm_repeat.options = Wasm_repeat.default_options)
+    ?(candidate_timeout : int = 0) (randseed : int option) (modes : Modes.t)
+    (specenv : wasm_specenv) (storage : storage) (seed : seed) : tw =
   let rand = Option.value ~default:2026 randseed in
   Random.init rand;
-  { rand; modes; specenv; storage; seed; focus; mutation }
+  {
+    rand;
+    modes;
+    specenv;
+    storage;
+    seed;
+    focus;
+    mutation;
+    repeat = Wasm_repeat.create repeat;
+    candidate_timeout;
+  }
 
 (* Seed updater *)
 

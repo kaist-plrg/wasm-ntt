@@ -80,6 +80,7 @@ val load_seed_with_vdg :
   (seed_load, Wasm_phase.phase_error) result
 
 val decorate_artifact :
+  ?hits_label:string ->
   provenance:mutation_provenance ->
   selected_hits:Domain.Lib.IIdSet.t ->
   selected_close_misses:Domain.Lib.IIdSet.t ->
@@ -87,6 +88,20 @@ val decorate_artifact :
   (string, Wasm_phase.phase_error) result
 
 val render_and_recheck :
+  env:Wasm_phase_evaluator.env ->
+  seed:seed ->
+  mutated_module:Lang.Il.value ->
+  observation:observation ->
+  provenance:mutation_provenance ->
+  temporary_path:string ->
+  selected_hits:Domain.Lib.IIdSet.t ->
+  selected_close_misses:Domain.Lib.IIdSet.t ->
+  (verified, Wasm_phase.phase_error) result
+
+(** Like {!render_and_recheck}, with [hits_label] naming the hit footer of the
+    artifact instead of [Covered iids]. *)
+val render_and_recheck_labeled :
+  hits_label:string ->
   env:Wasm_phase_evaluator.env ->
   seed:seed ->
   mutated_module:Lang.Il.value ->

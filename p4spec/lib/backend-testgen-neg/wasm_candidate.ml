@@ -337,7 +337,8 @@ let trim_trailing_whitespace text =
   let length = last_non_whitespace (String.length text - 1) + 1 in
   String.sub text 0 length
 
-let decorate_artifact ~provenance ~selected_hits ~selected_close_misses body =
+let decorate_artifact ?(hits_label = "Covered iids") ~provenance ~selected_hits
+    ~selected_close_misses body =
   let evidence =
     match
       ( IIdSet.is_empty selected_hits,
@@ -345,7 +346,7 @@ let decorate_artifact ~provenance ~selected_hits ~selected_close_misses body =
     with
     | false, true ->
         Ok
-          (Format.asprintf ";; Covered iids %s"
+          (Format.asprintf ";; %s %s" hits_label
              (IIdSet.to_string selected_hits))
     | true, false ->
         Ok
@@ -369,8 +370,9 @@ let decorate_artifact ~provenance ~selected_hits ~selected_close_misses body =
         provenance.source provenance.mutated body evidence)
     evidence
 
-let render_and_recheck ~env ~seed ~mutated_module ~observation ~provenance
-    ~temporary_path ~selected_hits ~selected_close_misses =
+let render_and_recheck_labeled ~hits_label ~env ~seed ~mutated_module
+    ~observation ~provenance ~temporary_path ~selected_hits
+    ~selected_close_misses =
   let cleanup () = ignore (Episode.remove_artifact temporary_path) in
   let transferred = ref false in
   cleanup ();
@@ -386,7 +388,7 @@ let render_and_recheck ~env ~seed ~mutated_module ~observation ~provenance
               Error error
           | Ok text -> (
               match
-                decorate_artifact ~provenance ~selected_hits
+                decorate_artifact ~hits_label ~provenance ~selected_hits
                   ~selected_close_misses text
               with
               | Error error ->
@@ -414,3 +416,9 @@ let render_and_recheck ~env ~seed ~mutated_module ~observation ~provenance
                           | Ok _ ->
                               transferred := true;
                               Ok { category; coverage = replay.coverage }))))))
+
+let render_and_recheck ~env ~seed ~mutated_module ~observation ~provenance
+    ~temporary_path ~selected_hits ~selected_close_misses =
+  render_and_recheck_labeled ~hits_label:"Covered iids" ~env ~seed
+    ~mutated_module ~observation ~provenance ~temporary_path ~selected_hits
+    ~selected_close_misses

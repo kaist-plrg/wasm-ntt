@@ -909,6 +909,22 @@ let wasm_run_testgen_command =
            ("KIND turn off one mutation kind (repeatable): "
            ^ String.concat ", " Backend_testgen_neg.Mutate.mutation_kind_names
            )
+     and repeat_hits =
+       flag "-repeat-hits" (optional int)
+         ~doc:
+           "N keep fuzzing a dangling premise after its first hit until N more \
+            distinct stuck programs are kept for it under repeat/ (invocation \
+            phase; off by default)"
+     and repeat_fuel =
+       flag "-repeat-fuel" (optional int)
+         ~doc:
+           "R stop repeat collection for a premise R fuels after its first hit \
+            (requires -repeat-hits)"
+     and timeout_candidate =
+       flag "-timeout-candidate" (optional int)
+         ~doc:
+           "S skip a candidate whose evaluation takes more than S seconds and \
+            go on with the next one (off by default)"
      in
      fun () ->
        try
@@ -1004,7 +1020,38 @@ let wasm_run_testgen_command =
                  (CommandError
                     "Error: should specify either -fuel or -timeout")
          in
-         Backend_testgen_neg.Gen.wasm_fuzzer ~switches budget spec_sl phase gendir
+         let repeat =
+           match (repeat_hits, repeat_fuel) with
+           | None, None -> Backend_testgen_neg.Wasm_repeat.default_options
+           | None, Some _ ->
+               raise
+                 (CommandError "Error: -repeat-fuel requires -repeat-hits")
+           | Some hits, _ when hits <= 0 ->
+               raise (CommandError "Error: -repeat-hits should be positive")
+           | Some _, Some fuel when fuel < 0 ->
+               raise
+                 (CommandError "Error: -repeat-fuel should be non-negative")
+           | Some hits, fuel ->
+               if phase <> Backend_testgen_neg.Config.Invocation then
+                 raise
+                   (CommandError
+                      "Error: -repeat-hits is only valid with -phase invocation");
+               if Option.is_some focus then
+                 raise
+                   (CommandError
+                      "Error: -repeat-hits cannot be combined with -focus");
+               Backend_testgen_neg.Wasm_repeat.{ hits; fuel }
+         in
+         let candidate_timeout =
+           match timeout_candidate with
+           | None -> 0
+           | Some seconds when seconds <= 0 ->
+               raise
+                 (CommandError "Error: -timeout-candidate should be positive")
+           | Some seconds -> seconds
+         in
+         Backend_testgen_neg.Gen.wasm_fuzzer ~switches ~repeat ~candidate_timeout
+           budget spec_sl phase gendir
            name_campaign randseed logmode bootmode boot_observe_dirs
            boot_invoke_dirs mutationmode covermode focus
        with
