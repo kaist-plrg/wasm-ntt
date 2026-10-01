@@ -502,16 +502,6 @@ rule Step_plain_instr/call-indirect-null:
   -- if $(i < |STO.TABLES[ta].REFS|)
   -- if NullRef ht = STO.TABLES[ta].REFS[i]
 
-rule Step_plain_instr/call-indirect-mismatch:
-  STO fr ((NumV num_i) :: v*) |- (CALL_INDIRECT x y) :
-    (STO, fr, v*, (Trapping) :: eps)
-  -- if ta = fr.MODULE.TABLES[x]
-  -- if i = $nat_of_num(num_i)
-  -- if $(i < |STO.TABLES[ta].REFS|)
-  -- if FuncRef fa = STO.TABLES[ta].REFS[i]
-  -- if fi = STO.FUNCS[fa]
-  -- if ~$match_deftype(eps, fi.TYPE, fr.MODULE.TYPES[y])
-
 rule Step_plain_instr/call-indirect:
   STO fr ((NumV num_i) :: v*) |- (CALL_INDIRECT x y) :
     (STO, fr, v*, (Invoke fa) :: eps)
@@ -542,16 +532,6 @@ rule Step_plain_instr/return-call-indirect-null:
   -- if i = $nat_of_num(num_i)
   -- if $(i < |STO.TABLES[ta].REFS|)
   -- if NullRef ht = STO.TABLES[ta].REFS[i]
-
-rule Step_plain_instr/return-call-indirect-mismatch:
-  STO fr ((NumV num_i) :: v*) |- (RETURN_CALL_INDIRECT x y) :
-    (STO, fr, v*, (Trapping) :: eps)
-  -- if ta = fr.MODULE.TABLES[x]
-  -- if i = $nat_of_num(num_i)
-  -- if $(i < |STO.TABLES[ta].REFS|)
-  -- if FuncRef fa = STO.TABLES[ta].REFS[i]
-  -- if fi = STO.FUNCS[fa]
-  -- if ~$match_deftype(eps, fi.TYPE, fr.MODULE.TYPES[y])
 
 rule Step_plain_instr/return-call-indirect:
   STO fr ((NumV num_i) :: v*) |- (RETURN_CALL_INDIRECT x y) :
@@ -916,13 +896,6 @@ rule Step_plain_instr/ref-cast:
   -- Ref_ok: STO |- r : rtactual
   -- if rt_expect = $inst_reftype(fr.MODULE, rt)
   -- if $match_reftype(fr.MODULE.TYPES, rtactual, rt_expect)
-
-rule Step_plain_instr/ref-cast-fail:
-  STO fr ((RefV r) :: v*) |- REF.CAST rt :
-    (STO, fr, v*, (Trapping) :: eps)
-  -- Ref_ok: STO |- r : rtactual
-  -- if rt_expect = $inst_reftype(fr.MODULE, rt)
-  -- if ~$match_reftype(fr.MODULE.TYPES, rtactual, rt_expect)
 
 rule Step_plain_instr/extern-internalize-null:
   STO fr ((RefV (NullRef ht)) :: v*) |- EXTERN.CONVERT Internalize : (STO, fr, (RefV (NullRef NoneHT)) :: v*, eps)
