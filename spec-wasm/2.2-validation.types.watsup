@@ -136,6 +136,7 @@ rule Strtype_ok/func:
 rule Subtype_ok:
   C_0 |- subtype : OK
   -- if SubT fin ht* strt = subtype
+  -- if $(|ht*| <= 1)
   -- (Heaptype_ok: C_0 |- ht : OK)*
   -- Strtype_ok: C_0 |- strt : OK
 
