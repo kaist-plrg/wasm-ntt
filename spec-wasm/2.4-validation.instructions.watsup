@@ -7,6 +7,12 @@ rule Pack_ok:
   i |- packtype : OK
   -- if $($pack_size(packtype) < i)
 
+dec $check_uop_extends(unop_) : bool
+def $check_uop_extends(I32 (ExtendS _)) = true
+def $check_uop_extends(I64 (ExtendS _)) = true
+def $check_uop_extends(uop) = false
+  -- otherwise
+
 relation Unop_ok: |- unop_ : OK          hint(input %0)
 rule Unop_ok/i32:
   |- uop : OK
@@ -20,6 +26,7 @@ rule Unop_ok/i64:
 
 rule Unop_ok/else:
   |- uop : OK
+  -- if ~$check_uop_extends(uop)
 
 dec $check_lane_index(nat*) : bool
 def $check_lane_index(eps) = true

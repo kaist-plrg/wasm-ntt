@@ -32,8 +32,11 @@ def $subst_of(RecX x, dt*) = VarHT (RecX x)
 def $match_deftype(dt*, dt_1, dt_2) = true
   -- if dt_1 = dt_2
 def $match_deftype(dt*, dt_1, dt_2) = true
+  -- if dt_1 =/= dt_2
   -- if $subst_deftype<deftype*>(dt*, def $subst_of, dt_1) = $subst_deftype<deftype*>(dt*, def $subst_of, dt_2)
 def $match_deftype(dt*, dt_1, dt_2) = $match_heaptype_exists(dt*, ht*, dt_2)
+  -- if dt_1 =/= dt_2
+  -- if $subst_deftype<deftype*>(dt*, def $subst_of, dt_1) =/= $subst_deftype<deftype*>(dt*, def $subst_of, dt_2)
   -- if SubT fin ht* strt = $unrolldt(dt_1)
 
 def $match_heaptype(dt*, ht, AnyHT) = true
@@ -46,7 +49,7 @@ def $match_heaptype(dt*, NoFuncHT, ht) = $match_heaptype(dt*, ht, FuncHT)
 def $match_heaptype(dt*, NoExnHT, ht) = $match_heaptype(dt*, ht, ExnHT)
 def $match_heaptype(dt*, NoExternHT, ht) = $match_heaptype(dt*, ht, ExternHT)
 def $match_heaptype(dt*, VarHT (StatX x), ht) = $match_heaptype(dt*, DefHT dt*[x], ht)
-def $match_heaptype(dt*, ht, VarHT (StatX x)) = $match_heaptype(dt*, ht, DefHT dt*[x])
+def $match_heaptype(dt*, DefHT dt_1, VarHT (StatX x)) = $match_heaptype(dt*, DefHT dt_1, DefHT dt*[x])
 def $match_heaptype(dt*, DefHT dt_1, DefHT dt_2) = $match_deftype(dt*, dt_1, dt_2)
 def $match_heaptype(dt*, DefHT dt_1, ht) = true
   -- if DefStructT _ = $expanddt(dt_1)
@@ -57,9 +60,7 @@ def $match_heaptype(dt*, DefHT dt_1, ht) = true
 def $match_heaptype(dt*, DefHT dt_1, FuncHT) = true
   -- if DefFuncT _ = $expanddt(dt_1)
 def $match_heaptype(dt*, BotHT, _) = true
-def $match_heaptype(dt*, ht_1, ht_2) = true
-  -- if ht_1 = ht_2
-def $match_heaptype(dt*, ht_1, ht_2) = false  -- otherwise
+def $match_heaptype(dt*, ht_1, ht_2) = (ht_1 = ht_2)  -- otherwise
 
 def $match_heaptype_exists(dt*, eps, dt_1) = false
 def $match_heaptype_exists(dt*, ht_h :: ht_t*, dt_1) = true

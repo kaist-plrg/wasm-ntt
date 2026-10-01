@@ -303,6 +303,3 @@ rule Module_ok:
 rule Modules_ok/cons:
   |- module* : OK
   -- (Module_ok: |- module : OK)*
-
-rule Modules_ok/nil:
-  |- eps : OK
