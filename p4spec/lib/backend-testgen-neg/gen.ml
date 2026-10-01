@@ -1089,6 +1089,15 @@ let update_interestingw (fuel : int) (iid : iid) (idx_seed : int)
             fuel iid
           |> Logger.warn config.modes.logmode log)
 
+(* Validation never instantiates, and a huge limit is a meaningful
+   validation candidate *)
+let allocation_guardw (config : Config.tw) (mutated_module : value) :
+    string option =
+  match config.specenv.phase with
+  | Config.Validation -> None
+  | Config.Instantiation | Config.Invocation ->
+      Wasm_allocation_guard.exceeded mutated_module
+
 let classify_mutationw' (fuel : int) (iid : iid) (idx_seed : int)
     (strategy : string) (idx_method : int) (idx_mutation : int)
     (trials : int ref) (config : Config.tw) (log : Logger.t)
@@ -1114,8 +1123,18 @@ let classify_mutationw' (fuel : int) (iid : iid) (idx_seed : int)
         source = Sl.Print.string_of_value value_source;
         mutated = Sl.Print.string_of_value value_mutated }
   in
-  update_interestingw fuel iid idx_seed strategy idx_method idx_mutation trials
-    config log path_gen_wasm path_wasm kind seed mutated_module provenance
+  match allocation_guardw config mutated_module with
+  | Some reason ->
+      F.asprintf
+        "[F %d] [P %d] [S %d] [%s %d] [M %d] [%d/%d] [LIMIT] %s; not \
+         evaluating %s"
+        fuel iid idx_seed strategy idx_method idx_mutation !trials
+        Config.trials_seed reason path_gen_wasm
+      |> Logger.warn config.modes.logmode log
+  | None ->
+      update_interestingw fuel iid idx_seed strategy idx_method idx_mutation
+        trials config log path_gen_wasm path_wasm kind seed mutated_module
+        provenance
 
 let classify_mutationw (fuel : int) (iid : iid) (idx_seed : int)
     (strategy : string) (idx_method : int) (idx_mutation : int)
@@ -1751,6 +1770,15 @@ let wasm_fuzzer_init ?(switches : Mutate.switches = Mutate.all_on)
     (if candidate_timeout > 0 then F.asprintf "%ds" candidate_timeout
      else "off")
   |> Logger.log modes.logmode log_init;
+  (match phase with
+  | Config.Validation -> ()
+  | Config.Instantiation | Config.Invocation ->
+      F.asprintf
+        "[LIMIT] candidates with a memory min above %Ld pages or a table min \
+         above %Ld elements are not evaluated"
+        Wasm_allocation_guard.max_memory_pages
+        Wasm_allocation_guard.max_table_elems
+      |> Logger.log modes.logmode log_init);
   let names = function [] -> "none" | names -> String.concat " " names in
   F.asprintf "[MUTATION] enabled: %s (splice probability %.2f)"
     (names (Mutate.enabled_kind_names switches))

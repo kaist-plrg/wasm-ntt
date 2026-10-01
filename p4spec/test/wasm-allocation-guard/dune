@@ -1,0 +1,5 @@
+(test
+ (name allocation_guard_test)
+ (modules allocation_guard_test)
+ (deps (glob_files *.wast))
+ (libraries p4spectec.backend_testgen_neg))
