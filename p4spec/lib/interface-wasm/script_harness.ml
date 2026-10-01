@@ -14,6 +14,7 @@ module Utf8 = Wasm_interpreter.Utf8
 module V128 = Wasm_interpreter.V128
 module WasmExtern = Wasm_interpreter.Extern
 module WasmI31 = Wasm_interpreter.I31
+module WasmMatch = Wasm_interpreter.Match
 module WasmSource = Wasm_interpreter.Source
 module WasmValue = Wasm_interpreter.Value
 module Sim = Runtime.Sim.Signature
@@ -562,6 +563,38 @@ let funcaddr_of_export at module_inst name =
   | Some ("FuncAddr", [ addr ]) -> addr
   | _ -> error at "export is not a function"
 
+(* The reference interpreter checks the arguments of a script invoke against
+   the function type before calling it and reports a mismatch as a script
+   error. Invoke, like the abstract machine, assumes that they match: given
+   mismatched arguments, its execution gets stuck instead. *)
+let check_invoke_arguments at store funcaddr (literals : Script.literal list) =
+  let params =
+    match
+      let funcs = field at "FUNCS" store |> as_list at in
+      let funcinst = List.nth funcs (as_nat at funcaddr) in
+      Types.expand_def_type
+        (Deconstruct.sl_to_def_type (field at "TYPE" funcinst))
+    with
+    | Types.DefFuncT (Types.FuncT (params, _)) -> params
+    | _ -> error at "export is not a function"
+    | exception (Failure message | Invalid_argument message) ->
+        error at ("cannot read the function type: " ^ message)
+  in
+  if List.length literals <> List.length params then
+    error at "wrong number of arguments";
+  List.iter2
+    (fun (literal : Script.literal) param ->
+      match
+        WasmMatch.match_val_type [] (WasmValue.type_of_value literal.it) param
+      with
+      | true -> ()
+      | false -> error at "wrong type of argument"
+      | exception (Failure message | Invalid_argument message) ->
+          error at ("cannot match the argument type: " ^ message)
+      | exception Assert_failure _ ->
+          error at "cannot match the argument type: unknown reference")
+    literals params
+
 let globaladdr_of_export at module_inst name =
   match case_tag (lookup_export at module_inst name) with
   | Some ("GlobalAddr", [ addr ]) -> as_nat at addr
@@ -834,6 +867,7 @@ let run_action ?eval_relation runtime state (act : Script.action) =
   | Script.Invoke (var_opt, name, literals) ->
       let instance = lookup_instance no_region var_opt state in
       let funcaddr = funcaddr_of_export no_region instance.module_inst name in
+      check_invoke_arguments no_region state.store funcaddr literals;
       let arguments = value_list (List.map value_of_literal literals) in
       eval_relation ~relname:"Invoke" [ state.store; funcaddr; arguments ]
       |> invoke_outputs no_region

@@ -1,0 +1,17 @@
+(rule
+ (alias runtest)
+ (deps
+  invoke_arguments.sh
+  matching.wast
+  too-few.wast
+  too-many.wast
+  number-type.wast
+  reference-type.wast
+  null-to-non-null.wast
+  trap-assertion.wast
+  (source_tree ../../../spec-wasm))
+ (action
+  (run
+   bash
+   %{dep:invoke_arguments.sh}
+   %{exe:../../bin/main.exe})))
