@@ -346,7 +346,8 @@ def $fieldvals_of_refs(zt, eps) = eps
 def $fieldvals_of_refs(zt, r_1 :: r_t*) =
   $pack_field(zt, RefV r_1) :: $fieldvals_of_refs(zt, r_t*)
 
-def $ref_eq(NullRef _, NullRef _) = 1
+def $ref_eq(NullRef ht_1, NullRef ht_2) = 1
+  -- if ht_1 =/= ht_2
 def $ref_eq(r, r) = 1
 def $ref_eq(r_1, r_2) = 0
   -- otherwise
@@ -776,6 +777,7 @@ rule Step_plain_instr/memory-grow-i32-bounded-max-fail:
   -- if max = $(u64_1)
   -- if pages = $(|STO.MEMS[ma].BYTES| / $page_size)
   -- if newsize = $(pages + n)
+  -- if $(newsize <= 65536)
   -- if $(newsize > max)
 
 rule Step_plain_instr/memory-grow-i32-bounded-size-fail:
@@ -1088,126 +1090,6 @@ rule Step_plain_instr/memory-init:
   -- if STO' = STO[ .MEMS[ma].BYTES = $replace_bytes(STO.MEMS[ma].BYTES, offset, b*) ]
 
 ;; Source calls are lowered to Invoke by Step_plain_instr above.
-
-rule Step_plain_instr/binop-i32-add:
-  STO fr ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- BINOP (I32 IAdd) : (STO, fr, (NumV (I32 n)) :: v*, eps)
-  -- if n = $i32_add(i, j)
-
-rule Step_plain_instr/binop-i32-sub:
-  STO fr ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- BINOP (I32 ISub) : (STO, fr, (NumV (I32 n)) :: v*, eps)
-  -- if n = $i32_sub(i, j)
-
-rule Step_plain_instr/binop-i32-mul:
-  STO fr ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- BINOP (I32 IMul) : (STO, fr, (NumV (I32 n)) :: v*, eps)
-  -- if n = $i32_mul(i, j)
-
-rule Step_plain_instr/binop-i64-add:
-  STO fr ((NumV (I64 i64_2)) :: (NumV (I64 i64_1)) :: v*) |- BINOP (I64 IAdd) : (STO, fr, (NumV (I64 i64)) :: v*, eps)
-  -- if i64 = $i64_add(i64_1, i64_2)
-
-rule Step_plain_instr/binop-i64-sub:
-  STO fr ((NumV (I64 i64_2)) :: (NumV (I64 i64_1)) :: v*) |- BINOP (I64 ISub) : (STO, fr, (NumV (I64 i64)) :: v*, eps)
-  -- if i64 = $i64_sub(i64_1, i64_2)
-
-rule Step_plain_instr/binop-i64-mul:
-  STO fr ((NumV (I64 i64_2)) :: (NumV (I64 i64_1)) :: v*) |- BINOP (I64 IMul) : (STO, fr, (NumV (I64 i64)) :: v*, eps)
-  -- if i64 = $i64_mul(i64_1, i64_2)
-
-rule Step_plain_instr/binop-f32-add:
-  STO fr ((NumV (F32 fpb)) :: (NumV (F32 fpa)) :: v*) |- BINOP (F32 FAdd) : (STO, fr, (NumV (F32 fpc)) :: v*, eps)
-  -- if fpc = $f32_add(fpa, fpb)
-
-rule Step_plain_instr/binop-f32-sub:
-  STO fr ((NumV (F32 fpb)) :: (NumV (F32 fpa)) :: v*) |- BINOP (F32 FSub) : (STO, fr, (NumV (F32 fpc)) :: v*, eps)
-  -- if fpc = $f32_sub(fpa, fpb)
-
-rule Step_plain_instr/binop-f32-mul:
-  STO fr ((NumV (F32 fpb)) :: (NumV (F32 fpa)) :: v*) |- BINOP (F32 FMul) : (STO, fr, (NumV (F32 fpc)) :: v*, eps)
-  -- if fpc = $f32_mul(fpa, fpb)
-
-rule Step_plain_instr/binop-f64-add:
-  STO fr ((NumV (F64 fdb)) :: (NumV (F64 fda)) :: v*) |- BINOP (F64 FAdd) : (STO, fr, (NumV (F64 fdc)) :: v*, eps)
-  -- if fdc = $f64_add(fda, fdb)
-
-rule Step_plain_instr/binop-f64-sub:
-  STO fr ((NumV (F64 fdb)) :: (NumV (F64 fda)) :: v*) |- BINOP (F64 FSub) : (STO, fr, (NumV (F64 fdc)) :: v*, eps)
-  -- if fdc = $f64_sub(fda, fdb)
-
-rule Step_plain_instr/binop-f64-mul:
-  STO fr ((NumV (F64 fdb)) :: (NumV (F64 fda)) :: v*) |- BINOP (F64 FMul) : (STO, fr, (NumV (F64 fdc)) :: v*, eps)
-  -- if fdc = $f64_mul(fda, fdb)
-
-rule Step_plain_instr/test-i32-eqz:
-  STO fr ((NumV (I32 n_1)) :: v*) |- TEST (I32 Eqz) : (STO, fr, (NumV (I32 n)) :: v*, eps)
-  -- if n = $i32_eqz(n_1)
-
-rule Step_plain_instr/test-i64-eqz:
-  STO fr ((NumV (I64 i64)) :: v*) |- TEST (I64 Eqz) : (STO, fr, (NumV (I32 n)) :: v*, eps)
-  -- if n = $i64_eqz(i64)
-
-rule Step_plain_instr/compare-i32-gt-u:
-  STO fr ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- COMPARE (I32 GtU) : (STO, fr, (NumV (I32 n)) :: v*, eps)
-  -- if n = $i32_gt_u(i, j)
-
-rule Step_plain_instr/compare-i32-le-STO:
-  STO fr ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- COMPARE (I32 LeS) : (STO, fr, (NumV (I32 n)) :: v*, eps)
-  -- if n = $i32_le_s(i, j)
-
-rule Step_plain_instr/compare-i32-le-u:
-  STO fr ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- COMPARE (I32 LeU) : (STO, fr, (NumV (I32 n)) :: v*, eps)
-  -- if n = $i32_le_u(i, j)
-
-rule Step_plain_instr/compare-i64-le-u:
-  STO fr ((NumV (I64 i64_2)) :: (NumV (I64 i64_1)) :: v*) |- COMPARE (I64 LeU) : (STO, fr, (NumV (I32 n)) :: v*, eps)
-  -- if n = $i64_le_u(i64_1, i64_2)
-
-rule Step_plain_instr/compare-f32-eq:
-  STO fr ((NumV (F32 fpb)) :: (NumV (F32 fpa)) :: v*) |- COMPARE (F32 Eq) : (STO, fr, (NumV (I32 n)) :: v*, eps)
-  -- if n = $f32_eq(fpa, fpb)
-
-rule Step_plain_instr/compare-f32-ne:
-  STO fr ((NumV (F32 fpb)) :: (NumV (F32 fpa)) :: v*) |- COMPARE (F32 Ne) : (STO, fr, (NumV (I32 n)) :: v*, eps)
-  -- if n = $f32_ne(fpa, fpb)
-
-rule Step_plain_instr/compare-f32-le:
-  STO fr ((NumV (F32 fpb)) :: (NumV (F32 fpa)) :: v*) |- COMPARE (F32 Le) : (STO, fr, (NumV (I32 n)) :: v*, eps)
-  -- if n = $f32_le(fpa, fpb)
-
-rule Step_plain_instr/compare-f64-eq:
-  STO fr ((NumV (F64 fdb)) :: (NumV (F64 fda)) :: v*) |- COMPARE (F64 Eq) : (STO, fr, (NumV (I32 n)) :: v*, eps)
-  -- if n = $f64_eq(fda, fdb)
-
-rule Step_plain_instr/compare-f64-ne:
-  STO fr ((NumV (F64 fdb)) :: (NumV (F64 fda)) :: v*) |- COMPARE (F64 Ne) : (STO, fr, (NumV (I32 n)) :: v*, eps)
-  -- if n = $f64_ne(fda, fdb)
-
-rule Step_plain_instr/compare-f64-le:
-  STO fr ((NumV (F64 fdb)) :: (NumV (F64 fda)) :: v*) |- COMPARE (F64 Le) : (STO, fr, (NumV (I32 n)) :: v*, eps)
-  -- if n = $f64_le(fda, fdb)
-
-rule Step_plain_instr/compare-i32-eq-true:
-  STO fr ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- COMPARE (I32 Eq) : (STO, fr, (NumV (I32 1)) :: v*, eps)
-  -- if i = j
-
-rule Step_plain_instr/compare-i32-eq-false:
-  STO fr ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- COMPARE (I32 Eq) : (STO, fr, (NumV (I32 0)) :: v*, eps)
-  -- if $(i =/= j)
-
-rule Step_plain_instr/compare-i32-ne:
-  STO fr ((NumV (I32 j)) :: (NumV (I32 i)) :: v*) |- COMPARE (I32 Ne) : (STO, fr, (NumV (I32 n)) :: v*, eps)
-  -- if n = $i32_ne(i, j)
-
-rule Step_plain_instr/compare-i64-eq-true:
-  STO fr ((NumV (I64 i64_2)) :: (NumV (I64 i64_1)) :: v*) |- COMPARE (I64 Eq) : (STO, fr, (NumV (I32 1)) :: v*, eps)
-  -- if i64_1 = i64_2
-
-rule Step_plain_instr/compare-i64-eq-false:
-  STO fr ((NumV (I64 i64_2)) :: (NumV (I64 i64_1)) :: v*) |- COMPARE (I64 Eq) : (STO, fr, (NumV (I32 0)) :: v*, eps)
-  -- if i64_1 =/= i64_2
-
-rule Step_plain_instr/convert-i32-wrap-i64:
-  STO fr ((NumV (I64 i64)) :: v*) |- CONVERT (I32 WrapI64) : (STO, fr, (NumV (I32 n)) :: v*, eps)
-  -- if n = $i32_wrap_i64(i64)
 
 rule Step_plain_instr/test-generic:
   STO fr ((NumV num) :: v*) |- TEST top : (STO, fr, (NumV (I32 n)) :: v*, eps)
